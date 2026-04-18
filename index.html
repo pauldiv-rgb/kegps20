@@ -132,7 +132,7 @@ function pkColor(p){return p>=90?'#4CAF50':p>=80?'#FF8C00':p>0?'#E24B4A':'#557';
 function pkFmt(v,unit,p){if(!v)return'<span style="color:#334">—</span>';const c=pkColor(p);return`<span style="font-weight:700;color:${c}">${v.toFixed(unit==='km/h'?1:2)}\u00a0${unit}</span>${p>0?`<span style="color:${c};font-size:9px">\u00a0(${p.toFixed(0)}%)</span>`:''}`;}
 
 function fmtWeek(d){if(d===''||d==null)return'';const M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];const s=String(d).trim();if(/^\d{5,}(\.\d+)?$/.test(s)){const ms=(parseFloat(s)-25569)*86400000;const dt=new Date(ms);if(!isNaN(dt))return dt.getUTCDate()+' '+M[dt.getUTCMonth()];}const p=s.split(/[-\/]/);if(p.length===3){if(p[0].length===4)return parseInt(p[2])+' '+M[parseInt(p[1])-1];if(parseInt(p[0])>12)return parseInt(p[0])+' '+M[parseInt(p[1])-1];return parseInt(p[1])+' '+M[parseInt(p[0])-1];}return s;}
-function dateToMs(d){if(!d)return 0;const s=String(d).trim();if(/^\d{5,}(\.\d+)?$/.test(s))return(parseFloat(s)-25569)*86400000;const p=s.split(/[-\/]/);if(p.length===3){if(p[0].length===4)return Date.UTC(parseInt(p[0]),parseInt(p[1])-1,parseInt(p[2]));if(parseInt(p[0])>12)return Date.UTC(2000+parseInt(p[2]),parseInt(p[1])-1,parseInt(p[0]));return Date.UTC(2000+parseInt(p[2]),parseInt(p[0])-1,parseInt(p[1]));}return 0;}
+function dateToMs(d){if(!d)return 0;const s=String(d).trim();if(/^\d{5,}(\.\d+)?$/.test(s))return(parseFloat(s)-25569)*86400000;const MMAP={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};const p=s.split(/[-\/]/);if(p.length===3){const m1=MMAP[p[1].toLowerCase().substring(0,3)];if(m1!==undefined){const yr=parseInt(p[2]);const dy=parseInt(p[0]);if(!isNaN(yr)&&!isNaN(dy))return Date.UTC(yr,m1,dy);}if(p[0].length===4)return Date.UTC(parseInt(p[0]),parseInt(p[1])-1,parseInt(p[2]));if(parseInt(p[0])>12)return Date.UTC(2000+parseInt(p[2]),parseInt(p[1])-1,parseInt(p[0]));return Date.UTC(2000+parseInt(p[2]),parseInt(p[0])-1,parseInt(p[1]));}return 0;}
 function setupMsg(title,detail){return`<div class="setup-box"><div style="font-size:20px;margin-bottom:12px">📋</div><div style="font-size:13px;color:#9FE1CB;font-weight:600;margin-bottom:8px">${title}</div><div style="font-size:11px;color:#446;line-height:1.8;max-width:440px;margin:0 auto">${detail}</div></div>`;}
 // ── SCATTER BASE ──────────────────────────────────────────────────────────────
 function buildScatterBase(){
@@ -498,7 +498,8 @@ function renderSquad(){
   // Auto-return: injured player has a GPS session in LS_Daily_Export after the last match
   const lastMatchMs=buildLastMatchDate();
   const isAutoReturned=r=>{
-    if(gv(r,'Availability')!=='Injured')return false;
+    const av=gv(r,'Availability');
+    if(av!=='Injured'&&av!=='Unavailable')return false;
     const nm=gv(r,'Player Name','Player_Name');
     const latestDt=(peaks[nm]||{}).latestDt||0;
     return latestDt>0&&(lastMatchMs===0||latestDt>lastMatchMs);
@@ -873,7 +874,7 @@ function renderProfile(){
   const injRawP=squadRow?gv(squadRow,'Injury Status','Injury_Status')||'':'';
   const profPeaks=buildPlayerPeaks();
   const profLastMatch=buildLastMatchDate();
-  const profAutoRet=avRawP==='Injured'&&(profPeaks[pName]||{}).latestDt>0&&(profLastMatch===0||(profPeaks[pName]||{}).latestDt>profLastMatch);
+  const profAutoRet=(avRawP==='Injured'||avRawP==='Unavailable')&&(profPeaks[pName]||{}).latestDt>0&&(profLastMatch===0||(profPeaks[pName]||{}).latestDt>profLastMatch);
   const av=profAutoRet?'Available':avRawP;
   const inj=profAutoRet?'':injRawP;
   // HMLD ACWR — bypass LS_Squad_Load, read latest week from LS_Load_Trend
