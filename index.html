@@ -805,8 +805,10 @@ function renderMatch(){
     const pc=PCOL[pos]||'#557',ac=ACFG[av]||'#9E9E9E';
     const pMatches=intensityRows.filter(ir=>gv(ir,'Player_Name','Player Name')===name).length;
     const repPct=pMatches/totalMatches*100;
+    const repPctCapped=Math.min(repPct,100);
+    const repOver=repPct>100;
     const repColor=repPct>=80?'#4CAF50':repPct>=50?'#FF8C00':'#E24B4A';
-    const repBar=`<div style="display:flex;align-items:center;gap:8px"><div style="width:80px;height:5px;background:#0b1929;border-radius:3px"><div style="height:5px;width:${repPct}%;background:${repColor};border-radius:3px"></div></div><span style="font-size:10px;font-weight:700;color:${repColor}">${repPct.toFixed(0)}%</span></div>`;
+    const repBar=`<div style="display:flex;align-items:center;gap:8px"><div style="width:80px;height:5px;background:#0b1929;border-radius:3px"><div style="height:5px;width:${repPctCapped}%;background:${repColor};border-radius:3px"></div></div><span style="font-size:10px;font-weight:700;color:${repColor}" title="${repOver?`Actual: ${repPct.toFixed(0)}% (${pMatches}/${totalMatches} records — may include duplicate entries)`:''}">${repPctCapped.toFixed(0)}%${repOver?'*':''}</span></div>`;
     const hasExt=(num(extFlag)>0)||(extFlag&&extFlag!=='0'&&extFlag!=='');
     const extBadge=hasExt?`<span class="badge" style="background:#4FC3F722;color:#4FC3F7;border:1px solid #4FC3F744">${extDate?fmtWeek(extDate)+' External':extFlag==='1'?'External fixture':esc(extFlag)}</span>`:'<span style="color:#334">—</span>';
     return`<tr><td style="font-weight:600;color:#ddd">${esc(name)}</td><td style="color:${pc};font-size:11px">${esc(pos)}</td><td><span class="avail-dot" style="background:${ac}"></span><span style="color:${ac};font-size:11px;font-weight:600">${esc(av)}</span></td><td style="color:#9FE1CB;font-weight:700">${pMatches}/${totalMatches}</td><td>${repBar}</td><td style="color:#fff;font-size:11px">${lmm>0?Math.round(lmm)+' min':'—'}</td><td style="color:#446;font-size:11px">${dsm>0?Math.round(dsm)+'d':'—'}</td><td>${extBadge}</td></tr>`;
