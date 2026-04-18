@@ -1032,28 +1032,42 @@ function bindEvents(){
   bindTip('peak-svg','peak-tooltip');
 }
 // ── NEXT MATCH AUTO-DETECT ─────────────────────────────────────────────────────
+function parseScheduleDate(s){
+  if(!s)return null;
+  // Try direct parse first
+  let d=new Date(s);if(!isNaN(d.getTime()))return d;
+  // Handle "Wed, 29, Apr" / "Wed,  29, Apr" format
+  const MONTHS={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+  const parts=s.replace(/,/g,' ').trim().split(/\s+/);
+  let day=null,mon=null;
+  for(const p of parts){const n=parseInt(p);if(!isNaN(n)&&n>=1&&n<=31)day=n;const m=MONTHS[p.toLowerCase().substring(0,3)];if(m!==undefined)mon=m;}
+  if(day!==null&&mon!==null){
+    const now=new Date();let yr=now.getFullYear();
+    const cand=new Date(yr,mon,day);
+    if(cand<now&&(now-cand)>180*86400000)yr++;
+    return new Date(yr,mon,day);
+  }
+  return null;
+}
 function buildNextMatch(rows){
   if(!rows||!rows.length)return null;
   const sample=rows[0];
-  const dateCol=['Date','date','Match_Date','Match Date','Fixture_Date','Fixture Date'].find(c=>sample[c]!==undefined);
-  const oppCol=['Opponent','Opposition','Team','Vs','vs','Away','Home_Away','Match'].find(c=>sample[c]!==undefined);
-  const roundCol=['Round','Stage','Competition','Type','Round_Stage','Competition_Round','Fixture_Type'].find(c=>sample[c]!==undefined);
-  const venueCol=['Venue','Location','H_A','Home_Away','Ground'].find(c=>sample[c]!==undefined);
+  const dateCol=['Match date','Match Date','Date','date','Match_Date','Fixture_Date','Fixture Date'].find(c=>sample[c]!==undefined);
+  const oppCol=['Opposition','Opponent','Team','Vs','vs','Match'].find(c=>sample[c]!==undefined);
+  const roundCol=['Competition','Round','Stage','Type','Competition_Round','Fixture_Type'].find(c=>sample[c]!==undefined);
   if(!dateCol)return null;
   const today=new Date();today.setHours(0,0,0,0);
-  const upcoming=rows.filter(r=>{const d=new Date(gv(r,dateCol));return!isNaN(d.getTime())&&d>=today;})
-    .sort((a,b)=>new Date(gv(a,dateCol))-new Date(gv(b,dateCol)));
+  const upcoming=rows.filter(r=>{const d=parseScheduleDate(gv(r,dateCol));return d&&d>=today;})
+    .sort((a,b)=>parseScheduleDate(gv(a,dateCol))-parseScheduleDate(gv(b,dateCol)));
   if(!upcoming.length)return null;
   const next=upcoming[0];
-  const d=new Date(gv(next,dateCol));
+  const d=parseScheduleDate(gv(next,dateCol));
   const dateStr=d.toLocaleDateString('en-IE',{day:'numeric',month:'short',year:'numeric'});
   const opp=oppCol?gv(next,oppCol):'';
   const rnd=roundCol?gv(next,roundCol):'';
-  const venue=venueCol?gv(next,venueCol):'';
   const parts=[];
   if(opp)parts.push('v '+opp);
   if(rnd)parts.push(rnd);
-  if(venue&&venue!==opp)parts.push(venue);
   parts.push(dateStr);
   return parts.join(' — ');
 }
@@ -1065,7 +1079,7 @@ function dsStatus(id,result,label){
 }
 async function loadAll(){
   document.getElementById('tab-content').innerHTML='<div style="color:#9FE1CB;padding:40px 0;text-align:center"><span class="spinner"></span>Loading…</div>';
-  const [sq,int,dr,tr,dy,ex,sc]=await Promise.all([fetchCSV(CFG.SQUAD_LOAD_URL),fetchCSV(CFG.PLAYER_INTENSITY_URL),fetchCSV(CFG.DRILL_DATA_URL),fetchCSV(CFG.LOAD_TREND_URL),fetchCSV(CFG.DAILY_URL),fetchExtCSV(CFG.EXT_ACTIVITY_URL),fetchCSV(CFG.MATCH_SCHEDULE_URL)]);
+  const [sq,int,dr,tr,dy,ex,sc]=await Promise.all([fetchCSV(CFG.SQUAD_LOAD_URL),fetchCSV(CFG.PLAYER_INTENSITY_URL),fetchCSV(CFG.DRILL_DATA_URL),fetchCSV(CFG.LOAD_TREND_URL),fetchCSV(CFG.DAILY_URL),fetchExtCSV(CFG.EXT_ACTIVITY_URL),fetchExtCSV(CFG.MATCH_SCHEDULE_URL)]);
   DATA.squad=sq;DATA.intensity=int;DATA.drill=dr;DATA.trend=tr;DATA.daily=dy;DATA.ext=ex;DATA.schedule=sc;
   dsStatus('ds-squad',sq,'LS_Squad_Load');
   dsStatus('ds-intensity',int,'LS_Player_Intensity');
