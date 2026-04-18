@@ -1034,20 +1034,24 @@ function bindEvents(){
 // ── NEXT MATCH AUTO-DETECT ─────────────────────────────────────────────────────
 function parseScheduleDate(s){
   if(!s)return null;
-  // Try direct parse first
-  let d=new Date(s);if(!isNaN(d.getTime()))return d;
-  // Handle "Wed, 29, Apr" / "Wed,  29, Apr" format
   const MONTHS={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+  // Custom parser first — handles "Wed, 29, Apr" / "29 Apr" / "2026-04-29"
   const parts=s.replace(/,/g,' ').trim().split(/\s+/);
-  let day=null,mon=null;
-  for(const p of parts){const n=parseInt(p);if(!isNaN(n)&&n>=1&&n<=31)day=n;const m=MONTHS[p.toLowerCase().substring(0,3)];if(m!==undefined)mon=m;}
+  let day=null,mon=null,yr=null;
+  for(const p of parts){
+    const n=parseInt(p);
+    if(!isNaN(n)&&n>=2020&&n<=2099){yr=n;continue;}
+    if(!isNaN(n)&&n>=1&&n<=31)day=n;
+    const m=MONTHS[p.toLowerCase().substring(0,3)];
+    if(m!==undefined)mon=m;
+  }
   if(day!==null&&mon!==null){
-    const now=new Date();let yr=now.getFullYear();
-    const cand=new Date(yr,mon,day);
-    if(cand<now&&(now-cand)>180*86400000)yr++;
+    if(!yr){const now=new Date();yr=now.getFullYear();const cand=new Date(yr,mon,day);if(cand<now&&(now-cand)>180*86400000)yr++;}
     return new Date(yr,mon,day);
   }
-  return null;
+  // Fallback: native parse only if year >= 2020 (avoids Chrome misreading "Wed, 29, Apr" as 1901)
+  const d=new Date(s);
+  return(!isNaN(d.getTime())&&d.getFullYear()>=2020)?d:null;
 }
 function buildNextMatch(rows){
   if(!rows||!rows.length)return null;
