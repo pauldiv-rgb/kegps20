@@ -1,0 +1,1058 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kildare U20 — AD Performance Dashboard</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0b1929;color:#fff;font-family:Inter,Arial,sans-serif;min-height:100vh;font-size:13px}
+::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:#0b1929}::-webkit-scrollbar-thumb{background:#1e3a52;border-radius:3px}
+table{border-collapse:collapse;width:100%}
+th{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#557;border-bottom:1px solid #1e3a52;padding:8px 12px;text-align:left;cursor:pointer;user-select:none;white-space:nowrap}
+td{padding:8px 12px;font-size:12px;vertical-align:middle}
+tr:not(:last-child) td{border-bottom:1px solid #0f2a3e22}
+tr:hover td{background:#0f2a3e55}
+button{font-family:inherit;cursor:pointer}
+select{font-family:inherit;background:#0f2235;border:1px solid #1e3a52;color:#9FE1CB;padding:4px 10px;border-radius:3px;font-size:10px;cursor:pointer;appearance:none}
+.spinner{display:inline-block;width:16px;height:16px;border:2px solid #1e3a52;border-top:2px solid #9FE1CB;border-radius:50%;animation:spin .8s linear infinite;vertical-align:middle;margin-right:8px}
+@keyframes spin{to{transform:rotate(360deg)}}
+#tabs-nav button{padding:12px 18px;background:transparent;border:none;border-bottom:2px solid transparent;color:#446;font-size:12px;font-weight:400;letter-spacing:.04em;transition:all .15s}
+#tabs-nav button.active{color:#9FE1CB;border-bottom-color:#9FE1CB;font-weight:700}
+.pos-btn,.sub-btn,.metric-btn,.tl-btn{padding:4px 10px;border-radius:3px;font-size:10px;font-weight:600;background:transparent;border:1px solid #1e3a52;color:#446;transition:all .15s;cursor:pointer}
+.pos-btn.active,.sub-btn.active,.metric-btn.active,.tl-btn.active{background:#9FE1CB22;border-color:#9FE1CB;color:#9FE1CB}
+.mode-btn{padding:7px 18px;border-radius:4px;font-size:11px;font-weight:700;background:transparent;border:1px solid #1e3a52;color:#446;letter-spacing:.04em;transition:all .15s;cursor:pointer}
+.mode-btn.active{background:#1e3a5244;border-color:#9FE1CB;color:#9FE1CB}
+.card{flex:1;background:#0f2235;border-radius:6px;padding:10px 14px;border-top:2px solid #1e3a52}
+.card .label{font-size:9px;color:#557;text-transform:uppercase;letter-spacing:.09em;margin-bottom:4px}
+.card .value{font-size:20px;font-weight:700;color:#fff;line-height:1.1}
+.card .sub{font-size:9px;color:#446;margin-top:3px}
+.badge{display:inline-block;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:600;white-space:nowrap}
+.avail-dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:5px;vertical-align:middle}
+.setup-box{background:#0f2235;border-radius:8px;padding:32px;text-align:center;border:1px dashed #1e3a52}
+th[title]{cursor:help;border-bottom:1px dashed #446}
+</style>
+</head>
+<body>
+<div style="background:#0c1f32;border-bottom:1px solid #1e3a52;padding:14px 24px;display:flex;align-items:center;justify-content:space-between">
+  <div>
+    <div style="font-size:10px;color:#9FE1CB;letter-spacing:.14em;text-transform:uppercase;margin-bottom:3px" id="team-name"></div>
+    <div style="font-size:18px;font-weight:700;letter-spacing:-.02em">Athletic Development · Performance Dashboard</div>
+  </div>
+  <div style="text-align:right">
+    <div style="font-size:9px;color:#557;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Next Match</div>
+    <div style="font-size:12px;color:#9FE1CB;font-weight:700" id="next-match"></div>
+  </div>
+</div>
+<div id="data-status-bar" style="background:#0b1929;border-bottom:1px solid #1e3a52;padding:5px 24px;display:flex;gap:16px;align-items:center;font-size:9px;flex-wrap:wrap">
+  <span style="color:#334">Data:</span>
+  <span id="ds-squad" style="color:#334">LS_Squad_Load …</span>
+  <span id="ds-intensity" style="color:#334">LS_Player_Intensity …</span>
+  <span id="ds-drill" style="color:#334">LS_Drill_Data …</span>
+  <span id="ds-trend" style="color:#334">LS_Load_Trend …</span>
+  <span id="ds-daily" style="color:#334">LS_Daily_Export …</span>
+  <span id="ds-ext" style="color:#334">Ext Activity …</span>
+</div>
+<div id="tabs-nav" style="background:#0c1f32;border-bottom:1px solid #1e3a52;padding:0 24px;display:flex">
+  <button class="active" data-tab="squad">👥 Squad Status</button>
+  <button data-tab="load">📈 Load Monitoring</button>
+  <button data-tab="intensity">⚡ Intensity &amp; Zones</button>
+  <button data-tab="match">📊 Match Exposure</button>
+  <button data-tab="profile">👤 Player Profile</button>
+</div>
+<div style="padding:24px" id="tab-content">
+  <div style="color:#9FE1CB;padding:40px 0;text-align:center"><span class="spinner"></span>Loading dashboard data…</div>
+</div>
+<div style="padding:10px 24px;border-top:1px solid #0f2a3e;font-size:9px;color:#223">
+  Kildare GAA U20 Football · Athletic Development · gpexe · 2026 · Live data: Google Sheets
+</div>
+<script>
+// ── CONFIG ───────────────────────────────────────────────────────────────────
+const CFG={
+  SQUAD_LOAD_URL:'https://docs.google.com/spreadsheets/d/e/2PACX-1vTaiT2EXrwkobUINl0zCLTAa7G7vZy6J3AGgOEJubAAD8zaqEfv7XgPgF_lF7toYi0am6IKWFkAjEX4/pub?gid=2100000004&single=true&output=csv',
+  PLAYER_INTENSITY_URL:'https://docs.google.com/spreadsheets/d/e/2PACX-1vTaiT2EXrwkobUINl0zCLTAa7G7vZy6J3AGgOEJubAAD8zaqEfv7XgPgF_lF7toYi0am6IKWFkAjEX4/pub?gid=1529021756&single=true&output=csv',
+  DRILL_DATA_URL:'https://docs.google.com/spreadsheets/d/e/2PACX-1vTaiT2EXrwkobUINl0zCLTAa7G7vZy6J3AGgOEJubAAD8zaqEfv7XgPgF_lF7toYi0am6IKWFkAjEX4/pub?gid=215121705&single=true&output=csv',
+  LOAD_TREND_URL:'https://docs.google.com/spreadsheets/d/e/2PACX-1vTaiT2EXrwkobUINl0zCLTAa7G7vZy6J3AGgOEJubAAD8zaqEfv7XgPgF_lF7toYi0am6IKWFkAjEX4/pub?gid=2100000006&single=true&output=csv',
+  DAILY_URL:'https://docs.google.com/spreadsheets/d/e/2PACX-1vTaiT2EXrwkobUINl0zCLTAa7G7vZy6J3AGgOEJubAAD8zaqEfv7XgPgF_lF7toYi0am6IKWFkAjEX4/pub?gid=2100000012&single=true&output=csv',
+  EXT_ACTIVITY_URL:'https://docs.google.com/spreadsheets/d/e/2PACX-1vTaiT2EXrwkobUINl0zCLTAa7G7vZy6J3AGgOEJubAAD8zaqEfv7XgPgF_lF7toYi0am6IKWFkAjEX4/pub?gid=1093848037&single=true&output=csv',
+  NEXT_MATCH:'v Westmeath — QF — 15 Apr 2026',
+  TEAM:'Kildare GAA · U20 Football · 2026',
+};
+// ── CONSTANTS ────────────────────────────────────────────────────────────────
+const PCOL={'Middle 8':'#4FC3F7','Inside Forward':'#81C784','Inside Defender':'#FFB74D'};
+const FCFG={'High Risk':{bg:'#E24B4A22',color:'#E24B4A',border:'#E24B4A44'},'Monitor':{bg:'#FF8C0022',color:'#FF8C00',border:'#FF8C0044'},'Normal':{bg:'#4CAF5022',color:'#4CAF50',border:'#4CAF5044'},'Under-Loaded':{bg:'#4FC3F722',color:'#4FC3F7',border:'#4FC3F744'}};
+const ACFG={Available:'#4CAF50',RTP:'#FF8C00',Injured:'#E24B4A',Unavailable:'#9E9E9E','No GPS':'#9E9E9E'};
+const U20_M=125,U20_H=25,SNR_M=150,SNR_H=41;
+const SCW=900,SCH=380,SPL=56,SPR=20,SPT=20,SPB=48;
+const SPW=SCW-SPL-SPR,SPH=SCH-SPT-SPB;
+const XN=60,XX=170,YN=0,YX=48;
+const sx=v=>SPL+((v-XN)/(XX-XN))*SPW;
+const sy=v=>SPT+SPH-((v-YN)/(YX-YN))*SPH;
+const SPD_COLS=['Max_Speed','Session_Max_Speed','Peak_Speed','Top_Speed','Max_Velocity','Maximum_Velocity','Max_Vel'];
+const ACC_COLS=['Max_Acc','Max_Acc_ms2','Peak_Acc','Max_Acceleration','Maximum_Acceleration','Max_Acc_Load','Max Acc Load','Peak_Acceleration','Max_Accel','Peak_Accel'];
+const DEC_COLS=['Max_Dec','Max_Dec_ms2','Peak_Dec','Max_Deceleration','Maximum_Deceleration','Max_Dec_Load','Max Dec Load','Peak_Deceleration','Max_Decel','Peak_Decel'];
+// Auto-detect m/s → km/h: GPS units sometimes export max speed in m/s (typical range 5–12)
+// A value < 15 is almost certainly m/s; multiply by 3.6 to convert to km/h
+function spdKph(v){return(v>0&&v<15)?+(v*3.6).toFixed(1):v;}
+// ── METRICS (multi-column fallbacks for weekly sheets) ────────────────────────
+const METRICS={
+  hmld:{label:'HMLD',weekCols:['Weekly_HMLD','Weekly HMLD','HMLD_Weekly'],acwrCols:['HMLD_ACWR','HMLD ACWR'],unit:'m',dailyCol:'HMLD',color:'#9FE1CB'},
+  td:{label:'Total Distance',weekCols:['Weekly_TD','Weekly_Total_Distance','Weekly Total Distance','Total_Distance_Weekly','TD_Weekly'],acwrCols:['TD_ACWR','TD ACWR','Total_Distance_ACWR'],unit:'m',dailyCol:'Total_Distance',color:'#4FC3F7'},
+  hsr:{label:'HSR',weekCols:['Weekly_HSR','Weekly HSR','HSR_Weekly'],acwrCols:['HSR_ACWR','HSR ACWR'],unit:'m',dailyCol:'HSR',color:'#81C784'},
+  acc:{label:'Acc Events',weekCols:['Weekly_Acc_Events','Weekly Acc Events','Acc_Events_Weekly','Weekly_Acc'],acwrCols:['Acc_Events_ACWR','Acc ACWR','Acc_ACWR'],unit:'',dailyCol:'Acc_Events',color:'#FFB74D'},
+  dec:{label:'Dec Events',weekCols:['Weekly_Dec_Events','Weekly Dec Events','Dec_Events_Weekly','Weekly_Dec'],acwrCols:['Dec_Events_ACWR','Dec ACWR','Dec_ACWR'],unit:'',dailyCol:'Dec_Events',color:'#FF8A65'},
+};
+// ── STATE ─────────────────────────────────────────────────────────────────────
+const DATA={squad:null,intensity:null,drill:null,trend:null,daily:null,ext:null};
+const STATE={
+  tab:'squad',squadPos:'All',squadSort:'hmld',squadDir:'desc',
+  loadMetric:'hmld',loadPlayer:'All',
+  intPos:'All',intMatch:'All',intMode:'match',intHalf:'full',intDrill:undefined,intLastN:'All',
+  matchPos:'All',
+  profilePlayer:'',profileTimeline:'28d',
+  profMode:'match',profHalf:'full',profMatch:'All',
+};
+// ── CSV ───────────────────────────────────────────────────────────────────────
+function parseLine(line){const r=[];let c='',q=false;for(let i=0;i<line.length;i++){const ch=line[i];if(ch==='"'){q=!q;}else if(ch===','&&!q){r.push(c.trim());c='';}else c+=ch;}r.push(c.trim());return r;}
+function parseCSV(txt){try{const lines=txt.trim().split('\n');if(lines.length<2)return null;const hdrs=parseLine(lines[0]);const rows=lines.slice(1).map(l=>{const v=parseLine(l),o={};hdrs.forEach((h,i)=>{o[h]=v[i]||'';});return o;}).filter(r=>Object.values(r).some(v=>v!==''));return{headers:hdrs,rows};}catch(e){return null;}}
+async function fetchCSV(url){try{const res=await fetch(url+'&t='+Date.now());if(!res.ok)return{error:'HTTP '+res.status};const txt=await res.text();if(txt.trim().startsWith('<'))return{error:'HTML returned — check publish settings'};const parsed=parseCSV(txt);if(!parsed)return{error:'Empty or invalid CSV'};return{data:parsed};}catch(err){return{error:err.message};}}
+// Special fetcher for sheets where row 0 is a description and row 1 holds actual column headers
+async function fetchExtCSV(url){try{const res=await fetch(url+'&t='+Date.now());if(!res.ok)return{error:'HTTP '+res.status};const txt=await res.text();if(txt.trim().startsWith('<'))return{error:'HTML returned'};const lines=txt.trim().split('\n');if(lines.length<3)return{error:'Insufficient rows'};const hdrs=parseLine(lines[1]).map(h=>h.trim());const rows=lines.slice(2).map(l=>{const v=parseLine(l),o={};hdrs.forEach((h,i)=>{o[h]=v[i]||'';});return o;}).filter(r=>Object.values(r).some(v=>v!==''));return{data:{headers:hdrs,rows}};}catch(err){return{error:err.message};}}
+// ── HELPERS ───────────────────────────────────────────────────────────────────
+function gv(row,...keys){for(const k of keys)if(row&&row[k]!==undefined&&row[k]!=='')return row[k];return'';}
+function num(v){return parseFloat(String(v).replace(/,/g,''))||0;}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function badge(text,cfg){const c=cfg[text]||{bg:'#1e3a5222',color:'#557',border:'#1e3a5244'};return text?`<span class="badge" style="background:${c.bg};color:${c.color};border:1px solid ${c.border}">${esc(text)}</span>`:'<span style="color:#334">—</span>';}
+function acwrColor(v){if(!v||v===0)return'#557';if(v>1.5)return'#E24B4A';if(v>=1.3)return'#FF8C00';if(v>=0.8)return'#4CAF50';return'#4FC3F7';}
+function sprintColor(p){return p>=90?'#4CAF50':p>=80?'#FF8C00':'#E24B4A';}
+function accVolColor(v7,avg28){if(!avg28)return'#557';const r=v7/avg28;if(r>1.15)return'#E24B4A';if(r>=0.95)return'#4CAF50';if(r>=0.80)return'#FF8C00';return'#4FC3F7';}
+function pkColor(p){return p>=90?'#4CAF50':p>=80?'#FF8C00':p>0?'#E24B4A':'#557';}
+function pkFmt(v,unit,p){if(!v)return'<span style="color:#334">—</span>';const c=pkColor(p);return`<span style="font-weight:700;color:${c}">${v.toFixed(unit==='km/h'?1:2)}\u00a0${unit}</span>${p>0?`<span style="color:${c};font-size:9px">\u00a0(${p.toFixed(0)}%)</span>`:''}`;}
+
+function fmtWeek(d){if(d===''||d==null)return'';const M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];const s=String(d).trim();if(/^\d{5,}(\.\d+)?$/.test(s)){const ms=(parseFloat(s)-25569)*86400000;const dt=new Date(ms);if(!isNaN(dt))return dt.getUTCDate()+' '+M[dt.getUTCMonth()];}const p=s.split(/[-\/]/);if(p.length===3){if(p[0].length===4)return parseInt(p[2])+' '+M[parseInt(p[1])-1];if(parseInt(p[0])>12)return parseInt(p[0])+' '+M[parseInt(p[1])-1];return parseInt(p[1])+' '+M[parseInt(p[0])-1];}return s;}
+function dateToMs(d){if(!d)return 0;const s=String(d).trim();if(/^\d{5,}(\.\d+)?$/.test(s))return(parseFloat(s)-25569)*86400000;const p=s.split(/[-\/]/);if(p.length===3){if(p[0].length===4)return Date.UTC(parseInt(p[0]),parseInt(p[1])-1,parseInt(p[2]));if(parseInt(p[0])>12)return Date.UTC(2000+parseInt(p[2]),parseInt(p[1])-1,parseInt(p[0]));return Date.UTC(2000+parseInt(p[2]),parseInt(p[0])-1,parseInt(p[1]));}return 0;}
+function setupMsg(title,detail){return`<div class="setup-box"><div style="font-size:20px;margin-bottom:12px">📋</div><div style="font-size:13px;color:#9FE1CB;font-weight:600;margin-bottom:8px">${title}</div><div style="font-size:11px;color:#446;line-height:1.8;max-width:440px;margin:0 auto">${detail}</div></div>`;}
+// ── SCATTER BASE ──────────────────────────────────────────────────────────────
+function buildScatterBase(){
+  const p=[];
+  [70,80,90,100,110,120,130,140,150,160].forEach(x=>{p.push(`<line x1="${sx(x)}" x2="${sx(x)}" y1="${SPT}" y2="${SPT+SPH}" stroke="#0f2a3e" stroke-width="1"/>`);});
+  [0,10,20,30,40].forEach(y=>{p.push(`<line x1="${SPL}" x2="${SPL+SPW}" y1="${sy(y)}" y2="${sy(y)}" stroke="#0f2a3e" stroke-width="1"/>`);});
+  p.push(`<rect x="${sx(U20_M)}" y="${SPT}" width="${sx(XX)-sx(U20_M)}" height="${sy(U20_H)-SPT}" fill="#CC5500" fill-opacity="0.15"/>`);
+  p.push(`<line x1="${sx(U20_M)}" x2="${sx(U20_M)}" y1="${SPT}" y2="${sy(U20_H)}" stroke="#FF8C00" stroke-width="1.5" stroke-dasharray="5 3" opacity="0.8"/>`);
+  p.push(`<line x1="${sx(U20_M)}" x2="${sx(XX)}" y1="${sy(U20_H)}" y2="${sy(U20_H)}" stroke="#FF8C00" stroke-width="1.5" stroke-dasharray="5 3" opacity="0.8"/>`);
+  p.push(`<rect x="${sx(SNR_M)}" y="${SPT}" width="${sx(XX)-sx(SNR_M)}" height="${sy(SNR_H)-SPT}" fill="#8B1A1A" fill-opacity="0.60"/>`);
+  p.push(`<line x1="${sx(SNR_M)}" x2="${sx(SNR_M)}" y1="${SPT}" y2="${sy(SNR_H)}" stroke="#E24B4A" stroke-width="1.5" stroke-dasharray="5 3" opacity="0.9"/>`);
+  p.push(`<line x1="${sx(SNR_M)}" x2="${sx(XX)}" y1="${sy(SNR_H)}" y2="${sy(SNR_H)}" stroke="#E24B4A" stroke-width="1.5" stroke-dasharray="5 3" opacity="0.9"/>`);
+  p.push(`<text x="${sx(XX)-8}" y="${sy(SNR_H)-14}" text-anchor="end" font-size="9" fill="#E24B4A" font-weight="bold">SENIOR ZONE</text>`);
+  p.push(`<text x="${sx(XX)-8}" y="${sy(SNR_H)-4}" text-anchor="end" font-size="8" fill="#E24B4A" opacity="0.7">${SNR_M} M/Min · ${SNR_H} HMLD/Min</text>`);
+  p.push(`<text x="${sx(SNR_M)-8}" y="${sy(U20_H)-14}" text-anchor="end" font-size="9" fill="#FF8C00" font-weight="bold">U20 ZONE</text>`);
+  p.push(`<text x="${sx(SNR_M)-8}" y="${sy(U20_H)-4}" text-anchor="end" font-size="8" fill="#FF8C00" opacity="0.7">${U20_M} M/Min · ${U20_H} HMLD/Min</text>`);
+  p.push(`<line x1="${SPL}" x2="${SPL+SPW}" y1="${SPT+SPH}" y2="${SPT+SPH}" stroke="#1e3a52" stroke-width="1"/>`);
+  p.push(`<line x1="${SPL}" x2="${SPL}" y1="${SPT}" y2="${SPT+SPH}" stroke="#1e3a52" stroke-width="1"/>`);
+  [70,80,90,100,110,120,130,140,150,160].forEach(x=>{p.push(`<text x="${sx(x)}" y="${SPT+SPH+16}" text-anchor="middle" font-size="9" fill="#446">${x}</text>`);});
+  p.push(`<text x="${SPL+SPW/2}" y="${SCH-4}" text-anchor="middle" font-size="10" fill="#557">Distance Per Minute (M/Min)</text>`);
+  [0,10,20,30,40].forEach(y=>{p.push(`<text x="${SPL-6}" y="${sy(y)+4}" text-anchor="end" font-size="9" fill="#446">${y}</text>`);});
+  p.push(`<text transform="translate(13,${SPT+SPH/2}) rotate(-90)" text-anchor="middle" font-size="10" fill="#557">HMLD Per Minute</text>`);
+  return p;
+}
+function scatterSVG(parts,tipId='dot-tooltip'){
+  return`<div style="position:relative"><svg id="intensity-svg" viewBox="0 0 ${SCW} ${SCH}" width="100%" height="${SCH}" style="background:#0c1f32;border-radius:8px;display:block">${parts.join('')}</svg><div id="${tipId}" style="display:none;position:absolute;background:#0f2235;border:1px solid #1e3a52;border-radius:5px;padding:8px 12px;font-size:11px;pointer-events:none;min-width:180px;z-index:10"></div></div>`;
+}
+function scatterLegendBar(n,disp){
+  const iu20=disp.filter(p=>p.x>=U20_M&&p.y>=U20_H).length,isnr=disp.filter(p=>p.x>=SNR_M&&p.y>=SNR_H).length;
+  return`<div style="display:flex;gap:18px;align-items:center;margin-top:8px;flex-wrap:wrap;font-size:9px">
+    <div style="display:flex;gap:5px;align-items:center"><div style="width:11px;height:11px;background:#8B1A1A;border:1.5px dashed #E24B4A;border-radius:2px"></div><span style="color:#E24B4A;font-weight:700">Senior Zone</span><span style="color:#446">${isnr}/${n}</span></div>
+    <div style="display:flex;gap:5px;align-items:center"><div style="width:11px;height:11px;background:#CC5500;border:1.5px dashed #FF8C00;border-radius:2px"></div><span style="color:#FF8C00;font-weight:700">U20 Zone</span><span style="color:#446">${iu20}/${n}</span></div>
+    ${Object.entries(PCOL).map(([p,c])=>`<div style="display:flex;gap:5px;align-items:center"><div style="width:8px;height:8px;border-radius:50%;background:${c}"></div><span style="color:${c}">${p}</span></div>`).join('')}
+  </div>`;
+}
+function addZone(pts){return pts.map(p=>({...p,zone:p.x>=SNR_M&&p.y>=SNR_H?'Senior Zone':p.x>=U20_M&&p.y>=U20_H?'U20 Zone':'Below Zone'}));}
+// ── SCATTER DOT RENDER (shared, highlight support) ────────────────────────────
+function dotsSVG(disp,highlightName){
+  return disp.map(p=>{
+    const cx=sx(p.x),cy=sy(p.y),col=PCOL[p.pos]||'#aaa';
+    const isHL=highlightName&&p.full===highlightName;
+    const r=isHL?8:5,sw=isHL?2:1,stroke=isHL?'#fff':'#0c1f32';
+    const tip=esc(`${p.full} | ${p.pos||'—'} | ${p.x} M/Min · ${p.y} HMLD/Min | ${p.zone||''}${p.match?' | '+p.match:''}`);
+    return`<g class="dot" data-tip="${tip}">${isHL?`<circle cx="${cx}" cy="${cy}" r="12" fill="none" stroke="${col}" stroke-width="1" stroke-dasharray="3 3" opacity="0.5"/>`:''}
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="${col}" fill-opacity="${isHL?1:0.85}" stroke="${stroke}" stroke-width="${sw}"/>
+      <text x="${cx+r+3}" y="${cy+4}" font-size="${isHL?10:8.5}" fill="${col}" opacity="${isHL?1:0.85}" font-weight="${isHL?700:400}">${esc(p.name)}</text></g>`;
+  }).join('');
+}
+// ── DRILL HELPERS ─────────────────────────────────────────────────────────────
+function getDrillRows(){return DATA.drill&&!DATA.drill.error?DATA.drill.data.rows:[];}
+function drillPts(rows){
+  return rows.map(r=>({name:(gv(r,'Player_Name','Player Name')||'').split(' ').pop(),full:gv(r,'Player_Name','Player Name'),pos:gv(r,'Position_Group','Position Group'),td:num(gv(r,'Total_Distance','Total Distance')),hmld:num(gv(r,'HMLD')),dur:num(gv(r,'Duration_Min','Duration Min')),tag:gv(r,'Tags_and_Notes','Tags and Notes'),stype:gv(r,'Session_Type','Session Type'),match:gv(r,'Match_Label','Match Label')})).filter(p=>p.dur>0&&p.full).map(p=>({...p,x:+(p.td/p.dur).toFixed(1),y:+(p.hmld/p.dur).toFixed(1)})).filter(p=>p.x>0);
+}
+function avgByPlayer(pts){const map={};pts.forEach(p=>{if(!map[p.full])map[p.full]={...p,n:1};else{map[p.full].x+=p.x;map[p.full].y+=p.y;map[p.full].n++;}});return Object.values(map).map(p=>({...p,x:+(p.x/p.n).toFixed(1),y:+(p.y/p.n).toFixed(1)}));}
+// ── ZONE PANELS ───────────────────────────────────────────────────────────────
+function zoneBar(val,max,color){const pct=max>0?Math.min(100,(val/max)*100):0;return`<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px"><div style="flex:1;height:5px;background:#0b1929;border-radius:3px"><div style="height:5px;width:${pct}%;background:${color};border-radius:3px"></div></div><span style="font-size:9px;color:#557;min-width:40px;text-align:right">${val>0?Math.round(val)+'m':'—'}</span></div>`;}
+function buildZonePanels(rows){
+  if(!rows||!rows.length)return`<div style="margin-top:12px;font-size:10px;color:#334;text-align:center;padding:16px">No zone data for this selection.</div>`;
+  const avg=col=>{const vs=rows.map(r=>num(gv(r,col))).filter(v=>v>0);return vs.length?+(vs.reduce((a,b)=>a+b,0)/vs.length).toFixed(1):0;};
+  const sz=[avg('Speed_Z1_Dist'),avg('Speed_Z2_Dist'),avg('Speed_Z3_Dist'),avg('Speed_Z4_Dist'),avg('Speed_Z5_Dist'),avg('Speed_Z6_Dist')];
+  const szMax=Math.max(...sz,1),szColors=['#334','#446','#4FC3F7','#81C784','#FFB74D','#E24B4A'],szLabels=['Z1 Walk <7','Z2 Jog 7–14','Z3 Run 14–20','Z4 High 20–27','Z5 Sprint 27–29','Z6 Max >29'];
+  const speedPanel=`<div style="background:#0f2235;border-radius:8px;padding:14px 16px"><div style="font-size:9px;color:#9FE1CB;text-transform:uppercase;letter-spacing:.12em;margin-bottom:12px">Speed Zones (avg m)</div>${szLabels.map((l,i)=>`<div style="margin-bottom:8px"><span style="font-size:9px;color:${szColors[i]}">${l}</span>${zoneBar(sz[i],szMax,szColors[i])}</div>`).join('')}</div>`;
+  const al=avg('Acc_Low_Dist'),am=avg('Acc_Med_Dist'),ah=avg('Acc_High_Dist'),ae=avg('Acc_Events'),aMax=Math.max(al,am,ah,1);
+  const accPanel=`<div style="background:#0f2235;border-radius:8px;padding:14px 16px"><div style="font-size:9px;color:#9FE1CB;text-transform:uppercase;letter-spacing:.12em;margin-bottom:12px">Acc Zones (avg m)</div><div style="margin-bottom:8px"><span style="font-size:9px;color:#446">Low 0–2 m/s²</span>${zoneBar(al,aMax,'#4FC3F7')}</div><div style="margin-bottom:8px"><span style="font-size:9px;color:#446">Med 2–3 m/s²</span>${zoneBar(am,aMax,'#FFB74D')}</div><div style="margin-bottom:12px"><span style="font-size:9px;color:#446">High ≥3 m/s²</span>${zoneBar(ah,aMax,'#E24B4A')}</div><div style="border-top:1px solid #1e3a52;padding-top:10px;display:flex;justify-content:space-between"><span style="font-size:9px;color:#557">Events ≥3 m/s²</span><span style="font-size:15px;font-weight:700;color:#FFB74D">${ae>0?ae.toFixed(1):'—'}</span></div></div>`;
+  const dl=avg('Dec_Low_Dist'),dm=avg('Dec_Med_Dist'),dh=avg('Dec_High_Dist'),de=avg('Dec_Events'),dMax=Math.max(dl,dm,dh,1);
+  const decPanel=`<div style="background:#0f2235;border-radius:8px;padding:14px 16px"><div style="font-size:9px;color:#9FE1CB;text-transform:uppercase;letter-spacing:.12em;margin-bottom:12px">Dec Zones (avg m)</div><div style="margin-bottom:8px"><span style="font-size:9px;color:#446">Low 0–2 m/s²</span>${zoneBar(dl,dMax,'#4FC3F7')}</div><div style="margin-bottom:8px"><span style="font-size:9px;color:#446">Med 2–3 m/s²</span>${zoneBar(dm,dMax,'#FFB74D')}</div><div style="margin-bottom:12px"><span style="font-size:9px;color:#446">High ≥3 m/s²</span>${zoneBar(dh,dMax,'#E24B4A')}</div><div style="border-top:1px solid #1e3a52;padding-top:10px;display:flex;justify-content:space-between"><span style="font-size:9px;color:#557">Events ≥3 m/s²</span><span style="font-size:15px;font-weight:700;color:#FF8A65">${de>0?de.toFixed(1):'—'}</span></div></div>`;
+  const sq=avg('Sprint_Quality_Pct'),ew=avg('Ecc_Work_Jkg'),sqColor=sq>=90?'#4CAF50':sq>=80?'#FF8C00':'#E24B4A';
+  const eccRows=[...rows].filter(r=>num(gv(r,'Ecc_Index'))>0).sort((a,b)=>num(gv(b,'Ecc_Index'))-num(gv(a,'Ecc_Index'))).slice(0,5);
+  const qualPanel=`<div style="background:#0f2235;border-radius:8px;padding:14px 16px"><div style="font-size:9px;color:#9FE1CB;text-transform:uppercase;letter-spacing:.12em;margin-bottom:12px">Sprint Quality &amp; Eccentric</div><div style="display:flex;gap:8px;margin-bottom:12px"><div style="flex:1;text-align:center;background:#0b1929;border-radius:6px;padding:8px 4px"><div style="font-size:8px;color:#557;text-transform:uppercase;margin-bottom:3px">Sprint Quality</div><div style="font-size:17px;font-weight:700;color:${sqColor}">${sq>0?sq.toFixed(0)+'%':'—'}</div><div style="font-size:8px;color:#334;margin-top:2px">session max ÷ 28d peak</div></div><div style="flex:1;text-align:center;background:#0b1929;border-radius:6px;padding:8px 4px"><div style="font-size:8px;color:#557;text-transform:uppercase;margin-bottom:3px">Ecc Work</div><div style="font-size:17px;font-weight:700;color:#9FE1CB">${ew>0?ew.toFixed(0):'—'}</div><div style="font-size:8px;color:#334;margin-top:2px">J/kg avg</div></div></div>${eccRows.length?`<div style="font-size:8px;color:#557;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Top Ecc Index</div>${eccRows.map(r=>{const nm=(gv(r,'Player_Name','Player Name')||'').split(' ').pop();const ei=num(gv(r,'Ecc_Index'));const pc=PCOL[gv(r,'Position_Group','Position Group')]||'#557';return`<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:10px;color:${pc}">${esc(nm)}</span><span style="font-size:10px;font-weight:700;color:#9FE1CB">${ei.toFixed(2)}</span></div>`;}).join('')}`:'<div style="font-size:10px;color:#334">No eccentric index data.</div>'}</div>`;
+  return`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:14px">${speedPanel}${accPanel}${decPanel}${qualPanel}</div>`;
+}
+// ── WEEKLY CHART ──────────────────────────────────────────────────────────────
+function buildWeeklyChart(weeks,metric){
+  const m=METRICS[metric||'hmld'];
+  if(!weeks||!weeks.length)return`<div class="setup-box" style="padding:24px;color:#446;font-size:11px">No weekly data. Check LS_Load_Trend column names match: ${m.weekCols[0]}, ${m.acwrCols[0]}</div>`;
+  const LCW=960,LCH=280,LPL=68,LPR=58,LPT=20,LPB=46,LPW=LCW-LPL-LPR,LPH=LCH-LPT-LPB;
+  const n=weeks.length,colW=LPW/n,bw=colW*0.55;
+  const maxV=Math.max(...weeks.map(w=>w.val),1);
+  const step=metric==='hmld'||metric==='td'?500:metric==='hsr'?200:10;
+  const topV=Math.ceil(maxV/step)*step+step;
+  const hy=v=>LPT+LPH-(v/topV)*LPH;
+  const ay=v=>LPT+LPH-(Math.min(Math.max(v,0),2.0)/2.0)*LPH;
+  const bx=i=>LPL+i*colW+(colW-bw)/2;
+  const mx=i=>LPL+i*colW+colW/2;
+  const p=[];
+  p.push(`<rect x="${LPL}" y="${ay(1.3)}" width="${LPW}" height="${ay(0.8)-ay(1.3)}" fill="#4CAF50" fill-opacity="0.06"/>`);
+  [[1.5,'#E24B4A'],[1.3,'#FF8C00'],[0.8,'#4FC3F7']].forEach(([v,c])=>{p.push(`<line x1="${LPL}" x2="${LPL+LPW}" y1="${ay(v)}" y2="${ay(v)}" stroke="${c}" stroke-width="1" stroke-dasharray="4 3" opacity="0.6"/>`);p.push(`<text x="${LPL+LPW+4}" y="${ay(v)+4}" font-size="8" fill="${c}" opacity="0.8">${v}</text>`);});
+  for(let v=0;v<=topV;v+=step){p.push(`<line x1="${LPL}" x2="${LPL+LPW}" y1="${hy(v)}" y2="${hy(v)}" stroke="#0f2a3e" stroke-width="1"/>`);p.push(`<text x="${LPL-6}" y="${hy(v)+4}" text-anchor="end" font-size="9" fill="#446">${v>=1000?v/1000+'k':v}</text>`);}
+  weeks.forEach((w,i)=>{const bh=w.val>0?(w.val/topV)*LPH:0;p.push(`<rect x="${bx(i)}" y="${hy(w.val)}" width="${bw}" height="${bh}" fill="${m.color}" fill-opacity="0.6" rx="2"/>`);if(w.val>0){const lbl=w.val>=1000?(w.val/1000).toFixed(1)+'k':Math.round(w.val);p.push(`<text x="${bx(i)+bw/2}" y="${hy(w.val)-5}" text-anchor="middle" font-size="8" fill="${m.color}" font-weight="600">${lbl}</text>`);}});
+  for(let i=0;i<weeks.length-1;i++){const a1=weeks[i].acwr,a2=weeks[i+1].acwr;if(!a1||!a2)continue;p.push(`<line x1="${mx(i)}" y1="${ay(a1)}" x2="${mx(i+1)}" y2="${ay(a2)}" stroke="${acwrColor((a1+a2)/2)}" stroke-width="2.5" opacity="0.9"/>`);}
+  weeks.forEach((w,i)=>{if(!w.acwr)return;const tip=`${fmtWeek(w.week)} | ${m.label}: ${Math.round(w.val)}${m.unit} | EW ACWR: ${w.acwr.toFixed(2)} | Sessions: ${w.sessions}`;p.push(`<g class="trend-dot" data-tip="${esc(tip)}"><circle cx="${mx(i)}" cy="${ay(w.acwr)}" r="4" fill="${acwrColor(w.acwr)}" stroke="#0b1929" stroke-width="1.5"/></g>`);});
+  p.push(`<line x1="${LPL}" x2="${LPL+LPW}" y1="${LPT+LPH}" y2="${LPT+LPH}" stroke="#1e3a52" stroke-width="1"/>`);
+  p.push(`<line x1="${LPL}" x2="${LPL}" y1="${LPT}" y2="${LPT+LPH}" stroke="#1e3a52" stroke-width="1"/>`);
+  weeks.forEach((w,i)=>p.push(`<text x="${mx(i)}" y="${LPT+LPH+16}" text-anchor="middle" font-size="9" fill="#446">${fmtWeek(w.week)}</text>`));
+  p.push(`<text x="${LPL+LPW/2}" y="${LCH-4}" text-anchor="middle" font-size="10" fill="#557">Week</text>`);
+  p.push(`<text transform="translate(13,${LPT+LPH/2}) rotate(-90)" text-anchor="middle" font-size="10" fill="#557">Weekly ${m.label}</text>`);
+  p.push(`<text transform="translate(${LCW-8},${LPT+LPH/2}) rotate(90)" text-anchor="middle" font-size="10" fill="#557">EW ACWR</text>`);
+  return`<div style="position:relative"><svg id="weekly-svg" viewBox="0 0 ${LCW} ${LCH}" width="100%" height="${LCH}" style="background:#0c1f32;border-radius:8px;display:block">${p.join('')}</svg><div id="weekly-tooltip" style="display:none;position:absolute;background:#0f2235;border:1px solid #1e3a52;border-radius:5px;padding:8px 12px;font-size:11px;pointer-events:none;min-width:200px;z-index:10"></div></div>
+  <div style="display:flex;gap:14px;margin-top:8px;font-size:9px;color:#446;flex-wrap:wrap"><span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#4CAF50"></span>Normal 0.8–1.3</span><span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#FF8C00"></span>Monitor 1.3–1.5</span><span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#E24B4A"></span>High Risk &gt;1.5</span><span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#4FC3F7"></span>Under-Loaded &lt;0.8</span><span style="margin-left:auto">Bars = Weekly ${m.label} · Line = EW ACWR</span></div>`;
+}
+// ── DAILY CHART (with optional date cutoff) ────────────────────────────────────
+function buildDailyChart(playerName,metric,cutoffDays){
+  const m=METRICS[metric||'hmld'];
+  if(!DATA.daily||DATA.daily.error)return`<div style="padding:12px;color:#334;font-size:11px;background:#0f2235;border-radius:8px;margin-top:10px">No daily data (LS_Daily_Export).</div>`;
+  let rows=DATA.daily.data.rows.filter(r=>num(gv(r,m.dailyCol))>0);
+  if(cutoffDays){const cut=Date.now()-cutoffDays*86400000;rows=rows.filter(r=>dateToMs(gv(r,'Date'))>=cut);}
+  let aggRows;
+  if(playerName&&playerName!=='All'){
+    rows=rows.filter(r=>gv(r,'Player_Name')===playerName).sort((a,b)=>dateToMs(gv(a,'Date'))-dateToMs(gv(b,'Date')));
+    if(!cutoffDays)rows=rows.slice(-20);
+    aggRows=rows.map(r=>({date:gv(r,'Date'),val:num(gv(r,m.dailyCol)),stype:gv(r,'Session_Type')||'',label:gv(r,'Session_Label')||gv(r,'Match_Label')||''}));
+  } else {
+    const byDate={};
+    rows.forEach(r=>{const dt=gv(r,'Date');if(!dt)return;if(!byDate[dt])byDate[dt]={vals:[],stype:gv(r,'Session_Type')||'',label:gv(r,'Session_Label')||gv(r,'Match_Label')||''};byDate[dt].vals.push(num(gv(r,m.dailyCol)));});
+    aggRows=Object.entries(byDate).map(([dt,v])=>({date:dt,val:+(v.vals.reduce((a,b)=>a+b,0)/v.vals.length).toFixed(1),stype:v.stype,label:v.label})).sort((a,b)=>dateToMs(a.date)-dateToMs(b.date));
+    if(!cutoffDays)aggRows=aggRows.slice(-20);
+  }
+  if(!aggRows.length)return`<div style="padding:12px;color:#334;font-size:11px;background:#0f2235;border-radius:8px;margin-top:10px">No data for this selection / date range.</div>`;
+  const DCW=960,DCH=170,DPL=56,DPR=10,DPT=14,DPB=36,DPW=DCW-DPL-DPR,DPH=DCH-DPT-DPB;
+  const n=aggRows.length,cw=DPW/n,bw=cw*0.65;
+  const maxV=Math.max(...aggRows.map(r=>r.val),1),topV=Math.ceil(maxV/100)*100+50;
+  const by=v=>DPT+DPH-(v/topV)*DPH,bx2=i=>DPL+i*cw+(cw-bw)/2;
+  const p=[];
+  for(let v=0;v<=topV;v+=(topV<=600?100:500)){p.push(`<line x1="${DPL}" x2="${DPL+DPW}" y1="${by(v)}" y2="${by(v)}" stroke="#0f2a3e" stroke-width="1"/>`);p.push(`<text x="${DPL-4}" y="${by(v)+4}" text-anchor="end" font-size="8" fill="#334">${v>=1000?v/1000+'k':v}</text>`);}
+  aggRows.forEach((r,i)=>{const isMatch=r.stype.toLowerCase().includes('match');const col=isMatch?'#FF8C00':m.color;const bh=r.val>0?(r.val/topV)*DPH:0;const tip=`${fmtWeek(r.date)} | ${r.label||r.stype||'Session'} | ${m.label}: ${Math.round(r.val)}${m.unit}`;p.push(`<g class="trend-dot" data-tip="${esc(tip)}"><rect x="${bx2(i)}" y="${by(r.val)}" width="${bw}" height="${bh}" fill="${col}" fill-opacity="0.8" rx="2"/></g>`);});
+  if(n<=18)aggRows.forEach((r,i)=>{p.push(`<text x="${bx2(i)+bw/2}" y="${DPT+DPH+14}" text-anchor="middle" font-size="7.5" fill="#334" transform="rotate(-40,${bx2(i)+bw/2},${DPT+DPH+14})">${fmtWeek(r.date)}</text>`);});
+  p.push(`<line x1="${DPL}" x2="${DPL+DPW}" y1="${DPT+DPH}" y2="${DPT+DPH}" stroke="#1e3a52" stroke-width="1"/>`);
+  p.push(`<line x1="${DPL}" x2="${DPL}" y1="${DPT}" y2="${DPT+DPH}" stroke="#1e3a52" stroke-width="1"/>`);
+  p.push(`<text transform="translate(11,${DPT+DPH/2}) rotate(-90)" text-anchor="middle" font-size="9" fill="#557">Daily ${m.label}</text>`);
+  return`<div style="margin-top:10px"><div style="font-size:9px;color:#557;text-transform:uppercase;letter-spacing:.09em;margin-bottom:5px">Session-level · <span style="color:#FF8C00">■ Match</span> <span style="color:${m.color}">■ Training</span> · Hover for detail</div><div style="position:relative"><svg id="daily-svg" viewBox="0 0 ${DCW} ${DCH}" width="100%" height="${DCH}" style="background:#0c1f32;border-radius:8px;display:block">${p.join('')}</svg><div id="daily-tooltip" style="display:none;position:absolute;background:#0f2235;border:1px solid #1e3a52;border-radius:5px;padding:6px 10px;font-size:11px;pointer-events:none;min-width:160px;z-index:10"></div></div></div>`;
+}
+// ── MULTI-METRIC PEAK CHART (Load Monitoring: Max Speed / Max Acc / Max Dec) ───
+function buildMultiMetricChart(playerName){
+  if(!DATA.daily||DATA.daily.error)return`<div style="padding:12px;color:#334;font-size:11px;background:#0f2235;border-radius:8px;margin-top:10px">No daily data for peak chart.</div>`;
+  let rawRows=DATA.daily.data.rows;
+  let sessions;
+  if(playerName&&playerName!=='All'){
+    sessions=rawRows.filter(r=>gv(r,'Player_Name')===playerName).sort((a,b)=>dateToMs(gv(a,'Date'))-dateToMs(gv(b,'Date'))).slice(-20).map(r=>({date:gv(r,'Date'),spd:num(gv(r,...SPD_COLS)),acc:num(gv(r,'Max_Acc',...ACC_COLS)),dec:num(gv(r,'Max_Dec',...DEC_COLS)),stype:gv(r,'Session_Type')||''}));
+  } else {
+    const byDate={};
+    rawRows.forEach(r=>{const dt=gv(r,'Date');if(!dt)return;if(!byDate[dt])byDate[dt]={spd:[],acc:[],dec:[],stype:gv(r,'Session_Type')||''};const spd=num(gv(r,...SPD_COLS)),acc=num(gv(r,'Max_Acc',...ACC_COLS)),dec=num(gv(r,'Max_Dec',...DEC_COLS));if(spd>0)byDate[dt].spd.push(spd);if(acc>0)byDate[dt].acc.push(acc);if(dec>0)byDate[dt].dec.push(dec);});
+    sessions=Object.entries(byDate).map(([dt,v])=>({date:dt,spd:v.spd.length?Math.max(...v.spd):0,acc:v.acc.length?Math.max(...v.acc):0,dec:v.dec.length?Math.max(...v.dec):0,stype:v.stype})).sort((a,b)=>dateToMs(a.date)-dateToMs(b.date)).slice(-20);
+  }
+  if(!sessions.some(s=>s.spd>0||s.acc>0||s.dec>0)){
+    const tried=`${SPD_COLS[0]}, ${ACC_COLS[0]}, ${DEC_COLS[0]}`;
+    return`<div style="padding:12px;font-size:10px;color:#334;background:#0f2235;border-radius:8px;margin-top:10px">Peak speed/acc/dec columns not found in LS_Daily_Export. Expected: ${tried}</div>`;
+  }
+  // Targeted diagnostic: if acc or dec are all zero but spd is working, show headers
+  const hasAcc=sessions.some(s=>s.acc>0);
+  const hasDec=sessions.some(s=>s.dec>0);
+  let peakDebug='';
+  if(!hasAcc||!hasDec){
+    const firstRow=rawRows[0];
+    const headers=firstRow?Object.keys(firstRow).join(' · '):'(no rows)';
+    const missing=[];
+    if(!hasAcc)missing.push(`Max Acc (tried: ${ACC_COLS.slice(0,5).join(', ')})`);
+    if(!hasDec)missing.push(`Max Dec (tried: ${DEC_COLS.slice(0,5).join(', ')})`);
+    peakDebug=`<div style="margin-top:6px;padding:8px 12px;background:#0f2235;border-radius:6px;font-size:10px;color:#446;line-height:1.6">⚠ ${missing.join('; ')} — column not found in LS_Daily_Export.<br>Actual headers: <span style="color:#557">${esc(headers)}</span></div>`;
+  }
+  const series=[{key:'spd',label:'Max Vel',unit:'m/s',color:'#4FC3F7'},{key:'acc',label:'Max Acc',unit:'m/s²',color:'#81C784'},{key:'dec',label:'Max Dec',unit:'m/s²',color:'#FF8A65'}];
+  const W=960,BH=72,GAP=6,PL=64,PR=10,PT=14,PB=38,PW=W-PL-PR;
+  const n=sessions.length,cw=PW/n,bw=cw*0.65,bx=i=>PL+i*cw+(cw-bw)/2;
+  const totalH=series.length*(BH+GAP)+PT+PB;
+  const parts=[];
+  series.forEach((s,si)=>{
+    const yOff=PT+si*(BH+GAP);
+    const vals=sessions.map(r=>r[s.key]).filter(v=>v>0);
+    const maxV=vals.length?Math.max(...vals):1;
+    parts.push(`<text x="${PL-4}" y="${yOff+BH/2-4}" text-anchor="end" font-size="9" fill="${s.color}" font-weight="600">${s.label}</text>`);
+    parts.push(`<text x="${PL-4}" y="${yOff+BH/2+8}" text-anchor="end" font-size="8" fill="#334">${s.unit}</text>`);
+    parts.push(`<text x="${PL+PW+2}" y="${yOff+8}" font-size="7" fill="#334">${maxV.toFixed(1)}</text>`);
+    parts.push(`<line x1="${PL}" x2="${PL+PW}" y1="${yOff}" y2="${yOff}" stroke="#1e3a52" stroke-width="1"/>`);
+    parts.push(`<line x1="${PL}" x2="${PL+PW}" y1="${yOff+BH}" y2="${yOff+BH}" stroke="#0f2a3e" stroke-width="1"/>`);
+    sessions.forEach((r,i)=>{
+      const v=r[s.key];if(!v)return;
+      const bh=(v/maxV)*BH;
+      const isMatch=r.stype.toLowerCase().includes('match');
+      const col=isMatch?'#FF8C00':s.color;
+      const tip=`${fmtWeek(r.date)} | ${s.label}: ${v.toFixed(2)} ${s.unit}${isMatch?' [Match]':''}`;
+      parts.push(`<g class="trend-dot" data-tip="${esc(tip)}"><rect x="${bx(i)}" y="${yOff+BH-bh}" width="${bw}" height="${bh}" fill="${col}" fill-opacity="0.8" rx="2"/></g>`);
+    });
+  });
+  // X-axis dates
+  if(n<=18)sessions.forEach((r,i)=>{const xc=bx(i)+bw/2,y=PT+series.length*(BH+GAP)+16;parts.push(`<text x="${xc}" y="${y}" text-anchor="middle" font-size="7.5" fill="#334" transform="rotate(-40,${xc},${y})">${fmtWeek(r.date)}</text>`);});
+  parts.push(`<line x1="${PL}" x2="${PL}" y1="${PT}" y2="${PT+series.length*(BH+GAP)}" stroke="#1e3a52" stroke-width="1"/>`);
+  return`<div style="margin-top:14px"><div style="font-size:9px;color:#557;text-transform:uppercase;letter-spacing:.09em;margin-bottom:5px">Session Peaks — Max Speed · Max Acc · Max Dec · <span style="color:#FF8C00">■ Match</span> · Hover for values</div><div style="position:relative"><svg id="peak-svg" viewBox="0 0 ${W} ${totalH}" width="100%" height="${totalH}" style="background:#0c1f32;border-radius:8px;display:block">${parts.join('')}</svg><div id="peak-tooltip" style="display:none;position:absolute;background:#0f2235;border:1px solid #1e3a52;border-radius:5px;padding:6px 10px;font-size:11px;pointer-events:none;min-width:160px;z-index:10"></div></div>${peakDebug}</div>`;
+}
+// ── GET TREND WEEKS ───────────────────────────────────────────────────────────
+function getTrendWeeks(playerName,metric,maxWeeks){
+  const m=METRICS[metric||'hmld'];
+  if(!DATA.trend||DATA.trend.error)return null;
+  const rows=DATA.trend.data.rows;
+  let result;
+  if(playerName&&playerName!=='All'){
+    result=rows.filter(r=>gv(r,'Player_Name')===playerName).map(r=>({week:gv(r,'Week_Start','Week Start'),val:num(gv(r,...m.weekCols)),acwr:num(gv(r,...m.acwrCols)),sessions:num(gv(r,'Sessions'))})).filter(r=>r.week).sort((a,b)=>dateToMs(a.week)-dateToMs(b.week));
+  } else {
+    const byWeek={};
+    rows.forEach(r=>{const w=gv(r,'Week_Start','Week Start');if(!w)return;if(!byWeek[w])byWeek[w]={val:[],acwr:[],sessions:[]};byWeek[w].val.push(num(gv(r,...m.weekCols)));byWeek[w].acwr.push(num(gv(r,...m.acwrCols)));byWeek[w].sessions.push(num(gv(r,'Sessions')));});
+    result=Object.entries(byWeek).map(([week,v])=>({week,val:+(v.val.reduce((s,x)=>s+x,0)/v.val.length).toFixed(0),acwr:+(v.acwr.filter(x=>x>0).reduce((s,x)=>s+x,0)/(v.acwr.filter(x=>x>0).length||1)).toFixed(2),sessions:+(v.sessions.reduce((s,x)=>s+x,0)/v.sessions.length).toFixed(1)})).sort((a,b)=>dateToMs(a.week)-dateToMs(b.week));
+  }
+  if(maxWeeks)result=result.slice(-maxWeeks);else result=result.slice(-12);
+  return result;
+}
+// ── LATEST HMLD ACWR (LS_Load_Trend: most recent week per player) ─────────────
+function buildLatestAcwr(){
+  const map={};
+  if(!DATA.trend||DATA.trend.error)return map;
+  DATA.trend.data.rows.forEach(r=>{
+    const pn=gv(r,'Player_Name');if(!pn)return;
+    const dt=dateToMs(gv(r,'Week_Start','Week Start'));
+    const acwr=num(gv(r,'HMLD_ACWR','HMLD ACWR'));
+    if(acwr>0&&(!map[pn]||dt>map[pn].dt))map[pn]={acwr,dt};
+  });
+  return map;
+}
+// ── PLAYER PEAKS (LS_Daily_Export: latest session + 28d rolling peak) ─────────
+function buildPlayerPeaks(){
+  const map={};
+  if(!DATA.daily||DATA.daily.error)return map;
+  const now=Date.now(),d28=28*86400000;
+  DATA.daily.data.rows.forEach(r=>{
+    const pn=gv(r,'Player_Name');if(!pn)return;
+    const dt=dateToMs(gv(r,'Date'));
+    const spd=num(gv(r,...SPD_COLS));
+    const acc=num(gv(r,'Max_Acc',...ACC_COLS));
+    const dec=num(gv(r,'Max_Dec',...DEC_COLS));
+    if(!map[pn])map[pn]={rows:[]};
+    map[pn].rows.push({dt,spd,acc,dec});
+  });
+  Object.keys(map).forEach(pn=>{
+    const rows=map[pn].rows.sort((a,b)=>b.dt-a.dt);
+    const latest=rows[0]||{};
+    const r28=rows.filter(r=>r.dt>=now-d28);
+    const pk=(arr,k)=>Math.max(...arr.map(r=>r[k]).filter(v=>v>0),0)||0;
+    map[pn]={spd:latest.spd||0,acc:latest.acc||0,dec:latest.dec||0,
+              spd28:pk(r28,'spd'),acc28:pk(r28,'acc'),dec28:pk(r28,'dec'),
+              latestDt:rows[0]?rows[0].dt:0};
+  });
+  return map;
+}
+// ── EXTERNAL ACTIVITY HELPERS ─────────────────────────────────────────────────
+function parseExtActDate(ts){
+  if(!ts)return 0;
+  const s=String(ts).trim();
+  // DD/MM/YYYY HH:MM:SS (Google Forms timestamp)
+  const m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if(m)return Date.UTC(parseInt(m[3]),parseInt(m[2])-1,parseInt(m[1]));
+  return dateToMs(s);
+}
+function parseDuration(s){
+  if(!s)return 0;
+  s=String(s).trim();
+  const hm=s.match(/(\d+\.?\d*)\s*hour/i);
+  if(hm)return Math.round(parseFloat(hm[1])*60);
+  const nums=s.match(/\d+/g);
+  return nums?parseInt(nums[0]):0;
+}
+function parseExtSheetDate(s){
+  // Handles "Tue, 17, Mar" / "Sat, 28, Mar" format from External Activity sheet
+  if(!s)return 0;
+  s=String(s).trim();
+  const MONTHS={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+  const parts=s.split(',').map(p=>p.trim());
+  if(parts.length>=3){
+    const day=parseInt(parts[1]);
+    const mon=MONTHS[parts[2]];
+    if(!isNaN(day)&&mon!==undefined)return Date.UTC(2026,mon,day);
+  }
+  return parseExtActDate(s); // fallback to DD/MM/YYYY HH:MM:SS parser
+}
+function buildPlayerRates(){
+  // Compute avg HMLD / TD / HSR per player per session type (match vs training)
+  // Used to estimate load from external activity duration
+  const map={};
+  if(!DATA.daily||DATA.daily.error)return map;
+  DATA.daily.data.rows.forEach(r=>{
+    const pn=(gv(r,'Player_Name')||'').trim();if(!pn)return;
+    const stype=(gv(r,'Session_Type','Session_Label')||'').toLowerCase();
+    const isMatch=/match|game/.test(stype);
+    const hmld=num(gv(r,'HMLD'));
+    const td=num(gv(r,'Total_Distance'));
+    const hsr=num(gv(r,'HSR'));
+    if(!map[pn])map[pn]={m:{hmld:[],td:[],hsr:[]},t:{hmld:[],td:[],hsr:[]}};
+    const b=isMatch?'m':'t';
+    if(hmld>0)map[pn][b].hmld.push(hmld);
+    if(td>0)map[pn][b].td.push(td);
+    if(hsr>0)map[pn][b].hsr.push(hsr);
+  });
+  const avg=arr=>arr.length?Math.round(arr.reduce((s,v)=>s+v,0)/arr.length):0;
+  Object.keys(map).forEach(pn=>{
+    const d=map[pn];
+    map[pn]={
+      m:{hmld:avg(d.m.hmld),td:avg(d.m.td),hsr:avg(d.m.hsr),n:d.m.hmld.length},
+      t:{hmld:avg(d.t.hmld),td:avg(d.t.td),hsr:avg(d.t.hsr),n:d.t.hmld.length}
+    };
+  });
+  return map;
+}
+function getPlayerExtActs(name,windowMs){
+  if(!DATA.ext||DATA.ext.error)return[];
+  const nm=(name||'').trim().toLowerCase();
+  const cutoff=Date.now()-windowMs;
+  return DATA.ext.data.rows
+    .filter(r=>{
+      // Column is "Player" in structured sheet, "Name" in form responses
+      const pn=(gv(r,'Player')||gv(r,'Name')||'').trim().toLowerCase();
+      return pn===nm;
+    })
+    .map(r=>{
+      const actRaw=(gv(r,'Activity type')||gv(r,'Activity')||gv(r,'Activity ')||'').trim();
+      const dateRaw=gv(r,'Date')||gv(r,'Timestamp')||'';
+      const durRaw=gv(r,'Duration (min)')||gv(r,'Duration (minutes)')||gv(r,'Duration')||'';
+      return{
+        ts:parseExtSheetDate(dateRaw)||parseExtActDate(dateRaw),
+        act:actRaw,
+        dur:parseDuration(durRaw),
+        rpe:num(gv(r,'RPE')||gv(r,'Rate of Perceived Effort (RPE)')||''),
+        isMatch:/match|game|\bvs\b|\bv\s/i.test(actRaw)
+      };
+    })
+    .filter(e=>e.ts>=cutoff&&e.dur>0)
+    .sort((a,b)=>b.ts-a.ts);
+}
+// ── RENDER: SQUAD STATUS ───────────────────────────────────────────────────────
+function renderSquad(){
+  const d=DATA.squad;
+  if(!d||d.error)return`<div style="padding:20px;color:#E24B4A">⚠ ${d?d.error:'No data loaded'}</div>`;
+  const players=d.data.rows.filter(r=>gv(r,'Player Name','Player_Name'));
+  if(!players.length)return`<div style="padding:20px;color:#E24B4A">⚠ No player rows. Headers: <span style="font-family:monospace;font-size:10px">${esc(d.data.headers.slice(0,25).join(' | '))}</span></div>`;
+  const peaks=buildPlayerPeaks();
+  const latestAcwr=buildLatestAcwr();
+  const playerRates=buildPlayerRates();
+  // ACWR uniformity warning — use LS_Load_Trend values (bypassing LS_Squad_Load)
+  const acwrVals=players.map(r=>{const n=gv(r,'Player Name','Player_Name');return(latestAcwr[n]||{}).acwr||0;}).filter(v=>v>0);
+  const allSame=acwrVals.length>2&&acwrVals.every(v=>Math.abs(v-acwrVals[0])<0.01);
+  const acwrWarn=allSame?`<div style="background:#FF8C0018;border:1px solid #FF8C0044;border-radius:6px;padding:10px 16px;margin-bottom:12px;font-size:10px;color:#FF8C00">⚠ All players showing identical ACWR (${acwrVals[0].toFixed(2)}). Verify Monitoring Engine ACWR formula in the workbook — check that acute and chronic columns are computing independently. EW ACWR should vary between players with different attendance/load patterns.</div>`:'';
+  const avail=players.filter(r=>gv(r,'Availability')==='Available').length;
+  const rtp=players.filter(r=>/rtp|return/i.test(gv(r,'Availability'))).length;
+  const injured=players.filter(r=>gv(r,'Availability')==='Injured').length;
+  const flagged=players.filter(r=>['High Risk','Monitor'].includes(gv(r,'Load Flag','Load_Flag'))).length;
+  // Stale status: Injured / RTP / No GPS but GPS session data present in last 7 days
+  const d7ms=7*86400000,nowMs=Date.now();
+  const isStaleStatus=r=>{
+    const av=gv(r,'Availability')||'';
+    const isRestricted=av==='Injured'||/rtp|return/i.test(av)||av==='No GPS';
+    if(!isRestricted)return false;
+    const nm=gv(r,'Player Name','Player_Name');
+    const latestDt=(peaks[nm]||{}).latestDt||0;
+    return latestDt>0&&(nowMs-latestDt)<=d7ms;
+  };
+  const staleRows=players.filter(isStaleStatus);
+  const staleCount=staleRows.length;
+  const staleWarn=staleCount>0?`<div style="background:#E24B4A18;border:1px solid #E24B4A44;border-radius:6px;padding:10px 16px;margin-bottom:12px;font-size:10px;color:#E24B4A;display:flex;gap:12px;align-items:flex-start"><span style="font-size:14px;line-height:1">⚠</span><div><strong>${staleCount} player${staleCount>1?'s':''} with stale status flag</strong> — marked Injured / RTP / No GPS but GPS data present in last 7 days. Review and update Availability in the workbook.<br><span style="color:#FF8C00;margin-top:4px;display:inline-block">${staleRows.map(r=>gv(r,'Player Name','Player_Name')).join(' · ')}</span></div></div>`:'';
+  let filtered=STATE.squadPos==='All'?players:players.filter(r=>gv(r,'Position Group','Position_Group')===STATE.squadPos);
+  filtered=[...filtered].sort((a,b)=>{
+    if(STATE.squadSort==='hmld'){const aA=(latestAcwr[gv(a,'Player Name','Player_Name')]||{}).acwr||0,bA=(latestAcwr[gv(b,'Player Name','Player_Name')]||{}).acwr||0;return STATE.squadDir==='desc'?bA-aA:aA-bA;}
+    return STATE.squadDir==='desc'?num(gv(b,'Sessions Last 7 Days','Sessions_Last_7_Days'))-num(gv(a,'Sessions Last 7 Days','Sessions_Last_7_Days')):num(gv(a,'Sessions Last 7 Days','Sessions_Last_7_Days'))-num(gv(b,'Sessions Last 7 Days','Sessions_Last_7_Days'));
+  });
+  const th=(col,lbl,tip)=>`<th data-sort="${col}"${tip?` title="${tip}"`:''}>${lbl}${STATE.squadSort===col?(STATE.squadDir==='desc'?' ↓':' ↑'):''}</th>`;
+  const rows_html=filtered.map(r=>{
+    const name=gv(r,'Player Name','Player_Name')||'—';
+    const pos=gv(r,'Position Group','Position_Group')||'—';
+    const av=gv(r,'Availability')||'Available';
+    const inj=gv(r,'Injury Status','Injury_Status')||'';
+    const flag=gv(r,'Load Flag','Load_Flag')||'Normal';
+    // HMLD ACWR — bypass LS_Squad_Load, read latest week from LS_Load_Trend
+    const ha=(latestAcwr[name]||{}).acwr||0;
+    // External activity — LS_Squad_Load flags (fallback)
+    const extFlag=gv(r,'External_Fixture_Flag','External Fixture Flag','External_Activity','External Activity');
+    const extDate=gv(r,'External_Fixture_Date','External Fixture Date');
+    const hasExtSL=(num(extFlag)>0)||(extFlag&&extFlag!=='0'&&extFlag!=='');
+    const extDateMs=extDate?dateToMs(extDate):0;
+    const extIn7dSL=extDateMs>0&&(Date.now()-extDateMs)<=7*86400000;
+    // External Activity sheet — richer data: duration, RPE, match vs training
+    const extActs7d=getPlayerExtActs(name,7*86400000);
+    const hasExtForm=extActs7d.length>0;
+    const hasExt=hasExtSL||hasExtForm;
+    const extIn7d=extIn7dSL||hasExtForm;
+    // External session count to add to GPS sess total
+    const extSessCount=hasExtForm?extActs7d.length:(hasExtSL&&extIn7dSL?1:0);
+    // Estimated load from external activity (player avg per session × duration ratio)
+    const rates=playerRates[name]||null;
+    const TDUR={m:70,t:75};
+    let estHmld=0,estTd=0,estHsr=0;
+    extActs7d.forEach(e=>{
+      if(!rates)return;
+      const b=e.isMatch?'m':'t',rr=rates[b]||{};
+      if(rr.hmld>0){const sc=e.dur/TDUR[b];estHmld+=rr.hmld*sc;estTd+=rr.td*sc;estHsr+=rr.hsr*sc;}
+    });
+    const hasEstLoad=estHmld>0;
+    // Tooltip for external activity ⊕ indicator
+    const extActTip=extActs7d.length>0
+      ?extActs7d.map(e=>`${e.isMatch?'Match':'Training'} ${e.dur}min RPE${e.rpe}${e.act?' ('+e.act.substring(0,30)+')':''}`).join(' | ')
+        +(hasEstLoad?` | Est: HMLD ~${Math.round(estHmld)}m TD ~${Math.round(estTd)}m HSR ~${Math.round(estHsr)}m`:'')
+      :'External activity logged';
+    // Sess/7d — GPS sessions + external count
+    const sessRaw=num(gv(r,'Sessions Last 7 Days','Sessions_Last_7_Days'));
+    const sessAdj=sessRaw+extSessCount;
+    const sessHtml=sessAdj>0
+      ?String(sessAdj)+(extSessCount>0?` <span style="color:#4FC3F7;font-size:9px;cursor:help" title="${esc(extActTip)}">⊕${extSessCount>1?' ×'+extSessCount:''}</span>`:'')
+      :'—';
+    // Days/Mins since match — override with most recent external match date if earlier
+    const dsm=num(gv(r,'Days_Since_Match','Days Since Match'));
+    const lmm=num(gv(r,'Last_Match_Mins','Last Match Mins'));
+    const latestExtMatch=extActs7d.find(e=>e.isMatch)||null;
+    const formExtMatchMs=latestExtMatch?latestExtMatch.ts:0;
+    const bestExtDateMs=formExtMatchMs>extDateMs?formExtMatchMs:extDateMs;
+    const extDaysAgo=bestExtDateMs>0?Math.round((Date.now()-bestExtDateMs)/86400000):null;
+    const useExtDate=bestExtDateMs>0&&(dsm<=0||extDaysAgo<dsm);
+    const acc7=num(gv(r,'Acc_Events_7d','Acc Events 7d'));
+    const acc28=num(gv(r,'Acc_Events_28d_avg','Acc Events 28d Avg'));
+    const dec7=num(gv(r,'Dec_Events_7d','Dec Events 7d'));
+    const dec28=num(gv(r,'Dec_Events_28d_avg','Dec Events 28d Avg'));
+    const ac=ACFG[av]||'#9E9E9E',pc=PCOL[pos]||'#557',hc=acwrColor(ha);
+    // Max Velocity / Acc / Dec — read from LS_Daily_Export (most recent session + 28d peak)
+    const pd=peaks[name]||{};
+    const mspd=pd.spd||0,macc=pd.acc||0,mdec=pd.dec||0;
+    const spd28=pd.spd28||0,acc28p=pd.acc28||0,dec28p=pd.dec28||0;
+    const spdPct=spd28>0?(mspd/spd28*100):0;
+    const accMsPct=acc28p>0?(macc/acc28p*100):0;
+    const decMsPct=dec28p>0?(mdec/dec28p*100):0;
+    const velFmt=pkFmt(mspd,'m/s',spdPct);
+    const accPeakFmt=pkFmt(macc,'m/s²',accMsPct);
+    const decPeakFmt=pkFmt(mdec,'m/s²',decMsPct);
+    // Acc/Dec event columns: value + % of 28d avg with colour
+    const accRatio=acc28>0?acc7/acc28:null;
+    const accPct=accRatio!==null?(accRatio*100).toFixed(0)+'%':null;
+    const accColor=accRatio!==null?accVolColor(acc7,acc28):'#557';
+    const accFmt=acc7>0?`<span style="color:${accColor};font-weight:700">${acc7.toFixed(1)}</span>${accPct?`<span style="color:${accColor};font-size:9px"> (${accPct})</span>`:''}`:'<span style="color:#334">—</span>';
+    const decRatio=dec28>0?dec7/dec28:null;
+    const decPct=decRatio!==null?(decRatio*100).toFixed(0)+'%':null;
+    const decColor=decRatio!==null?accVolColor(dec7,dec28):'#557';
+    const decFmt=dec7>0?`<span style="color:${decColor};font-weight:700">${dec7.toFixed(1)}</span>${decPct?`<span style="color:${decColor};font-size:9px"> (${decPct})</span>`:''}`:'<span style="color:#334">—</span>';
+    // Days since match — override with external match date if more recent
+    let dsmFmt='—';
+    if(useExtDate){
+      const extSrc=latestExtMatch?esc(latestExtMatch.act.substring(0,40)):'external match';
+      dsmFmt=`${extDaysAgo}d <span style="color:#4FC3F7;font-size:9px;cursor:help" title="${extSrc} — overrides GPS match date">⊕ Ext</span>`;
+    } else if(dsm>0){
+      dsmFmt=`${Math.round(dsm)}d${lmm>0?' / '+Math.round(lmm)+'m':''}`;
+      if(hasExt){
+        const extLbl=latestExtMatch
+          ?`${Math.round((Date.now()-latestExtMatch.ts)/86400000)}d ago RPE${latestExtMatch.rpe}`
+          :extDate?fmtWeek(extDate):'ext';
+        dsmFmt+=` <span style="color:#4FC3F7;font-size:9px;cursor:help" title="${esc(extActTip)}">⊕ ${esc(extLbl)}</span>`;
+      }
+    }
+    // Action column logic (priority order)
+    let action='On track',ac2='#334';
+    if(av==='Injured'||av==='Unavailable'){action='Unavailable';ac2='#9E9E9E';}
+    else if(av==='RTP'||/rtp|return/i.test(av)){action='RTP — manage exposure';ac2='#FF8C00';}
+    else if(ha>1.5){action='Reduce load ↓';ac2='#E24B4A';}
+    else if(ha>=1.3&&hasExt){action='Manage load — ext noted';ac2='#FF8C00';}
+    else if(ha>=1.3){action='Manage load ⚠';ac2='#FF8C00';}
+    else if(ha>0&&ha<0.8){action='Increase volume ↑';ac2='#4FC3F7';}
+    else if(spdPct>0&&spdPct<80){action='Speed readiness ⚠';ac2='#FF8C00';}
+    else if((accMsPct>0&&accMsPct<80)||(decMsPct>0&&decMsPct<80)){action='Neuromusc. readiness ⚠';ac2='#FF8C00';}
+    else if(accRatio!==null&&accRatio>1.15){action='Acc spike — review';ac2='#E24B4A';}
+    else if(hasExt){action=hasEstLoad?`Review total load (est. +${Math.round(estHmld)}m HMLD)`:'Review total load';ac2='#4FC3F7';}
+    const stale=isStaleStatus(r);
+    return`<tr${stale?' style="background:#E24B4A08"':''}>
+      <td style="font-weight:600;color:#ddd">${esc(name)}${hasExt?` <span style="font-size:9px;color:#4FC3F7;cursor:help" title="${esc(extActTip)}">⊕</span>`:''}</td>
+      <td style="color:${pc};font-size:11px">${esc(pos)}</td>
+      <td><span class="avail-dot" style="background:${ac}"></span><span style="color:${ac};font-size:11px;font-weight:600">${esc(av)}</span>${stale?` <span style="font-size:9px;color:#E24B4A;font-weight:700" title="GPS data present in last 7 days — status may be outdated. Update Availability in workbook.">⚠ stale</span>`:''}</td>
+      <td style="font-size:11px;color:${inj?'#FF8C00':'#334'}">${esc(inj)||'—'}</td>
+      <td>${badge(flag,FCFG)}</td>
+      <td style="font-weight:700;font-size:13px;color:${hc}">${ha>0?ha.toFixed(2):'—'}</td>
+      <td style="font-size:11px">${dsmFmt}</td>
+      <td style="color:#9FE1CB;font-weight:600">${sessHtml}</td>
+      <td style="font-size:11px">${velFmt}</td>
+      <td style="font-size:11px">${accPeakFmt}</td>
+      <td style="font-size:11px">${decPeakFmt}</td>
+      <td style="font-size:11px">${accFmt}</td>
+      <td style="font-size:11px">${decFmt}</td>
+      <td style="font-size:11px;white-space:nowrap;color:${ac2};font-weight:600">${esc(action)}</td>
+    </tr>`;
+  }).join('');
+  return`<div>
+    ${acwrWarn}
+    ${staleWarn}
+    <div style="display:flex;gap:8px;margin-bottom:16px">
+      <div class="card" style="border-top-color:#4CAF50"><div class="label">Available</div><div class="value" style="color:#4CAF50">${avail}</div><div class="sub">of ${players.length}</div></div>
+      <div class="card" style="border-top-color:#FF8C00"><div class="label">RTP</div><div class="value" style="color:#FF8C00">${rtp}</div></div>
+      <div class="card" style="border-top-color:#E24B4A"><div class="label">Injured</div><div class="value" style="color:#E24B4A">${injured}</div></div>
+      <div class="card" style="border-top-color:#FF8C00"><div class="label">Load Flagged</div><div class="value" style="color:#FF8C00">${flagged}</div><div class="sub">ACWR Monitor + High Risk</div></div>
+      ${staleCount>0?`<div class="card" style="border-top-color:#E24B4A;cursor:pointer" title="Stale status: GPS data present but marked Injured/RTP/No GPS"><div class="label">Stale Status</div><div class="value" style="color:#E24B4A">${staleCount}</div><div class="sub">review workbook</div></div>`:''}
+      <div class="card" style="flex:2"><div class="label">Next Match</div><div class="value" style="font-size:13px">${esc(CFG.NEXT_MATCH)}</div></div>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+      <div id="squad-pos-filter" style="display:flex;gap:6px;align-items:center">
+        <span style="font-size:10px;color:#557;text-transform:uppercase">Position</span>
+        ${['All','Middle 8','Inside Forward','Inside Defender'].map(p=>`<button class="pos-btn${STATE.squadPos===p?' active':''}" data-pos="${p}" style="${STATE.squadPos===p&&PCOL[p]?`border-color:${PCOL[p]};color:${PCOL[p]};background:${PCOL[p]}22`:''}">${p}</button>`).join('')}
+      </div>
+      <button onclick="loadAll()" style="padding:2px 8px;border-radius:3px;border:1px solid #1e3a52;background:transparent;color:#557;font-size:10px">↻ Refresh</button>
+    </div>
+    <div style="background:#0c1f32;border-radius:8px;overflow:auto">
+      <table><thead><tr>
+        <th>Player</th><th>Position</th><th>Status</th><th>Injury</th><th>Load Flag</th>
+        ${th('hmld','HMLD ACWR','EW ACWR: acute÷chronic exponentially weighted. >1.5=High Risk · 1.3–1.5=Monitor · 0.8–1.3=Normal · <0.8=Under-Loaded. Converges to 1.00 with sustained consistent load — this is mathematically correct.')}
+        <th title="Days since last GPS match. ⊕ = external fixture logged this week (not included in day count — workbook must track external match dates separately)">Days/Mins · Match</th>
+        ${th('sess','Sess/7d')}
+        <th title="Max speed from most recent GPS session (m/s) · % = personal 28d rolling peak. ≥90%=Green · 80–89%=Amber · <80%=Red. Source: LS_Daily_Export.">Max Vel (m/s · %pk)</th>
+        <th title="Max acceleration from most recent GPS session (m/s²) · % = personal 28d rolling peak. ≥90%=Green · 80–89%=Amber · <80%=Red.">Max Acc (m/s²)</th>
+        <th title="Max deceleration from most recent GPS session (m/s²) · % of personal 28d peak. Source: LS_Daily_Export.">Max Dec (m/s²)</th>
+        <th title="Acc Events avg last 7d. (%) = 7d avg as % of 28d avg baseline. ≥95%=Green · 80–95%=Amber · <80%=Blue · >115%=Red spike">Acc 7d (% avg)</th>
+        <th title="Dec Events avg last 7d. Same colour scale as Acc. Tracks neuromuscular loading trend.">Dec 7d (% avg)</th>
+        <th title="Priority: 1 Unavailable · 2 High Risk load · 3 Monitor · 4 Sprint readiness · 5 Acc spike · 6 Under-loaded · 7 External load · 8 On track">Action</th>
+      </tr></thead>
+      <tbody>${rows_html||'<tr><td colspan="15" style="text-align:center;color:#334;padding:30px">No players match filter.</td></tr>'}</tbody>
+      </table>
+    </div>
+    <div style="margin-top:10px;background:#0f2235;border-radius:6px;padding:10px 14px;font-size:9px;color:#446;line-height:1.9">
+      <strong style="color:#9FE1CB">Action guide:</strong> <span style="color:#FF8C00">RTP — manage exposure</span> = return-to-play, cap mins · <span style="color:#E24B4A">Reduce load ↓</span> = HMLD ACWR >1.5, high injury risk · <span style="color:#FF8C00">Manage load ⚠</span> = ACWR 1.3–1.5, cap sessions · <span style="color:#4FC3F7">Increase volume ↑</span> = ACWR <0.8, under-stimulated · <span style="color:#FF8C00">Speed readiness ⚠</span> = max vel <80% of 28d peak · <span style="color:#FF8C00">Neuromusc. readiness ⚠</span> = max acc or dec <80% of 28d peak · <span style="color:#E24B4A">Acc spike</span> = acc events >115% of 28d avg · <span style="color:#4FC3F7">Review total load</span> = external activity flagged this week, GPS understates load · ⊕ Sess/7d adjusted +1 for external · Days Since Match overridden by external date where more recent
+    </div>
+  </div>`;
+}
+// ── RENDER: LOAD MONITORING ────────────────────────────────────────────────────
+function renderLoad(){
+  if(!DATA.trend||DATA.trend.error)return setupMsg('Load Trend — Not Connected',DATA.trend?DATA.trend.error:'Check CFG.LOAD_TREND_URL.');
+  const m=METRICS[STATE.loadMetric];
+  const players=['All',...new Set(DATA.trend.data.rows.map(r=>gv(r,'Player_Name')).filter(Boolean)).values()].sort((a,b)=>a==='All'?-1:a.localeCompare(b));
+  const weeks=getTrendWeeks(STATE.loadPlayer,STATE.loadMetric);
+  const lastWeek=weeks&&weeks.length?weeks[weeks.length-1]:null;
+  const prevWeek=weeks&&weeks.length>1?weeks[weeks.length-2]:null;
+  const acwrDelta=lastWeek&&prevWeek&&lastWeek.acwr&&prevWeek.acwr?+(lastWeek.acwr-prevWeek.acwr).toFixed(2):null;
+  const valDelta=lastWeek&&prevWeek?+(lastWeek.val-prevWeek.val).toFixed(0):null;
+  const seasonTotal=weeks?weeks.reduce((s,w)=>s+w.val,0):0;
+  const metricBtns=Object.entries(METRICS).map(([k,v])=>`<button class="metric-btn${STATE.loadMetric===k?' active':''}" data-metric="${k}">${v.label}</button>`).join('');
+  // Debug: show what columns were found if no data
+  const hasData=weeks&&weeks.some(w=>w.val>0);
+  const colDebug=!hasData&&DATA.trend&&!DATA.trend.error?`<div style="margin-top:8px;font-size:9px;color:#446;background:#0f2235;border-radius:4px;padding:8px">No data found for this metric. LS_Load_Trend headers: <span style="color:#9FE1CB;font-family:monospace">${esc(DATA.trend.data.headers.slice(0,30).join(' · '))}</span><br>Expected column: ${m.weekCols[0]}</div>`:'';
+  return`<div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+      <div style="display:flex;gap:5px;flex-wrap:wrap">${metricBtns}</div>
+      <div style="width:1px;height:22px;background:#1e3a52;margin:0 4px"></div>
+      <span style="font-size:10px;color:#557;text-transform:uppercase">Player</span>
+      <select id="load-player-sel">${players.map(p=>`<option value="${esc(p)}"${STATE.loadPlayer===p?' selected':''}>${esc(p)}</option>`).join('')}</select>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:16px">
+      <div class="card"><div class="label">This Week ${m.label}</div><div class="value" style="color:${m.color}">${lastWeek&&lastWeek.val>0?Math.round(lastWeek.val).toLocaleString()+(m.unit?' '+m.unit:''):'—'}</div><div class="sub">${valDelta!==null?(valDelta>=0?'↑ +':'')+valDelta+' vs prev':'—'}</div></div>
+      <div class="card" style="border-top-color:${lastWeek?acwrColor(lastWeek.acwr):'#1e3a52'}"><div class="label">EW ACWR</div><div class="value" style="color:${lastWeek?acwrColor(lastWeek.acwr):'#557'}">${lastWeek&&lastWeek.acwr?lastWeek.acwr.toFixed(2):'—'}</div><div class="sub">${acwrDelta!==null?(acwrDelta>=0?'↑ +':'')+acwrDelta+' vs prev':'—'}</div></div>
+      <div class="card"><div class="label">Sessions</div><div class="value">${lastWeek?lastWeek.sessions:'—'}</div><div class="sub">this week</div></div>
+      <div class="card"><div class="label">Season Total ${m.label}</div><div class="value" style="font-size:15px;color:${m.color}">${seasonTotal>0?Math.round(seasonTotal).toLocaleString()+(m.unit?' '+m.unit:''):'—'}</div><div class="sub">last ${weeks?weeks.length:0} wks</div></div>
+    </div>
+    ${buildWeeklyChart(weeks,STATE.loadMetric)}
+    ${colDebug}
+    ${buildDailyChart(STATE.loadPlayer,STATE.loadMetric)}
+    ${buildMultiMetricChart(STATE.loadPlayer)}
+    <div style="margin-top:10px;background:#0f2235;border-radius:6px;padding:10px 14px;font-size:10px;color:#446;line-height:1.7">
+      <strong style="color:#9FE1CB">EW ACWR note:</strong> Exponentially weighted — weights recent sessions more heavily than a rolling window. Score of 1.00 = acute load ≈ chronic baseline, expected with sustained consistent training. Scores diverge after a load spike (match week) or sudden reduction. If all players show exactly 1.00, verify Monitoring Engine ACWR formula in the workbook.
+    </div>
+  </div>`;
+}
+// ── RENDER: INTENSITY — MATCH/TRAINING MODES ──────────────────────────────────
+function getMatchesSorted(allRows){
+  // Returns match labels sorted chronologically using Date column if available
+  const matchDates={};
+  allRows.forEach(r=>{const m=gv(r,'Match_Label');const dt=gv(r,'Date','Match_Date');if(m&&dt&&!matchDates[m])matchDates[m]=dateToMs(dt);else if(m&&!matchDates[m])matchDates[m]=0;});
+  return Object.entries(matchDates).sort((a,b)=>a[1]-b[1]).map(([m])=>m);
+}
+function filterLastN(allPts,allRows,n){
+  if(n==='All')return allPts;
+  const sorted=getMatchesSorted(allRows);
+  const keep=sorted.slice(-parseInt(n));
+  return allPts.filter(p=>keep.includes(p.match));
+}
+function renderMatchFull(highlightName){
+  const d=DATA.intensity;
+  if(!d||d.error)return`<div style="padding:20px;color:#E24B4A">⚠ ${d?d.error:'No intensity data'}</div>`;
+  let allPts=d.data.rows.filter(r=>num(gv(r,'M_Per_Min'))>0);
+  if(STATE.intPos!=='All')allPts=allPts.filter(r=>(gv(r,'Position_Group','Position Group')||'')===STATE.intPos);
+  const sortedMatches=getMatchesSorted(d.data.rows);
+  const matches=['All',...sortedMatches];
+  let filtPts=STATE.intMatch!=='All'?allPts.filter(r=>gv(r,'Match_Label')===STATE.intMatch):filterLastN(allPts,d.data.rows,STATE.intLastN);
+  let dispPts=filtPts.map(r=>({name:(gv(r,'Player_Name','Player Name')||'').split(' ').pop(),full:gv(r,'Player_Name','Player Name'),pos:gv(r,'Position_Group','Position Group'),x:num(gv(r,'M_Per_Min')),y:num(gv(r,'HMLD_Per_Min')),match:gv(r,'Match_Label')||''}));
+  if(STATE.intMatch==='All'){const map={};dispPts.forEach(p=>{if(!map[p.full])map[p.full]={...p,n:1};else{map[p.full].x+=p.x;map[p.full].y+=p.y;map[p.full].n++;}});dispPts=Object.values(map).map(p=>({...p,x:+(p.x/p.n).toFixed(1),y:+(p.y/p.n).toFixed(1)}));}
+  dispPts=addZone(dispPts);
+  const avgX=dispPts.length?+(dispPts.reduce((a,p)=>a+p.x,0)/dispPts.length).toFixed(0):0;
+  const avgY=dispPts.length?+(dispPts.reduce((a,p)=>a+p.y,0)/dispPts.length).toFixed(1):0;
+  const parts=buildScatterBase();
+  if(avgX>0){parts.push(`<line x1="${sx(avgX)}" x2="${sx(avgX)}" y1="${SPT}" y2="${SPT+SPH}" stroke="#9FE1CB" stroke-width="1" stroke-dasharray="3 4" opacity="0.22"/>`);parts.push(`<line x1="${SPL}" x2="${SPL+SPW}" y1="${sy(avgY)}" y2="${sy(avgY)}" stroke="#9FE1CB" stroke-width="1" stroke-dasharray="3 4" opacity="0.22"/>`);}
+  parts.push(dotsSVG(dispPts,highlightName||null));
+  const iu20=dispPts.filter(p=>p.zone==='U20 Zone').length,isnr=dispPts.filter(p=>p.zone==='Senior Zone').length;
+  const matchSel=`<select id="int-match-sel" style="max-width:180px">${matches.map(m=>`<option value="${esc(m)}"${STATE.intMatch===m?' selected':''}>${esc(m)}</option>`).join('')}</select>`;
+  const lastNSel=`<select id="int-lastn-sel"><option value="All"${STATE.intLastN==='All'?' selected':''}>All matches</option><option value="1"${STATE.intLastN==='1'?' selected':''}>Last match</option><option value="3"${STATE.intLastN==='3'?' selected':''}>Last 3</option><option value="5"${STATE.intLastN==='5'?' selected':''}>Last 5</option></select>`;
+  return`<div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap">
+    <div class="card"><div class="label">Squad M/Min</div><div class="value">${avgX}</div></div>
+    <div class="card"><div class="label">Squad HMLD/Min</div><div class="value">${avgY}</div></div>
+    <div class="card" style="border-top-color:#FF8C00"><div class="label">U20 Zone</div><div class="value" style="color:#FF8C00">${iu20}/${dispPts.length}</div></div>
+    <div class="card" style="border-top-color:#E24B4A"><div class="label">Senior Zone</div><div class="value" style="color:#E24B4A">${isnr}/${dispPts.length}</div></div>
+    <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+      <span style="font-size:10px;color:#557;text-transform:uppercase">Match</span>${matchSel}
+      <span style="font-size:10px;color:#557;text-transform:uppercase">Show</span>${lastNSel}
+    </div>
+  </div>
+  ${scatterSVG(parts)}
+  ${scatterLegendBar(dispPts.length,dispPts)}
+  ${buildZonePanels(filtPts)}`;
+}
+function renderMatchHalf(halfLabel,highlightName){
+  if(!DATA.drill||DATA.drill.error)return setupMsg('Half data requires LS_Drill_Data',DATA.drill?DATA.drill.error:'Check gid=215121705 is published.');
+  const drillRows=getDrillRows().filter(r=>(gv(r,'Session_Type','Session Type')||'').toLowerCase().includes('match')&&(gv(r,'Tags_and_Notes','Tags and Notes')||'')=== halfLabel);
+  let pts=drillPts(drillRows);if(STATE.intPos!=='All')pts=pts.filter(p=>p.pos===STATE.intPos);
+  const disp=addZone(avgByPlayer(pts));
+  const avgX=disp.length?+(disp.reduce((a,p)=>a+p.x,0)/disp.length).toFixed(0):0;
+  const avgY=disp.length?+(disp.reduce((a,p)=>a+p.y,0)/disp.length).toFixed(1):0;
+  const parts=buildScatterBase();
+  if(avgX>0){parts.push(`<line x1="${sx(avgX)}" x2="${sx(avgX)}" y1="${SPT}" y2="${SPT+SPH}" stroke="#9FE1CB" stroke-width="1" stroke-dasharray="3 4" opacity="0.22"/>`);parts.push(`<line x1="${SPL}" x2="${SPL+SPW}" y1="${sy(avgY)}" y2="${sy(avgY)}" stroke="#9FE1CB" stroke-width="1" stroke-dasharray="3 4" opacity="0.22"/>`);}
+  parts.push(dotsSVG(disp,highlightName||null));
+  return`<div style="display:flex;gap:8px;margin-bottom:12px"><div class="card"><div class="label">${halfLabel} M/Min</div><div class="value">${avgX}</div></div><div class="card"><div class="label">${halfLabel} HMLD/Min</div><div class="value">${avgY}</div></div><div class="card"><div class="label">Players</div><div class="value">${disp.length}</div></div></div>${scatterSVG(parts)}${scatterLegendBar(disp.length,disp)}`;
+}
+function renderMatchArrow(highlightName){
+  if(!DATA.drill||DATA.drill.error)return setupMsg('1H→2H requires LS_Drill_Data',DATA.drill?DATA.drill.error:'Check gid=215121705 is published.');
+  const matchRows=getDrillRows().filter(r=>(gv(r,'Session_Type','Session Type')||'').toLowerCase().includes('match'));
+  const byPlayer={};
+  matchRows.forEach(r=>{const name=gv(r,'Player_Name','Player Name'),tag=gv(r,'Tags_and_Notes','Tags and Notes'),dur=num(gv(r,'Duration_Min','Duration Min'));if(!name||dur<=0)return;if(!byPlayer[name])byPlayer[name]={h1:[],h2:[],pos:gv(r,'Position_Group','Position Group')};const mpm=num(gv(r,'Total_Distance','Total Distance'))/dur,hpm=num(gv(r,'HMLD'))/dur;if(tag==='1st Half')byPlayer[name].h1.push({mpm,hpm});else if(tag==='2nd Half')byPlayer[name].h2.push({mpm,hpm});});
+  let arrows=Object.entries(byPlayer).filter(([,v])=>v.h1.length&&v.h2.length).map(([name,v])=>{const avg=arr=>({x:+(arr.reduce((s,p)=>s+p.mpm,0)/arr.length).toFixed(1),y:+(arr.reduce((s,p)=>s+p.hpm,0)/arr.length).toFixed(1)});return{name:name.split(' ').pop(),full:name,pos:v.pos,h1:avg(v.h1),h2:avg(v.h2)};});
+  if(STATE.intPos!=='All')arrows=arrows.filter(a=>a.pos===STATE.intPos);
+  const improved=arrows.filter(a=>a.h2.y>=a.h1.y).length,declined=arrows.filter(a=>a.h2.y<a.h1.y).length;
+  const avgDrop=arrows.length?+((arrows.reduce((s,a)=>s+(a.h2.y-a.h1.y),0)/arrows.length)).toFixed(2):0;
+  const parts=buildScatterBase();
+  parts.unshift(`<defs><marker id="arr-g" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#4CAF50" opacity="0.8"/></marker><marker id="arr-r" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#E24B4A" opacity="0.8"/></marker><marker id="arr-a" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#FF8C00" opacity="0.8"/></marker></defs>`);
+  arrows.forEach(a=>{const x1=sx(a.h1.x),y1=sy(a.h1.y),x2=sx(a.h2.x),y2=sy(a.h2.y),col=highlightName&&a.full===highlightName?'#fff':PCOL[a.pos]||'#aaa';const drop=a.h2.y-a.h1.y,arrCol=drop>=0?'#4CAF50':drop>=-3?'#FF8C00':'#E24B4A',markId=drop>=0?'arr-g':drop>=-3?'arr-a':'arr-r';parts.push(`<g class="dot" data-tip="${esc(`${a.full} | 1H: ${a.h1.x}M/Min ${a.h1.y}HMLD/Min → 2H: ${a.h2.x}M/Min ${a.h2.y}HMLD/Min | Δ${drop>=0?'+':''}${drop.toFixed(1)} HMLD/Min`)}"><line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${arrCol}" stroke-width="1.8" marker-end="url(#${markId})" opacity="0.75"/><circle cx="${x1}" cy="${y1}" r="4" fill="none" stroke="${col}" stroke-width="1.5" opacity="0.7"/><circle cx="${x2}" cy="${y2}" r="${highlightName&&a.full===highlightName?8:5}" fill="${col}" fill-opacity="0.85" stroke="${highlightName&&a.full===highlightName?'#fff':'#0c1f32'}" stroke-width="${highlightName&&a.full===highlightName?2:1}"/><text x="${x2+8}" y="${y2+4}" font-size="8.5" fill="${col}">${esc(a.name)}</text></g>`);});
+  return`<div style="display:flex;gap:8px;margin-bottom:12px"><div class="card"><div class="label">Tracked</div><div class="value">${arrows.length}</div></div><div class="card" style="border-top-color:#4CAF50"><div class="label">Maintained</div><div class="value" style="color:#4CAF50">${improved}</div></div><div class="card" style="border-top-color:#E24B4A"><div class="label">Faded</div><div class="value" style="color:#E24B4A">${declined}</div></div><div class="card"><div class="label">Avg HMLD/Min Δ</div><div class="value" style="color:${avgDrop>=0?'#4CAF50':'#E24B4A'};font-size:16px">${avgDrop>0?'+':''}${avgDrop}</div></div></div>${scatterSVG(parts)}${scatterLegendBar(arrows.length,addZone(arrows.map(a=>({...a,x:a.h2.x,y:a.h2.y}))))}
+  <div style="margin-top:6px;font-size:9px;color:#223">Open circle = 1st Half · Filled = 2nd Half · Green = maintained · Amber = minor fade · Red = significant fade (&gt;3 HMLD/Min)</div>`;
+}
+function renderTrainingDrill(highlightName){
+  if(!DATA.drill||DATA.drill.error)return setupMsg('Training drill data (LS_Drill_Data)',DATA.drill?DATA.drill.error:'Check gid=215121705 is published.');
+  const dRows=getDrillRows().filter(r=>!(gv(r,'Session_Type','Session Type')||'').toLowerCase().includes('match'));
+  const drillNames=['All',...new Set(dRows.map(r=>gv(r,'Tags_and_Notes','Tags and Notes')).filter(Boolean)).values()].sort((a,b)=>a==='All'?-1:a.localeCompare(b));
+  let rows=dRows;
+  if(STATE.intDrill&&STATE.intDrill!=='All')rows=rows.filter(r=>gv(r,'Tags_and_Notes','Tags and Notes')===STATE.intDrill);
+  let pts=drillPts(rows);if(STATE.intPos!=='All')pts=pts.filter(p=>p.pos===STATE.intPos);
+  const disp=addZone(avgByPlayer(pts));
+  const avgX=disp.length?+(disp.reduce((a,p)=>a+p.x,0)/disp.length).toFixed(0):0;
+  const avgY=disp.length?+(disp.reduce((a,p)=>a+p.y,0)/disp.length).toFixed(1):0;
+  const parts=buildScatterBase();
+  if(avgX>0){parts.push(`<line x1="${sx(avgX)}" x2="${sx(avgX)}" y1="${SPT}" y2="${SPT+SPH}" stroke="#9FE1CB" stroke-width="1" stroke-dasharray="3 4" opacity="0.22"/>`);parts.push(`<line x1="${SPL}" x2="${SPL+SPW}" y1="${sy(avgY)}" y2="${sy(avgY)}" stroke="#9FE1CB" stroke-width="1" stroke-dasharray="3 4" opacity="0.22"/>`);}
+  parts.push(dotsSVG(disp,highlightName||null));
+  const drillSel=`<select id="int-drill-sel">${drillNames.map(dn=>`<option value="${esc(dn)}"${(STATE.intDrill||'All')===dn?' selected':''}>${esc(dn)}</option>`).join('')}</select>`;
+  return`<div style="display:flex;gap:8px;margin-bottom:12px;align-items:center"><div class="card"><div class="label">M/Min</div><div class="value">${avgX}</div></div><div class="card"><div class="label">HMLD/Min</div><div class="value">${avgY}</div></div><div class="card"><div class="label">Players</div><div class="value">${disp.length}</div></div><div style="display:flex;gap:8px;align-items:center;flex-shrink:0"><span style="font-size:10px;color:#557;text-transform:uppercase">Drill</span>${drillSel}</div></div>${scatterSVG(parts)}${scatterLegendBar(disp.length,disp)}${buildZonePanels(rows)}`;
+}
+function renderIntensity(highlightName){
+  const halfOpts=[{k:'full',l:'Full Game'},{k:'1h',l:'1st Half'},{k:'2h',l:'2nd Half'},{k:'arrow',l:'1H → 2H'}];
+  const modeBtns=`<button class="mode-btn${STATE.intMode==='match'?' active':''}" data-imode="match">⚽ Match</button><button class="mode-btn${STATE.intMode==='training'?' active':''}" data-imode="training">🏃 Training</button>`;
+  const halfBtns=STATE.intMode==='match'?`<div style="display:flex;gap:5px">${halfOpts.map(o=>`<button class="sub-btn${STATE.intHalf===o.k?' active':''}" data-ihalf="${o.k}">${o.l}</button>`).join('')}</div>`:'';
+  const posFilter=`<div id="int-pos-filter" style="display:flex;gap:6px;align-items:center"><span style="font-size:10px;color:#557;text-transform:uppercase">Position</span>${['All','Middle 8','Inside Forward','Inside Defender'].map(p=>`<button class="pos-btn${STATE.intPos===p?' active':''}" data-pos="${p}">${p}</button>`).join('')}</div>`;
+  const controls=`<div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">${modeBtns}<div style="width:1px;height:22px;background:#1e3a52"></div>${halfBtns}<div style="margin-left:auto">${posFilter}</div></div>`;
+  let chartHTML='';
+  if(STATE.intMode==='match'){if(STATE.intHalf==='full')chartHTML=renderMatchFull(highlightName);else if(STATE.intHalf==='1h')chartHTML=renderMatchHalf('1st Half',highlightName);else if(STATE.intHalf==='2h')chartHTML=renderMatchHalf('2nd Half',highlightName);else chartHTML=renderMatchArrow(highlightName);}
+  else{chartHTML=renderTrainingDrill(highlightName);}
+  return controls+chartHTML;
+}
+// ── RENDER: MATCH EXPOSURE ─────────────────────────────────────────────────────
+function renderMatch(){
+  const d=DATA.squad;
+  if(!d||d.error)return`<div style="padding:20px;color:#E24B4A">⚠ ${d?d.error:'No squad data'}</div>`;
+  let players=d.data.rows.filter(r=>gv(r,'Player Name','Player_Name'));
+  if(STATE.matchPos!=='All')players=players.filter(r=>gv(r,'Position Group','Position_Group')===STATE.matchPos);
+  const intensityRows=DATA.intensity&&!DATA.intensity.error?DATA.intensity.data.rows:[];
+  const matchLabels=[...new Set(intensityRows.map(r=>gv(r,'Match_Label')).filter(Boolean))];
+  const totalMatches=matchLabels.length||1;
+  const avgRep=players.length?players.reduce((s,r)=>{const nm=gv(r,'Player Name','Player_Name');const pm=intensityRows.filter(ir=>gv(ir,'Player_Name','Player Name')===nm).length;return s+(pm/totalMatches*100);},0)/players.length:0;
+  const rows_html=players.map(r=>{
+    const name=gv(r,'Player Name','Player_Name')||'—';
+    const pos=gv(r,'Position Group','Position_Group')||'—';
+    const av=gv(r,'Availability')||'—';
+    const dsm=num(gv(r,'Days_Since_Match','Days Since Match'));
+    const lmm=num(gv(r,'Last_Match_Mins','Last Match Mins'));
+    const extFlag=gv(r,'External_Fixture_Flag','External Fixture Flag','External_Activity','External Activity');
+    const extDate=gv(r,'External_Fixture_Date','External Fixture Date');
+    const pc=PCOL[pos]||'#557',ac=ACFG[av]||'#9E9E9E';
+    const pMatches=intensityRows.filter(ir=>gv(ir,'Player_Name','Player Name')===name).length;
+    const repPct=pMatches/totalMatches*100;
+    const repColor=repPct>=80?'#4CAF50':repPct>=50?'#FF8C00':'#E24B4A';
+    const repBar=`<div style="display:flex;align-items:center;gap:8px"><div style="width:80px;height:5px;background:#0b1929;border-radius:3px"><div style="height:5px;width:${repPct}%;background:${repColor};border-radius:3px"></div></div><span style="font-size:10px;font-weight:700;color:${repColor}">${repPct.toFixed(0)}%</span></div>`;
+    const hasExt=(num(extFlag)>0)||(extFlag&&extFlag!=='0'&&extFlag!=='');
+    const extBadge=hasExt?`<span class="badge" style="background:#4FC3F722;color:#4FC3F7;border:1px solid #4FC3F744">${extDate?fmtWeek(extDate)+' External':extFlag==='1'?'External fixture':esc(extFlag)}</span>`:'<span style="color:#334">—</span>';
+    return`<tr><td style="font-weight:600;color:#ddd">${esc(name)}</td><td style="color:${pc};font-size:11px">${esc(pos)}</td><td><span class="avail-dot" style="background:${ac}"></span><span style="color:${ac};font-size:11px;font-weight:600">${esc(av)}</span></td><td style="color:#9FE1CB;font-weight:700">${pMatches}/${totalMatches}</td><td>${repBar}</td><td style="color:#fff;font-size:11px">${lmm>0?Math.round(lmm)+' min':'—'}</td><td style="color:#446;font-size:11px">${dsm>0?Math.round(dsm)+'d':'—'}</td><td>${extBadge}</td></tr>`;
+  }).join('');
+  return`<div>
+    <div style="display:flex;gap:8px;margin-bottom:16px">
+      <div class="card"><div class="label">Matches in Dataset</div><div class="value">${totalMatches}</div></div>
+      <div class="card"><div class="label">Avg Rep % (GPS)</div><div class="value" style="color:${avgRep>=70?'#4CAF50':'#FF8C00'}">${avgRep.toFixed(0)}%</div></div>
+      <div class="card"><div class="label">Squad Size</div><div class="value">${players.length}</div></div>
+    </div>
+    <div style="display:flex;align-items:center;margin-bottom:12px;gap:8px">
+      <div id="match-pos-filter" style="display:flex;gap:6px;align-items:center">
+        <span style="font-size:10px;color:#557;text-transform:uppercase">Position</span>
+        ${['All','Middle 8','Inside Forward','Inside Defender'].map(p=>`<button class="pos-btn${STATE.matchPos===p?' active':''}" data-pos="${p}">${p}</button>`).join('')}
+      </div>
+    </div>
+    <div style="background:#0c1f32;border-radius:8px;overflow:auto">
+      <table><thead><tr><th>Player</th><th>Position</th><th>Status</th><th>Matches Played</th><th>Rep % (GPS only)</th><th>Last Match Mins</th><th>Days Since Match</th><th>External Activity</th></tr></thead>
+      <tbody>${rows_html||'<tr><td colspan="8" style="text-align:center;color:#334;padding:30px">No players match filter.</td></tr>'}</tbody></table>
+    </div>
+    <div style="margin-top:8px;font-size:9px;color:#223">Rep % = matches appearing in GPS data ÷ total matches in dataset · External Activity reads External_Fixture_Flag from workbook</div>
+  </div>`;
+}
+// ── RENDER: PLAYER PROFILE ─────────────────────────────────────────────────────
+function getTop28dSessions(playerName){
+  if(!DATA.daily||DATA.daily.error)return[];
+  const cut=Date.now()-28*86400000;
+  return DATA.daily.data.rows.filter(r=>gv(r,'Player_Name')===playerName&&dateToMs(gv(r,'Date'))>=cut).sort((a,b)=>dateToMs(gv(b,'Date'))-dateToMs(gv(a,'Date')));
+}
+function renderProfile(){
+  let playerList=[];
+  if(DATA.squad&&!DATA.squad.error)playerList=DATA.squad.data.rows.map(r=>gv(r,'Player Name','Player_Name')).filter(Boolean).sort();
+  else if(DATA.trend&&!DATA.trend.error)playerList=[...new Set(DATA.trend.data.rows.map(r=>gv(r,'Player_Name')).filter(Boolean)).values()].sort();
+  if(!playerList.length)return setupMsg('No Player Data','Load squad or trend data.');
+  if(!STATE.profilePlayer||!playerList.includes(STATE.profilePlayer))STATE.profilePlayer=playerList[0];
+  const pName=STATE.profilePlayer;
+  const squadRow=DATA.squad&&!DATA.squad.error?DATA.squad.data.rows.find(r=>gv(r,'Player Name','Player_Name')===pName):null;
+  const av=squadRow?gv(squadRow,'Availability')||'—':'—';
+  const inj=squadRow?gv(squadRow,'Injury Status','Injury_Status')||'':'';
+  // HMLD ACWR — bypass LS_Squad_Load, read latest week from LS_Load_Trend
+  const ha=(buildLatestAcwr()[pName]||{}).acwr||0;
+  const flag=squadRow?gv(squadRow,'Load Flag','Load_Flag')||'—':'—';
+  const sess7=squadRow?gv(squadRow,'Sessions Last 7 Days','Sessions_Last_7_Days')||'—':'—';
+  const pos=squadRow?gv(squadRow,'Position Group','Position_Group')||'—':'—';
+  const notes=squadRow?gv(squadRow,'Notes')||'':'';
+  const dsm=squadRow?num(gv(squadRow,'Days_Since_Match','Days Since Match')):0;
+  const lmm=squadRow?num(gv(squadRow,'Last_Match_Mins','Last Match Mins')):0;
+  // Max Velocity from LS_Daily_Export (most recent session + 28d peak)
+  const _pdProf=buildPlayerPeaks()[pName]||{};
+  const mspd=_pdProf.spd||0,_spdPk28=_pdProf.spd28||0;
+  const _spdPctProf=_spdPk28>0?(mspd/_spdPk28*100):0;
+  const acc7=squadRow?num(gv(squadRow,'Acc_Events_7d','Acc Events 7d')):0;
+  const acc28=squadRow?num(gv(squadRow,'Acc_Events_28d_avg','Acc Events 28d Avg')):0;
+  const dec7=squadRow?num(gv(squadRow,'Dec_Events_7d','Dec Events 7d')):0;
+  const dec28=squadRow?num(gv(squadRow,'Dec_Events_28d_avg','Dec Events 28d Avg')):0;
+  const ac=ACFG[av]||'#9E9E9E',pc=PCOL[pos]||'#557';
+  const accDelta=acc28>0?+(((acc7-acc28)/acc28)*100).toFixed(0):null;
+  const decDelta=dec28>0?+(((dec7-dec28)/dec28)*100).toFixed(0):null;
+  const extFlag=squadRow?gv(squadRow,'External_Fixture_Flag','External Fixture Flag','External_Activity','External Activity'):'';
+  const hasExt=(num(extFlag)>0)||(extFlag&&extFlag!=='0'&&extFlag!=='');
+  // Timeline
+  const tlCutoffs={'7d':7,'14d':14,'28d':28,'Season':null};
+  const cutoff=tlCutoffs[STATE.profileTimeline];
+  const tlBtns=['7d','14d','28d','Season'].map(k=>`<button class="tl-btn${STATE.profileTimeline===k?' active':''}" data-tl="${k}">${k}</button>`).join('');
+  const kpi=(label,value,color,sub)=>`<div class="card"><div class="label">${label}</div><div class="value" style="color:${color||'#fff'};font-size:${String(value).length>7?'13px':'20px'}">${value}</div>${sub?`<div class="sub">${sub}</div>`:''}</div>`;
+  // Chart: daily for 7d/14d/28d, weekly for Season
+  let trendChart='';
+  if(STATE.profileTimeline==='Season'){
+    const weeks=getTrendWeeks(pName,'hmld',null);
+    trendChart=`<div style="margin-top:4px"><div style="font-size:9px;color:#9FE1CB;text-transform:uppercase;letter-spacing:.12em;margin-bottom:8px">Weekly HMLD — Season</div>${buildWeeklyChart(weeks,'hmld')}</div>`;
+  } else {
+    trendChart=`<div style="margin-top:4px"><div style="font-size:9px;color:#9FE1CB;text-transform:uppercase;letter-spacing:.12em;margin-bottom:8px">Daily HMLD — Last ${STATE.profileTimeline}</div>${buildDailyChart(pName,'hmld',cutoff)}</div>`;
+  }
+  // Top 28d sessions table
+  const top28=getTop28dSessions(pName);
+  let top28HTML='';
+  if(top28.length){
+    const top28Sorted=[...top28].sort((a,b)=>num(gv(b,'HMLD'))-num(gv(a,'HMLD'))).slice(0,8);
+    top28HTML=`<div style="margin-top:18px">
+      <div style="font-size:9px;color:#9FE1CB;text-transform:uppercase;letter-spacing:.12em;margin-bottom:8px">Top Sessions — Last 28 Days (sorted by HMLD)</div>
+      <div style="background:#0c1f32;border-radius:8px;overflow:auto">
+        <table><thead><tr><th>Date</th><th>Session</th><th>HMLD (m)</th><th>Total Dist</th><th>HSR (m)</th><th>Max Speed</th><th>Acc Events</th><th>Dec Events</th></tr></thead>
+        <tbody>${top28Sorted.map(r=>{
+          const dt=fmtWeek(gv(r,'Date'));
+          const stype=gv(r,'Session_Type','Session Type')||'';
+          const slabel=gv(r,'Session_Label','Match_Label','Match Label')||stype;
+          const isMatch=stype.toLowerCase().includes('match');
+          const hmld=num(gv(r,'HMLD'));
+          const td=num(gv(r,'Total_Distance','Total Distance'));
+          const hsr=num(gv(r,'HSR'));
+          const spd=num(gv(r,...SPD_COLS));
+          const acc=num(gv(r,'Acc_Events','Acc Events'));
+          const dec=num(gv(r,'Dec_Events','Dec Events'));
+          return`<tr>
+            <td style="color:#9FE1CB;font-weight:600">${dt}</td>
+            <td style="color:${isMatch?'#FF8C00':'#446'};font-size:11px">${esc(slabel)}</td>
+            <td style="color:#9FE1CB;font-weight:700">${hmld>0?Math.round(hmld):'—'}</td>
+            <td style="color:#4FC3F7">${td>0?Math.round(td).toLocaleString():'—'}</td>
+            <td style="color:#81C784">${hsr>0?Math.round(hsr):'—'}</td>
+            <td style="color:#aaa">${spd>0?spd.toFixed(2)+' m/s':'—'}</td>
+            <td style="color:#FFB74D">${acc>0?acc.toFixed(1):'—'}</td>
+            <td style="color:#FF8A65">${dec>0?dec.toFixed(1):'—'}</td>
+          </tr>`;
+        }).join('')}</tbody></table>
+      </div>
+    </div>`;
+  } else {
+    top28HTML=`<div style="margin-top:18px;background:#0f2235;border-radius:6px;padding:12px;font-size:10px;color:#334">No session data in last 28 days (LS_Daily_Export).</div>`;
+  }
+  // Profile scatter — same player highlighted
+  const profHalfOpts=[{k:'full',l:'Full Game'},{k:'1h',l:'1st Half'},{k:'2h',l:'2nd Half'},{k:'arrow',l:'1H → 2H'}];
+  const profModeBtns=`<button class="mode-btn${STATE.profMode==='match'?' active':''}" data-pmode="match">⚽ Match</button><button class="mode-btn${STATE.profMode==='training'?' active':''}" data-pmode="training">🏃 Training</button>`;
+  const profHalfBtns=STATE.profMode==='match'?`<div style="display:flex;gap:5px">${profHalfOpts.map(o=>`<button class="sub-btn${STATE.profHalf===o.k?' active':''}" data-phalf="${o.k}">${o.l}</button>`).join('')}</div>`:'';
+  // Profile scatter uses intMode/intHalf/intMatch state but overrides for this view
+  const savedMode=STATE.intMode,savedHalf=STATE.intHalf,savedMatch=STATE.intMatch,savedLastN=STATE.intLastN;
+  STATE.intMode=STATE.profMode;STATE.intHalf=STATE.profHalf;STATE.intMatch=STATE.profMatch;STATE.intLastN='All';
+  let profScatterHTML='';
+  if(STATE.profMode==='match'){if(STATE.profHalf==='full')profScatterHTML=renderMatchFull(pName);else if(STATE.profHalf==='1h')profScatterHTML=renderMatchHalf('1st Half',pName);else if(STATE.profHalf==='2h')profScatterHTML=renderMatchHalf('2nd Half',pName);else profScatterHTML=renderMatchArrow(pName);}
+  else{profScatterHTML=renderTrainingDrill(pName);}
+  STATE.intMode=savedMode;STATE.intHalf=savedHalf;STATE.intMatch=savedMatch;STATE.intLastN=savedLastN;
+  const profMatchSel=DATA.intensity&&!DATA.intensity.error?`<select id="prof-match-sel" style="max-width:160px">${['All',...getMatchesSorted(DATA.intensity.data.rows)].map(m=>`<option value="${esc(m)}"${STATE.profMatch===m?' selected':''}>${esc(m)}</option>`).join('')}</select>`:'';
+  return`<div>
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:18px;flex-wrap:wrap">
+      <span style="font-size:10px;color:#557;text-transform:uppercase">Player</span>
+      <select id="profile-player-sel">${playerList.map(p=>`<option value="${esc(p)}"${pName===p?' selected':''}>${esc(p)}</option>`).join('')}</select>
+      <span style="font-size:12px;color:${pc};font-weight:600">${esc(pos)}</span>
+      <span class="avail-dot" style="background:${ac}"></span><span style="font-size:11px;color:${ac};font-weight:600">${esc(av)}</span>
+      ${inj?`<span style="font-size:11px;color:#FF8C00">· ${esc(inj)}</span>`:''}
+      ${hasExt?`<span style="font-size:10px;color:#4FC3F7">⊕ External activity</span>`:''}
+      <div style="margin-left:auto;display:flex;gap:4px">${tlBtns}</div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:14px">
+      ${kpi('HMLD ACWR',ha>0?ha.toFixed(2):'—',acwrColor(ha),ha>0?'EW Acute÷Chronic':'')}
+      ${kpi('Load Flag',flag,flag==='High Risk'?'#E24B4A':flag==='Monitor'?'#FF8C00':flag==='Under-Loaded'?'#4FC3F7':'#4CAF50')}
+      ${kpi('Sessions/7d',sess7,'#9FE1CB')}
+      ${kpi('Days Since Match',dsm>0?Math.round(dsm)+'d':'—',dsm>7?'#FF8C00':'#4CAF50',lmm>0?'Last: '+Math.round(lmm)+' min':'')}
+      ${kpi('Max Velocity',mspd>0?mspd.toFixed(2)+'\u00a0m/s':'—',pkColor(_spdPctProf),mspd>0&&_spdPk28>0?_spdPctProf.toFixed(0)+'% of 28d peak':'last session')}
+      ${kpi('Status',av,ac)}
+      ${kpi('Acc Events 7d',acc7>0?acc7.toFixed(1):'—','#FFB74D',accDelta!==null?(accDelta>0?'+':'')+accDelta+'% vs 28d avg':'')}
+      ${kpi('Acc vs 28d avg',accDelta!==null?(accDelta>0?'+':'')+accDelta+'%':'—',accDelta!==null?accVolColor(acc7,acc28):'#557')}
+      ${kpi('Dec Events 7d',dec7>0?dec7.toFixed(1):'—','#FF8A65',decDelta!==null?(decDelta>0?'+':'')+decDelta+'% vs 28d avg':'')}
+      ${kpi('Dec vs 28d avg',decDelta!==null?(decDelta>0?'+':'')+decDelta+'%':'—',decDelta!==null?accVolColor(dec7,dec28):'#557')}
+      ${kpi('Position',pos,pc)}
+      ${kpi('External',hasExt?'⊕ Yes':'—',hasExt?'#4FC3F7':'#334',hasExt?'Fixture not in GPS':'')}
+    </div>
+    ${notes?`<div style="background:#0f2235;border-radius:6px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:#9FE1CB;line-height:1.5"><span style="font-size:9px;color:#557;text-transform:uppercase;margin-right:8px">Notes</span>${esc(notes)}</div>`:''}
+    ${trendChart}
+    ${top28HTML}
+    <div style="margin-top:22px;border-top:1px solid #1e3a52;padding-top:16px">
+      <div style="font-size:9px;color:#9FE1CB;text-transform:uppercase;letter-spacing:.12em;margin-bottom:10px">Performance Scatter — ${esc(pName.split(' ').pop())} highlighted</div>
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+        ${profModeBtns}
+        <div style="width:1px;height:22px;background:#1e3a52"></div>
+        ${profHalfBtns}
+        ${STATE.profMode==='match'&&profMatchSel?`<span style="font-size:10px;color:#557">Match</span>${profMatchSel}`:''}
+      </div>
+      ${profScatterHTML}
+    </div>
+  </div>`;
+}
+// ── RENDER DISPATCHER ──────────────────────────────────────────────────────────
+function render(){
+  const el=document.getElementById('tab-content');
+  try{
+    if(STATE.tab==='squad')el.innerHTML=renderSquad();
+    else if(STATE.tab==='load')el.innerHTML=renderLoad();
+    else if(STATE.tab==='intensity')el.innerHTML=renderIntensity();
+    else if(STATE.tab==='match')el.innerHTML=renderMatch();
+    else if(STATE.tab==='profile')el.innerHTML=renderProfile();
+    bindEvents();
+  }catch(err){
+    el.innerHTML=`<div style="padding:20px;color:#E24B4A;font-family:monospace;font-size:11px">⚠ Render error: ${esc(err.message)}<br><br>${esc(err.stack||'')}</div>`;
+  }
+}
+// ── EVENTS ─────────────────────────────────────────────────────────────────────
+function bindEvents(){
+  // Tab nav
+  document.querySelectorAll('#tabs-nav button').forEach(btn=>{btn.onclick=()=>{STATE.tab=btn.dataset.tab;document.querySelectorAll('#tabs-nav button').forEach(b=>b.classList.remove('active'));btn.classList.add('active');render();};});
+  // Squad
+  document.querySelectorAll('#squad-pos-filter .pos-btn').forEach(btn=>{btn.onclick=()=>{STATE.squadPos=btn.dataset.pos;render();};});
+  document.querySelectorAll('th[data-sort]').forEach(th=>{th.onclick=()=>{if(STATE.squadSort===th.dataset.sort)STATE.squadDir=STATE.squadDir==='desc'?'asc':'desc';else{STATE.squadSort=th.dataset.sort;STATE.squadDir='desc';}render();};});
+  // Load Monitoring
+  document.querySelectorAll('[data-metric]').forEach(btn=>{btn.onclick=()=>{STATE.loadMetric=btn.dataset.metric;render();};});
+  const lp=document.getElementById('load-player-sel');if(lp)lp.onchange=()=>{STATE.loadPlayer=lp.value;render();};
+  // Intensity
+  document.querySelectorAll('[data-imode]').forEach(btn=>{btn.onclick=()=>{STATE.intMode=btn.dataset.imode;render();};});
+  document.querySelectorAll('[data-ihalf]').forEach(btn=>{btn.onclick=()=>{STATE.intHalf=btn.dataset.ihalf;render();};});
+  const ms=document.getElementById('int-match-sel');if(ms)ms.onchange=()=>{STATE.intMatch=ms.value;render();};
+  const ln=document.getElementById('int-lastn-sel');if(ln)ln.onchange=()=>{STATE.intLastN=ln.value;render();};
+  const ds2=document.getElementById('int-drill-sel');if(ds2)ds2.onchange=()=>{STATE.intDrill=ds2.value;render();};
+  document.querySelectorAll('#int-pos-filter .pos-btn').forEach(btn=>{btn.onclick=()=>{STATE.intPos=btn.dataset.pos;render();};});
+  // Match Exposure
+  document.querySelectorAll('#match-pos-filter .pos-btn').forEach(btn=>{btn.onclick=()=>{STATE.matchPos=btn.dataset.pos;render();};});
+  // Player Profile
+  const pp=document.getElementById('profile-player-sel');if(pp)pp.onchange=()=>{STATE.profilePlayer=pp.value;render();};
+  document.querySelectorAll('[data-tl]').forEach(btn=>{btn.onclick=()=>{STATE.profileTimeline=btn.dataset.tl;render();};});
+  // Profile scatter controls
+  document.querySelectorAll('[data-pmode]').forEach(btn=>{btn.onclick=()=>{STATE.profMode=btn.dataset.pmode;render();};});
+  document.querySelectorAll('[data-phalf]').forEach(btn=>{btn.onclick=()=>{STATE.profHalf=btn.dataset.phalf;render();};});
+  const pm=document.getElementById('prof-match-sel');if(pm)pm.onchange=()=>{STATE.profMatch=pm.value;render();};
+  // SVG tooltips
+  function bindTip(svgId,tipId){
+    const svg=document.getElementById(svgId),tip=document.getElementById(tipId);
+    if(!svg||!tip)return;
+    svg.querySelectorAll('.dot,.trend-dot').forEach(dot=>{
+      dot.onmouseenter=()=>{
+        const t=dot.dataset.tip;if(!t)return;
+        tip.innerHTML=t.split(' | ').map((line,i)=>`<div style="${i===0?'font-weight:bold':'font-size:10px;color:#9FE1CB;margin-top:2px'}">${esc(line)}</div>`).join('');
+        const sr=svg.getBoundingClientRect();
+        const er=(dot.querySelector('circle')||dot.querySelector('rect')||dot).getBoundingClientRect?.()??sr;
+        tip.style.display='block';tip.style.left=(er.left-sr.left+12)+'px';tip.style.top=Math.max(0,er.top-sr.top-50)+'px';
+      };
+      dot.onmouseleave=()=>{tip.style.display='none';};
+    });
+  }
+  bindTip('intensity-svg','dot-tooltip');
+  bindTip('weekly-svg','weekly-tooltip');
+  bindTip('daily-svg','daily-tooltip');
+  bindTip('peak-svg','peak-tooltip');
+}
+// ── DATA LOAD ──────────────────────────────────────────────────────────────────
+function dsStatus(id,result,label){
+  const el=document.getElementById(id);if(!el)return;
+  if(!result||result.error)el.innerHTML=`<span style="color:#E24B4A">✗ ${label}: ${result?esc(result.error):'no response'}</span>`;
+  else el.innerHTML=`<span style="color:#4CAF50">✓ ${label} (${result.data.rows.length} rows)</span>`;
+}
+async function loadAll(){
+  document.getElementById('tab-content').innerHTML='<div style="color:#9FE1CB;padding:40px 0;text-align:center"><span class="spinner"></span>Loading…</div>';
+  const [sq,int,dr,tr,dy,ex]=await Promise.all([fetchCSV(CFG.SQUAD_LOAD_URL),fetchCSV(CFG.PLAYER_INTENSITY_URL),fetchCSV(CFG.DRILL_DATA_URL),fetchCSV(CFG.LOAD_TREND_URL),fetchCSV(CFG.DAILY_URL),fetchExtCSV(CFG.EXT_ACTIVITY_URL)]);
+  DATA.squad=sq;DATA.intensity=int;DATA.drill=dr;DATA.trend=tr;DATA.daily=dy;DATA.ext=ex;
+  dsStatus('ds-squad',sq,'LS_Squad_Load');
+  dsStatus('ds-intensity',int,'LS_Player_Intensity');
+  dsStatus('ds-drill',dr,'LS_Drill_Data');
+  dsStatus('ds-trend',tr,'LS_Load_Trend');
+  dsStatus('ds-daily',dy,'LS_Daily_Export');
+  dsStatus('ds-ext',ex,'Ext Activity');
+  if([sq,int].every(r=>!r||r.error)){
+    const errs=[sq,int,dr,tr,dy].map((r,i)=>(['Squad','Intensity','Drill','Trend','Daily'][i]+': '+(r?r.error:'none'))).join('<br>');
+    document.getElementById('tab-content').innerHTML=`<div style="background:#E24B4A18;border:1px solid #E24B4A44;border-radius:8px;padding:24px 28px;max-width:600px;margin:24px auto"><div style="font-size:14px;color:#E24B4A;font-weight:700;margin-bottom:10px">⚠ All data fetches failed</div><div style="font-size:11px;color:#FF8C00;line-height:1.9;font-family:monospace">${errs}</div><div style="margin-top:14px;font-size:11px;color:#446;line-height:1.7">Possible causes: file:// URL (deploy to Netlify) · Sheet not published · Network offline</div><button onclick="loadAll()" style="margin-top:14px;padding:6px 16px;border-radius:4px;border:1px solid #9FE1CB;background:transparent;color:#9FE1CB;font-size:11px">↻ Retry</button></div>`;
+    return;
+  }
+  render();
+}
+document.getElementById('team-name').textContent=CFG.TEAM;
+document.getElementById('next-match').textContent=CFG.NEXT_MATCH;
+loadAll();
+</script>
+</body>
+</html>
