@@ -728,7 +728,7 @@ function renderMatchFull(highlightName){
   </div>
   ${scatterSVG(parts)}
   ${scatterLegendBar(dispPts.length,dispPts)}
-  ${buildZonePanels(filtPts)}`;
+  ${buildZonePanels(highlightName?filtPts.filter(r=>gv(r,'Player_Name','Player Name')===highlightName):filtPts)}`;
 }
 function renderMatchHalf(halfLabel,highlightName){
   if(!DATA.drill||DATA.drill.error)return setupMsg('Half data requires LS_Drill_Data',DATA.drill?DATA.drill.error:'Check gid=215121705 is published.');
@@ -771,7 +771,7 @@ function renderTrainingDrill(highlightName){
   if(avgX>0){parts.push(`<line x1="${sx(avgX)}" x2="${sx(avgX)}" y1="${SPT}" y2="${SPT+SPH}" stroke="#9FE1CB" stroke-width="1" stroke-dasharray="3 4" opacity="0.22"/>`);parts.push(`<line x1="${SPL}" x2="${SPL+SPW}" y1="${sy(avgY)}" y2="${sy(avgY)}" stroke="#9FE1CB" stroke-width="1" stroke-dasharray="3 4" opacity="0.22"/>`);}
   parts.push(dotsSVG(disp,highlightName||null));
   const drillSel=`<select id="int-drill-sel">${drillNames.map(dn=>`<option value="${esc(dn)}"${(STATE.intDrill||'All')===dn?' selected':''}>${esc(dn)}</option>`).join('')}</select>`;
-  return`<div style="display:flex;gap:8px;margin-bottom:12px;align-items:center"><div class="card"><div class="label">M/Min</div><div class="value">${avgX}</div></div><div class="card"><div class="label">HMLD/Min</div><div class="value">${avgY}</div></div><div class="card"><div class="label">Players</div><div class="value">${disp.length}</div></div><div style="display:flex;gap:8px;align-items:center;flex-shrink:0"><span style="font-size:10px;color:#557;text-transform:uppercase">Drill</span>${drillSel}</div></div>${scatterSVG(parts)}${scatterLegendBar(disp.length,disp)}${buildZonePanels(rows)}`;
+  return`<div style="display:flex;gap:8px;margin-bottom:12px;align-items:center"><div class="card"><div class="label">M/Min</div><div class="value">${avgX}</div></div><div class="card"><div class="label">HMLD/Min</div><div class="value">${avgY}</div></div><div class="card"><div class="label">Players</div><div class="value">${disp.length}</div></div><div style="display:flex;gap:8px;align-items:center;flex-shrink:0"><span style="font-size:10px;color:#557;text-transform:uppercase">Drill</span>${drillSel}</div></div>${scatterSVG(parts)}${scatterLegendBar(disp.length,disp)}${buildZonePanels(highlightName?rows.filter(r=>gv(r,'Player_Name','Player Name')===highlightName):rows)}`;
 }
 function renderIntensity(highlightName){
   const halfOpts=[{k:'full',l:'Full Game'},{k:'1h',l:'1st Half'},{k:'2h',l:'2nd Half'},{k:'arrow',l:'1H → 2H'}];
