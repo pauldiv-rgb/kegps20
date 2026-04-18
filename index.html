@@ -1089,12 +1089,20 @@ async function loadAll(){
   dsStatus('ds-ext',ex,'Ext Activity');
   if(sc&&!sc.error){
     const nm=buildNextMatch(sc.data.rows);
-    if(nm){CFG.NEXT_MATCH=nm;document.getElementById('next-match').textContent=nm;}
-    const el=document.getElementById('ds-schedule');
-    if(el)el.innerHTML=`<span style="color:#4CAF50">✓ Match Schedule (${sc.data.rows.length} rows)</span>`;
+    const scEl=document.getElementById('ds-schedule');
+    if(nm){
+      CFG.NEXT_MATCH=nm;
+      document.getElementById('next-match').textContent=nm;
+      if(scEl)scEl.innerHTML=`<span style="color:#4CAF50">✓ Schedule → ${esc(nm)}</span>`;
+    } else {
+      const firstRow=sc.data.rows[0]||{};
+      const cols=Object.keys(firstRow).slice(0,4).join(' | ');
+      const firstDate=firstRow[Object.keys(firstRow)[0]]||'?';
+      if(scEl)scEl.innerHTML=`<span style="color:#FF8C00">⚠ Schedule (${sc.data.rows.length}r) no upcoming — cols: [${esc(cols)}] sample date: "${esc(firstDate)}"</span>`;
+    }
   } else {
     const el=document.getElementById('ds-schedule');
-    if(el)el.innerHTML=`<span style="color:#FF8C00">⚠ Match Schedule: ${sc?sc.error:'no response'}</span>`;
+    if(el)el.innerHTML=`<span style="color:#E24B4A">✗ Match Schedule: ${sc?sc.error:'no response'}</span>`;
   }
   if([sq,int].every(r=>!r||r.error)){
     const errs=[sq,int,dr,tr,dy].map((r,i)=>(['Squad','Intensity','Drill','Trend','Daily'][i]+': '+(r?r.error:'none'))).join('<br>');
