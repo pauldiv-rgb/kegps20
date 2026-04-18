@@ -52,6 +52,7 @@ th[title]{cursor:help;border-bottom:1px dashed #446}
   <span id="ds-trend" style="color:#334">LS_Load_Trend …</span>
   <span id="ds-daily" style="color:#334">LS_Daily_Export …</span>
   <span id="ds-ext" style="color:#334">Ext Activity …</span>
+  <span id="ds-schedule" style="color:#334">Match Schedule …</span>
 </div>
 <div id="tabs-nav" style="background:#0c1f32;border-bottom:1px solid #1e3a52;padding:0 24px;display:flex">
   <button class="active" data-tab="squad">👥 Squad Status</button>
@@ -75,7 +76,8 @@ const CFG={
   LOAD_TREND_URL:'https://docs.google.com/spreadsheets/d/e/2PACX-1vTaiT2EXrwkobUINl0zCLTAa7G7vZy6J3AGgOEJubAAD8zaqEfv7XgPgF_lF7toYi0am6IKWFkAjEX4/pub?gid=2100000006&single=true&output=csv',
   DAILY_URL:'https://docs.google.com/spreadsheets/d/e/2PACX-1vTaiT2EXrwkobUINl0zCLTAa7G7vZy6J3AGgOEJubAAD8zaqEfv7XgPgF_lF7toYi0am6IKWFkAjEX4/pub?gid=2100000012&single=true&output=csv',
   EXT_ACTIVITY_URL:'https://docs.google.com/spreadsheets/d/e/2PACX-1vTaiT2EXrwkobUINl0zCLTAa7G7vZy6J3AGgOEJubAAD8zaqEfv7XgPgF_lF7toYi0am6IKWFkAjEX4/pub?gid=1093848037&single=true&output=csv',
-  NEXT_MATCH:'v Westmeath — QF — 15 Apr 2026',
+  MATCH_SCHEDULE_URL:'https://docs.google.com/spreadsheets/d/e/2PACX-1vTaiT2EXrwkobUINl0zCLTAa7G7vZy6J3AGgOEJubAAD8zaqEfv7XgPgF_lF7toYi0am6IKWFkAjEX4/pub?gid=2100000002&single=true&output=csv',
+  NEXT_MATCH:'',
   TEAM:'Kildare GAA · U20 Football · 2026',
 };
 // ── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -103,7 +105,7 @@ const METRICS={
   dec:{label:'Dec Events',weekCols:['Weekly_Dec_Events','Weekly Dec Events','Dec_Events_Weekly','Weekly_Dec'],acwrCols:['Dec_Events_ACWR','Dec ACWR','Dec_ACWR'],unit:'',dailyCol:'Dec_Events',color:'#FF8A65'},
 };
 // ── STATE ─────────────────────────────────────────────────────────────────────
-const DATA={squad:null,intensity:null,drill:null,trend:null,daily:null,ext:null};
+const DATA={squad:null,intensity:null,drill:null,trend:null,daily:null,ext:null,schedule:null};
 const STATE={
   tab:'squad',squadPos:'All',squadSort:'hmld',squadDir:'desc',
   loadMetric:'hmld',loadPlayer:'All',
@@ -1029,6 +1031,32 @@ function bindEvents(){
   bindTip('daily-svg','daily-tooltip');
   bindTip('peak-svg','peak-tooltip');
 }
+// ── NEXT MATCH AUTO-DETECT ─────────────────────────────────────────────────────
+function buildNextMatch(rows){
+  if(!rows||!rows.length)return null;
+  const sample=rows[0];
+  const dateCol=['Date','date','Match_Date','Match Date','Fixture_Date','Fixture Date'].find(c=>sample[c]!==undefined);
+  const oppCol=['Opponent','Opposition','Team','Vs','vs','Away','Home_Away','Match'].find(c=>sample[c]!==undefined);
+  const roundCol=['Round','Stage','Competition','Type','Round_Stage','Competition_Round','Fixture_Type'].find(c=>sample[c]!==undefined);
+  const venueCol=['Venue','Location','H_A','Home_Away','Ground'].find(c=>sample[c]!==undefined);
+  if(!dateCol)return null;
+  const today=new Date();today.setHours(0,0,0,0);
+  const upcoming=rows.filter(r=>{const d=new Date(gv(r,dateCol));return!isNaN(d.getTime())&&d>=today;})
+    .sort((a,b)=>new Date(gv(a,dateCol))-new Date(gv(b,dateCol)));
+  if(!upcoming.length)return null;
+  const next=upcoming[0];
+  const d=new Date(gv(next,dateCol));
+  const dateStr=d.toLocaleDateString('en-IE',{day:'numeric',month:'short',year:'numeric'});
+  const opp=oppCol?gv(next,oppCol):'';
+  const rnd=roundCol?gv(next,roundCol):'';
+  const venue=venueCol?gv(next,venueCol):'';
+  const parts=[];
+  if(opp)parts.push('v '+opp);
+  if(rnd)parts.push(rnd);
+  if(venue&&venue!==opp)parts.push(venue);
+  parts.push(dateStr);
+  return parts.join(' — ');
+}
 // ── DATA LOAD ──────────────────────────────────────────────────────────────────
 function dsStatus(id,result,label){
   const el=document.getElementById(id);if(!el)return;
@@ -1037,14 +1065,23 @@ function dsStatus(id,result,label){
 }
 async function loadAll(){
   document.getElementById('tab-content').innerHTML='<div style="color:#9FE1CB;padding:40px 0;text-align:center"><span class="spinner"></span>Loading…</div>';
-  const [sq,int,dr,tr,dy,ex]=await Promise.all([fetchCSV(CFG.SQUAD_LOAD_URL),fetchCSV(CFG.PLAYER_INTENSITY_URL),fetchCSV(CFG.DRILL_DATA_URL),fetchCSV(CFG.LOAD_TREND_URL),fetchCSV(CFG.DAILY_URL),fetchExtCSV(CFG.EXT_ACTIVITY_URL)]);
-  DATA.squad=sq;DATA.intensity=int;DATA.drill=dr;DATA.trend=tr;DATA.daily=dy;DATA.ext=ex;
+  const [sq,int,dr,tr,dy,ex,sc]=await Promise.all([fetchCSV(CFG.SQUAD_LOAD_URL),fetchCSV(CFG.PLAYER_INTENSITY_URL),fetchCSV(CFG.DRILL_DATA_URL),fetchCSV(CFG.LOAD_TREND_URL),fetchCSV(CFG.DAILY_URL),fetchExtCSV(CFG.EXT_ACTIVITY_URL),fetchCSV(CFG.MATCH_SCHEDULE_URL)]);
+  DATA.squad=sq;DATA.intensity=int;DATA.drill=dr;DATA.trend=tr;DATA.daily=dy;DATA.ext=ex;DATA.schedule=sc;
   dsStatus('ds-squad',sq,'LS_Squad_Load');
   dsStatus('ds-intensity',int,'LS_Player_Intensity');
   dsStatus('ds-drill',dr,'LS_Drill_Data');
   dsStatus('ds-trend',tr,'LS_Load_Trend');
   dsStatus('ds-daily',dy,'LS_Daily_Export');
   dsStatus('ds-ext',ex,'Ext Activity');
+  if(sc&&!sc.error){
+    const nm=buildNextMatch(sc.data.rows);
+    if(nm){CFG.NEXT_MATCH=nm;document.getElementById('next-match').textContent=nm;}
+    const el=document.getElementById('ds-schedule');
+    if(el)el.innerHTML=`<span style="color:#4CAF50">✓ Match Schedule (${sc.data.rows.length} rows)</span>`;
+  } else {
+    const el=document.getElementById('ds-schedule');
+    if(el)el.innerHTML=`<span style="color:#FF8C00">⚠ Match Schedule: ${sc?sc.error:'no response'}</span>`;
+  }
   if([sq,int].every(r=>!r||r.error)){
     const errs=[sq,int,dr,tr,dy].map((r,i)=>(['Squad','Intensity','Drill','Trend','Daily'][i]+': '+(r?r.error:'none'))).join('<br>');
     document.getElementById('tab-content').innerHTML=`<div style="background:#E24B4A18;border:1px solid #E24B4A44;border-radius:8px;padding:24px 28px;max-width:600px;margin:24px auto"><div style="font-size:14px;color:#E24B4A;font-weight:700;margin-bottom:10px">⚠ All data fetches failed</div><div style="font-size:11px;color:#FF8C00;line-height:1.9;font-family:monospace">${errs}</div><div style="margin-top:14px;font-size:11px;color:#446;line-height:1.7">Possible causes: file:// URL (deploy to Netlify) · Sheet not published · Network offline</div><button onclick="loadAll()" style="margin-top:14px;padding:6px 16px;border-radius:4px;border:1px solid #9FE1CB;background:transparent;color:#9FE1CB;font-size:11px">↻ Retry</button></div>`;
