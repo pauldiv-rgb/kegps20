@@ -130,6 +130,21 @@ function sprintColor(p){return p>=90?'#4CAF50':p>=80?'#FF8C00':'#E24B4A';}
 function accVolColor(v7,avg28){if(!avg28)return'#557';const r=v7/avg28;if(r>1.15)return'#E24B4A';if(r>=0.95)return'#4CAF50';if(r>=0.80)return'#FF8C00';return'#4FC3F7';}
 function pkColor(p){return p>=90?'#4CAF50':p>=80?'#FF8C00':p>0?'#E24B4A':'#557';}
 function pkFmt(v,unit,p){if(!v)return'<span style="color:#334">—</span>';const c=pkColor(p);return`<span style="font-weight:700;color:${c}">${v.toFixed(unit==='km/h'?1:2)}\u00a0${unit}</span>${p>0?`<span style="color:${c};font-size:9px">\u00a0(${p.toFixed(0)}%)</span>`:''}`;}
+// velBar — last-session value + fill bar (% of 28d peak) + 28d ref label
+// Color driven by 7-day max vs 28d peak: ≥95% neutral, 80-94% amber, <80% red
+function velBar(lastVal,peak28,max7,unit){
+  if(!lastVal&&!peak28)return'<span style="color:#334">—</span>';
+  const pct=peak28>0?Math.round(lastVal/peak28*100):0;
+  const ratio7=(peak28>0&&max7>0)?max7/peak28:null;
+  let barClr,valClr;
+  if(ratio7===null||ratio7>=0.95){barClr='#2a4a5e';valClr='#9FE1CB';}
+  else if(ratio7>=0.80){barClr='#FF8C00';valClr='#FF8C00';}
+  else{barClr='#E24B4A';valClr='#E24B4A';}
+  const bw=Math.min(Math.max(pct,0),100);
+  const pk28s=peak28>0?peak28.toFixed(2):'—';
+  const vStr=lastVal>0?lastVal.toFixed(2):'—';
+  return`<div style="min-width:80px"><div style="display:flex;align-items:baseline;gap:3px"><span style="font-weight:700;color:${valClr}">${vStr}</span><span style="font-size:9px;color:#446">${unit}</span></div><div style="position:relative;height:3px;background:#1a3347;border-radius:2px;margin:3px 0;width:72px"><div style="position:absolute;left:0;top:0;height:100%;width:${bw}%;background:${barClr};border-radius:2px"></div></div><div style="font-size:9px;color:#446">pk28: ${pk28s}${pct>0?` <span style="color:${barClr}">${pct}%</span>`:''}</div></div>`;
+}
 
 function fmtWeek(d){if(d===''||d==null)return'';const M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];const s=String(d).trim();if(/^\d{5,}(\.\d+)?$/.test(s)){const ms=(parseFloat(s)-25569)*86400000;const dt=new Date(ms);if(!isNaN(dt))return dt.getUTCDate()+' '+M[dt.getUTCMonth()];}const p=s.split(/[-\/]/);if(p.length===3){if(p[0].length===4)return parseInt(p[2])+' '+M[parseInt(p[1])-1];if(parseInt(p[0])>12)return parseInt(p[0])+' '+M[parseInt(p[1])-1];return parseInt(p[1])+' '+M[parseInt(p[0])-1];}return s;}
 function dateToMs(d){if(!d)return 0;const s=String(d).trim();if(/^\d{5,}(\.\d+)?$/.test(s))return(parseFloat(s)-25569)*86400000;const MMAP={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};const p=s.split(/[-\/]/);if(p.length===3){const m1=MMAP[p[1].toLowerCase().substring(0,3)];if(m1!==undefined){const yr=parseInt(p[2]);const dy=parseInt(p[0]);if(!isNaN(yr)&&!isNaN(dy))return Date.UTC(yr,m1,dy);}if(p[0].length===4)return Date.UTC(parseInt(p[0]),parseInt(p[1])-1,parseInt(p[2]));if(parseInt(p[0])>12)return Date.UTC(2000+parseInt(p[2]),parseInt(p[1])-1,parseInt(p[0]));return Date.UTC(2000+parseInt(p[2]),parseInt(p[0])-1,parseInt(p[1]));}return 0;}
@@ -352,7 +367,7 @@ function buildLatestAcwr(){
 function buildPlayerPeaks(){
   const map={};
   if(!DATA.daily||DATA.daily.error)return map;
-  const now=Date.now(),d28=28*86400000;
+  const now=Date.now(),d28=28*86400000,d7=7*86400000;
   DATA.daily.data.rows.forEach(r=>{
     const pn=gv(r,'Player_Name');if(!pn)return;
     const dt=dateToMs(gv(r,'Date'));
@@ -366,9 +381,11 @@ function buildPlayerPeaks(){
     const rows=map[pn].rows.sort((a,b)=>b.dt-a.dt);
     const latest=rows[0]||{};
     const r28=rows.filter(r=>r.dt>=now-d28);
+    const r7=rows.filter(r=>r.dt>=now-d7);
     const pk=(arr,k)=>Math.max(...arr.map(r=>r[k]).filter(v=>v>0),0)||0;
     map[pn]={spd:latest.spd||0,acc:latest.acc||0,dec:latest.dec||0,
               spd28:pk(r28,'spd'),acc28:pk(r28,'acc'),dec28:pk(r28,'dec'),
+              spd7:pk(r7,'spd'),accPk7:pk(r7,'acc'),decPk7:pk(r7,'dec'),
               latestDt:rows[0]?rows[0].dt:0};
   });
   return map;
@@ -587,16 +604,22 @@ function renderSquad(){
     const dec7=num(gv(r,'Dec_Events_7d','Dec Events 7d'));
     const dec28=num(gv(r,'Dec_Events_28d_avg','Dec Events 28d Avg'));
     const ac=ACFG[av]||'#9E9E9E',pc=PCOL[pos]||'#557',hc=acwrColor(ha);
-    // Max Velocity / Acc / Dec — read from LS_Daily_Export (most recent session + 28d peak)
+    // Max Velocity / Acc / Dec — read from LS_Daily_Export (most recent session + 28d peak + 7d max)
     const pd=peaks[name]||{};
     const mspd=pd.spd||0,macc=pd.acc||0,mdec=pd.dec||0;
     const spd28=pd.spd28||0,acc28p=pd.acc28||0,dec28p=pd.dec28||0;
+    const mspd7=pd.spd7||0,macc7=pd.accPk7||0,mdec7=pd.decPk7||0;
+    // % of 28d peak — kept for action column logic only
     const spdPct=spd28>0?(mspd/spd28*100):0;
     const accMsPct=acc28p>0?(macc/acc28p*100):0;
     const decMsPct=dec28p>0?(mdec/dec28p*100):0;
-    const velFmt=pkFmt(mspd,'m/s',spdPct);
-    const accPeakFmt=pkFmt(macc,'m/s²',accMsPct);
-    const decPeakFmt=pkFmt(mdec,'m/s²',decMsPct);
+    // 7d exposure ratio vs 28d peak — drives color and action flags
+    const spd7ratio=spd28>0&&mspd7>0?mspd7/spd28:null;
+    const acc7ratio=acc28p>0&&macc7>0?macc7/acc28p:null;
+    const dec7ratio=dec28p>0&&mdec7>0?mdec7/dec28p:null;
+    const velFmt=velBar(mspd,spd28,mspd7,'m/s');
+    const accPeakFmt=velBar(macc,acc28p,macc7,'m/s²');
+    const decPeakFmt=velBar(mdec,dec28p,mdec7,'m/s²');
     // Acc/Dec event columns: value + % of 28d avg with colour
     const accRatio=acc28>0?acc7/acc28:null;
     const accPct=accRatio!==null?(accRatio*100).toFixed(0)+'%':null;
@@ -628,8 +651,8 @@ function renderSquad(){
     else if(ha>=1.3&&hasExt){action='Manage load — ext noted';ac2='#FF8C00';}
     else if(ha>=1.3){action='Manage load ⚠';ac2='#FF8C00';}
     else if(ha>0&&ha<0.8){action='Increase volume ↑';ac2='#4FC3F7';}
-    else if(spdPct>0&&spdPct<80){action='Speed readiness ⚠';ac2='#FF8C00';}
-    else if((accMsPct>0&&accMsPct<80)||(decMsPct>0&&decMsPct<80)){action='Neuromusc. readiness ⚠';ac2='#FF8C00';}
+    else if(spd7ratio!==null&&spd7ratio<0.80){action='Speed readiness ⚠';ac2='#FF8C00';}
+    else if((acc7ratio!==null&&acc7ratio<0.80)||(dec7ratio!==null&&dec7ratio<0.80)){action='Neuromusc. readiness ⚠';ac2='#FF8C00';}
     else if(accRatio!==null&&accRatio>1.15){action='Acc spike — review';ac2='#E24B4A';}
     else if(hasExt){action=hasEstLoad?`Review total load (est. +${Math.round(estHmld)}m HMLD)`:'Review total load';ac2='#4FC3F7';}
     const stale=isStaleStatus(r);
