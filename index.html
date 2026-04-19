@@ -499,7 +499,8 @@ function renderSquad(){
   const lastMatchMs=buildLastMatchDate();
   const isAutoReturned=r=>{
     const av=gv(r,'Availability');
-    if(av!=='Injured'&&av!=='Unavailable')return false;
+    const isRestricted=av==='Injured'||av==='Unavailable'||av==='No GPS'||/rtp|return/i.test(av);
+    if(!isRestricted)return false;
     const nm=gv(r,'Player Name','Player_Name');
     const latestDt=(peaks[nm]||{}).latestDt||0;
     return latestDt>0&&(lastMatchMs===0||latestDt>lastMatchMs);
@@ -874,7 +875,8 @@ function renderProfile(){
   const injRawP=squadRow?gv(squadRow,'Injury Status','Injury_Status')||'':'';
   const profPeaks=buildPlayerPeaks();
   const profLastMatch=buildLastMatchDate();
-  const profAutoRet=(avRawP==='Injured'||avRawP==='Unavailable')&&(profPeaks[pName]||{}).latestDt>0&&(profLastMatch===0||(profPeaks[pName]||{}).latestDt>profLastMatch);
+  const profIsRestricted=avRawP==='Injured'||avRawP==='Unavailable'||avRawP==='No GPS'||/rtp|return/i.test(avRawP);
+  const profAutoRet=profIsRestricted&&(profPeaks[pName]||{}).latestDt>0&&(profLastMatch===0||(profPeaks[pName]||{}).latestDt>profLastMatch);
   const av=profAutoRet?'Available':avRawP;
   const inj=profAutoRet?'':injRawP;
   // HMLD ACWR — bypass LS_Squad_Load, read latest week from LS_Load_Trend
