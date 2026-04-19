@@ -817,7 +817,13 @@ function renderMatch(){
   if(STATE.matchPos!=='All')players=players.filter(r=>gv(r,'Position Group','Position_Group')===STATE.matchPos);
   const intensityRows=DATA.intensity&&!DATA.intensity.error?DATA.intensity.data.rows:[];
   const matchLabels=[...new Set(intensityRows.map(r=>gv(r,'Match_Label')).filter(Boolean))];
-  const totalMatches=matchLabels.length||1;
+  // Use match schedule past count as denominator — more accurate than GPS-only count
+  const schedPastCount=(()=>{
+    if(!DATA.schedule||DATA.schedule.error)return 0;
+    const now=new Date();now.setHours(0,0,0,0);
+    return DATA.schedule.data.rows.filter(r=>{const d=parseScheduleDate(gv(r,'Match date'));return d&&d<now;}).length;
+  })();
+  const totalMatches=schedPastCount||matchLabels.length||1;
   const avgRep=players.length?players.reduce((s,r)=>{const nm=gv(r,'Player Name','Player_Name');const pm=intensityRows.filter(ir=>gv(ir,'Player_Name','Player Name')===nm).length;return s+(pm/totalMatches*100);},0)/players.length:0;
   const rows_html=players.map(r=>{
     const name=gv(r,'Player Name','Player_Name')||'—';
@@ -840,7 +846,7 @@ function renderMatch(){
   }).join('');
   return`<div>
     <div style="display:flex;gap:8px;margin-bottom:16px">
-      <div class="card"><div class="label">Matches in Dataset</div><div class="value">${totalMatches}</div></div>
+      <div class="card"><div class="label">Total Matches</div><div class="value">${totalMatches}</div><div class="sub">${schedPastCount?'from schedule':'GPS only'}</div></div>
       <div class="card"><div class="label">Avg Rep % (GPS)</div><div class="value" style="color:${avgRep>=70?'#4CAF50':'#FF8C00'}">${avgRep.toFixed(0)}%</div></div>
       <div class="card"><div class="label">Squad Size</div><div class="value">${players.length}</div></div>
     </div>
