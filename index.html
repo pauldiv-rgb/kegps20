@@ -130,20 +130,23 @@ function sprintColor(p){return p>=90?'#4CAF50':p>=80?'#FF8C00':'#E24B4A';}
 function accVolColor(v7,avg28){if(!avg28)return'#557';const r=v7/avg28;if(r>1.15)return'#E24B4A';if(r>=0.95)return'#4CAF50';if(r>=0.80)return'#FF8C00';return'#4FC3F7';}
 function pkColor(p){return p>=90?'#4CAF50':p>=80?'#FF8C00':p>0?'#E24B4A':'#557';}
 function pkFmt(v,unit,p){if(!v)return'<span style="color:#334">—</span>';const c=pkColor(p);return`<span style="font-weight:700;color:${c}">${v.toFixed(unit==='km/h'?1:2)}\u00a0${unit}</span>${p>0?`<span style="color:${c};font-size:9px">\u00a0(${p.toFixed(0)}%)</span>`:''}`;}
-// velBar — last-session value + fill bar (% of 28d peak) + 28d ref label
-// Color driven by 7-day max vs 28d peak: ≥95% neutral, 80-94% amber, <80% red
+// velBar — last-session value + fill bar (sess % of 28d peak) + 28d ref + explicit 7d exposure label
+// Fill bar width = last session / 28d peak. Color driven by 7d max vs 28d peak.
+// Label shows pk28 ref (plain) + "7d: XX%" (colored) so readers know exactly what the alert is.
 function velBar(lastVal,peak28,max7,unit){
   if(!lastVal&&!peak28)return'<span style="color:#334">—</span>';
-  const pct=peak28>0?Math.round(lastVal/peak28*100):0;
+  const sessPct=peak28>0?Math.round(lastVal/peak28*100):0;
   const ratio7=(peak28>0&&max7>0)?max7/peak28:null;
+  const r7Pct=ratio7!==null?Math.round(ratio7*100):null;
   let barClr,valClr;
   if(ratio7===null||ratio7>=0.95){barClr='#2a4a5e';valClr='#9FE1CB';}
   else if(ratio7>=0.80){barClr='#FF8C00';valClr='#FF8C00';}
   else{barClr='#E24B4A';valClr='#E24B4A';}
-  const bw=Math.min(Math.max(pct,0),100);
+  const bw=Math.min(Math.max(sessPct,0),100);
   const pk28s=peak28>0?peak28.toFixed(2):'—';
   const vStr=lastVal>0?lastVal.toFixed(2):'—';
-  return`<div style="min-width:80px"><div style="display:flex;align-items:baseline;gap:3px"><span style="font-weight:700;color:${valClr}">${vStr}</span><span style="font-size:9px;color:#446">${unit}</span></div><div style="position:relative;height:3px;background:#1a3347;border-radius:2px;margin:3px 0;width:72px"><div style="position:absolute;left:0;top:0;height:100%;width:${bw}%;background:${barClr};border-radius:2px"></div></div><div style="font-size:9px;color:#446">pk28: ${pk28s}${pct>0?` <span style="color:${barClr}">${pct}%</span>`:''}</div></div>`;
+  const d7lbl=r7Pct!==null?` <span style="color:${barClr};font-weight:600">7d:${r7Pct}%</span>`:'';
+  return`<div style="min-width:88px"><div style="display:flex;align-items:baseline;gap:3px"><span style="font-weight:700;color:${valClr}">${vStr}</span><span style="font-size:9px;color:#446">${unit}</span></div><div style="position:relative;height:3px;background:#1a3347;border-radius:2px;margin:3px 0;width:72px"><div style="position:absolute;left:0;top:0;height:100%;width:${bw}%;background:${barClr};border-radius:2px"></div></div><div style="font-size:9px;color:#446">pk28:${pk28s}${d7lbl}</div></div>`;
 }
 
 function fmtWeek(d){if(d===''||d==null)return'';const M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];const s=String(d).trim();if(/^\d{5,}(\.\d+)?$/.test(s)){const ms=(parseFloat(s)-25569)*86400000;const dt=new Date(ms);if(!isNaN(dt))return dt.getUTCDate()+' '+M[dt.getUTCMonth()];}const p=s.split(/[-\/]/);if(p.length===3){if(p[0].length===4)return parseInt(p[2])+' '+M[parseInt(p[1])-1];if(parseInt(p[0])>12)return parseInt(p[0])+' '+M[parseInt(p[1])-1];return parseInt(p[1])+' '+M[parseInt(p[0])-1];}return s;}
