@@ -457,6 +457,18 @@ function getPlayerExtActs(name,windowMs){
     .sort((a,b)=>b.ts-a.ts);
 }
 // ── AUTO-RETURN: detect injured players who have completed a post-match session ──
+function buildLatestSessionType(){
+  // Returns {playerName: {ms, type}} — most recent session type per player from LS_Daily_Export
+  const map={};
+  if(!DATA.daily||DATA.daily.error)return map;
+  DATA.daily.data.rows.forEach(r=>{
+    const pn=(gv(r,'Player_Name')||'').trim();if(!pn)return;
+    const ms=dateToMs(gv(r,'Date'));if(!ms)return;
+    const stype=(gv(r,'Session_Type','Session Type')||'').toLowerCase();
+    if(!map[pn]||ms>map[pn].ms)map[pn]={ms,type:stype};
+  });
+  return map;
+}
 function buildLastMatchDate(){
   if(!DATA.intensity||DATA.intensity.error)return 0;
   let maxMs=0;
@@ -483,9 +495,24 @@ function renderSquad(){
   const rtp=players.filter(r=>/rtp|return/i.test(gv(r,'Availability'))).length;
   const injured=players.filter(r=>gv(r,'Availability')==='Injured').length;
   const flagged=players.filter(r=>['High Risk','Monitor'].includes(gv(r,'Load Flag','Load_Flag'))).length;
-  // Stale status: Injured / RTP / No GPS but GPS session data present in last 7 days
+  // Auto-return: any player with a GPS session after last match → Available (or RTP if session typed RTP)
+  const lastMatchMs=buildLastMatchDate();
+  const latestSessTypes=buildLatestSessionType();
+  const isAutoReturned=r=>{
+    const av=gv(r,'Availability');
+    if(av==='Available')return false; // already correct
+    const nm=gv(r,'Player Name','Player_Name');
+    const latestDt=(peaks[nm]||{}).latestDt||0;
+    return latestDt>0&&(lastMatchMs===0||latestDt>lastMatchMs);
+  };
+  const autoReturnStatus=nm=>{
+    const stype=(latestSessTypes[nm]||{}).type||'';
+    return /rtp|return.to.play/i.test(stype)?'RTP':'Available';
+  };
+  // Stale status: restricted status but GPS data within 7 days — only for non-auto-returned players
   const d7ms=7*86400000,nowMs=Date.now();
   const isStaleStatus=r=>{
+    if(isAutoReturned(r))return false;
     const av=gv(r,'Availability')||'';
     const isRestricted=av==='Injured'||/rtp|return/i.test(av)||av==='No GPS';
     if(!isRestricted)return false;
@@ -495,16 +522,6 @@ function renderSquad(){
   };
   const staleRows=players.filter(isStaleStatus);
   const staleCount=staleRows.length;
-  // Auto-return: injured player has a GPS session in LS_Daily_Export after the last match
-  const lastMatchMs=buildLastMatchDate();
-  const isAutoReturned=r=>{
-    const av=gv(r,'Availability');
-    const isRestricted=av==='Injured'||av==='Unavailable'||av==='No GPS'||/rtp|return/i.test(av);
-    if(!isRestricted)return false;
-    const nm=gv(r,'Player Name','Player_Name');
-    const latestDt=(peaks[nm]||{}).latestDt||0;
-    return latestDt>0&&(lastMatchMs===0||latestDt>lastMatchMs);
-  };
   const staleWarn=staleCount>0?`<div style="background:#E24B4A18;border:1px solid #E24B4A44;border-radius:6px;padding:10px 16px;margin-bottom:12px;font-size:10px;color:#E24B4A;display:flex;gap:12px;align-items:flex-start"><span style="font-size:14px;line-height:1">⚠</span><div><strong>${staleCount} player${staleCount>1?'s':''} with stale status flag</strong> — marked Injured / RTP / No GPS but GPS data present in last 7 days. Review and update Availability in the workbook.<br><span style="color:#FF8C00;margin-top:4px;display:inline-block">${staleRows.map(r=>gv(r,'Player Name','Player_Name')).join(' · ')}</span></div></div>`:'';
   let filtered=STATE.squadPos==='All'?players:players.filter(r=>gv(r,'Position Group','Position_Group')===STATE.squadPos);
   filtered=[...filtered].sort((a,b)=>{
@@ -518,7 +535,7 @@ function renderSquad(){
     const avRaw=gv(r,'Availability')||'Available';
     const injRaw=gv(r,'Injury Status','Injury_Status')||'';
     const autoRet=isAutoReturned(r);
-    const av=autoRet?'Available':avRaw;
+    const av=autoRet?autoReturnStatus(name):avRaw;
     const inj=autoRet?'':injRaw;
     const flag=gv(r,'Load Flag','Load_Flag')||'Normal';
     // HMLD ACWR — bypass LS_Squad_Load, read latest week from LS_Load_Trend
@@ -881,9 +898,10 @@ function renderProfile(){
   const injRawP=squadRow?gv(squadRow,'Injury Status','Injury_Status')||'':'';
   const profPeaks=buildPlayerPeaks();
   const profLastMatch=buildLastMatchDate();
-  const profIsRestricted=avRawP==='Injured'||avRawP==='Unavailable'||avRawP==='No GPS'||/rtp|return/i.test(avRawP);
-  const profAutoRet=profIsRestricted&&(profPeaks[pName]||{}).latestDt>0&&(profLastMatch===0||(profPeaks[pName]||{}).latestDt>profLastMatch);
-  const av=profAutoRet?'Available':avRawP;
+  const profLatestSessTypes=buildLatestSessionType();
+  const profAutoRet=avRawP!=='Available'&&(profPeaks[pName]||{}).latestDt>0&&(profLastMatch===0||(profPeaks[pName]||{}).latestDt>profLastMatch);
+  const profAutoStatus=(()=>{const stype=(profLatestSessTypes[pName]||{}).type||'';return /rtp|return.to.play/i.test(stype)?'RTP':'Available';})();
+  const av=profAutoRet?profAutoStatus:avRawP;
   const inj=profAutoRet?'':injRawP;
   // HMLD ACWR — bypass LS_Squad_Load, read latest week from LS_Load_Trend
   const ha=(buildLatestAcwr()[pName]||{}).acwr||0;
