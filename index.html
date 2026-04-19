@@ -358,11 +358,14 @@ function getTrendWeeks(playerName,metric,maxWeeks){
 function buildLatestAcwr(){
   const map={};
   if(!DATA.trend||DATA.trend.error)return map;
+  const now=Date.now(),d7=7*86400000,d21=21*86400000;
   DATA.trend.data.rows.forEach(r=>{
     const pn=gv(r,'Player_Name');if(!pn)return;
     const dt=dateToMs(gv(r,'Week_Start','Week Start'));
     const acwr=num(gv(r,'HMLD_ACWR','HMLD ACWR'));
-    if(acwr>0&&(!map[pn]||dt>map[pn].dt))map[pn]={acwr,dt};
+    // Skip current-week row — sheet updates mid-week so ACWR is based on partial load
+    if(now-dt<d7)return;
+    if(acwr>0&&(!map[pn]||dt>map[pn].dt))map[pn]={acwr,dt,stale:now-dt>d21};
   });
   return map;
 }
@@ -558,8 +561,10 @@ function renderSquad(){
     const av=autoRet?autoReturnStatus(name):avRaw;
     const inj=autoRet?'':injRaw;
     const flag=gv(r,'Load Flag','Load_Flag')||'Normal';
-    // HMLD ACWR — bypass LS_Squad_Load, read latest week from LS_Load_Trend
-    const ha=(latestAcwr[name]||{}).acwr||0;
+    // HMLD ACWR — bypass LS_Squad_Load, read latest COMPLETED week from LS_Load_Trend
+    const haObj=latestAcwr[name]||{};
+    const ha=haObj.acwr||0;
+    const haStale=haObj.stale||false; // true if latest entry is 21+ days old
     // External activity — LS_Squad_Load flags (fallback)
     const extFlag=gv(r,'External_Fixture_Flag','External Fixture Flag','External_Activity','External Activity');
     const extDate=gv(r,'External_Fixture_Date','External Fixture Date');
@@ -650,10 +655,10 @@ function renderSquad(){
     let action='On track',ac2='#334';
     if(av==='Injured'||av==='Unavailable'){action='Unavailable';ac2='#9E9E9E';}
     else if(av==='RTP'||/rtp|return/i.test(av)){action='RTP — manage exposure';ac2='#FF8C00';}
-    else if(ha>1.5){action='Reduce load ↓';ac2='#E24B4A';}
-    else if(ha>=1.3&&hasExt){action='Manage load — ext noted';ac2='#FF8C00';}
-    else if(ha>=1.3){action='Manage load ⚠';ac2='#FF8C00';}
-    else if(ha>0&&ha<0.8){action='Increase volume ↑';ac2='#4FC3F7';}
+    else if(!haStale&&ha>1.5){action='Reduce load ↓';ac2='#E24B4A';}
+    else if(!haStale&&ha>=1.3&&hasExt){action='Manage load — ext noted';ac2='#FF8C00';}
+    else if(!haStale&&ha>=1.3){action='Manage load ⚠';ac2='#FF8C00';}
+    else if(!haStale&&ha>0&&ha<0.8){action='Increase volume ↑';ac2='#4FC3F7';}
     else if(spd7ratio!==null&&spd7ratio<0.80){action='Speed readiness ⚠';ac2='#FF8C00';}
     else if((acc7ratio!==null&&acc7ratio<0.80)||(dec7ratio!==null&&dec7ratio<0.80)){action='Neuromusc. readiness ⚠';ac2='#FF8C00';}
     else if(accRatio!==null&&accRatio>1.15){action='Acc spike — review';ac2='#E24B4A';}
@@ -665,7 +670,7 @@ function renderSquad(){
       <td><span class="avail-dot" style="background:${ac}"></span><span style="color:${ac};font-size:11px;font-weight:600">${esc(av)}</span>${autoRet?` <span style="font-size:9px;color:#4CAF50;font-weight:700" title="Auto-cleared: GPS session detected after last match. Update Availability in workbook to confirm return.">↩ GPS</span>`:stale?` <span style="font-size:9px;color:#E24B4A;font-weight:700" title="GPS data present in last 7 days — status may be outdated. Update Availability in workbook.">⚠ stale</span>`:''}</td>
       <td style="font-size:11px;color:${inj?'#FF8C00':'#334'}">${esc(inj)||'—'}</td>
       <td>${badge(flag,FCFG)}</td>
-      <td style="font-weight:700;font-size:13px;color:${hc}">${ha>0?ha.toFixed(2):'—'}</td>
+      <td style="font-weight:700;font-size:13px;color:${haStale?'#446':hc}">${ha>0?ha.toFixed(2):'—'}${haStale?`<span style="font-size:9px;color:#FF8C00;font-weight:400;margin-left:3px" title="ACWR data is 3+ weeks old — check LS_Load_Trend formula for this player">⚠</span>`:''}</td>
       <td style="font-size:11px">${dsmFmt}</td>
       <td style="color:#9FE1CB;font-weight:600">${sessHtml}</td>
       <td style="font-size:11px">${velFmt}</td>
