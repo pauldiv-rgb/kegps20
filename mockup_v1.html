@@ -2997,7 +2997,7 @@ function applyFilters(){
     }
 
     var visible=pPass&&aPass&&dPass&&sPass&&dtPass;
-    dot.style.display=visible?'':'none';
+    dot.style.display=visible?'block':'none';
   });
 }
 
@@ -3574,9 +3574,25 @@ function gfChange(){
     if(_absent<=0){attNote.style.display='none';}
     else{attNote.style.display='';attNote.textContent='⚠ '+_absent+' absent — averages based on '+_present+' players present';}
   }
-  /* Show/hide drill filter in leaderboard based on session type */
+  /* Rebuild drill dropdown from session's actual drills */
   var drillEl = document.getElementById('lb-drill');
-  if(drillEl) drillEl.disabled = !sess.drills;
+  if(drillEl){
+    var prevDrill = drillEl.value;
+    drillEl.innerHTML = '<option value="sess">Full session</option>';
+    if(sess.drills){
+      Object.keys(sess.drills).forEach(function(k){
+        var opt = document.createElement('option');
+        opt.value = k;
+        opt.textContent = sess.drills[k].name || k;
+        drillEl.appendChild(opt);
+      });
+      drillEl.disabled = false;
+      if(drillEl.querySelector('option[value="'+prevDrill+'"]')) drillEl.value = prevDrill;
+      else drillEl.value = 'sess';
+    } else {
+      drillEl.disabled = true;
+    }
+  }
   /* Render verdict cards and ACWR flags for selected session */
   renderSessionVerdict();
   renderACWRFlags();
@@ -3661,10 +3677,28 @@ function renderDrillBars(){
   var lbl = METRIC_LABELS[metric] || metric;
   var BAR_COLORS = {wu:'#5a9be8',ssg:'#3dbd84',poss:'#9b77dd',cg:'#e08844',swu:'#D4A830',dk:'#3AABB8',ov1:'#D44E7A',ov4:'#5DAD5D',pos:'#8877CC',hup:'#D49040',h1:'#26C6DA',h2:'#7E57C2'};
   var PAL_BAR  = ['#5a9be8','#3dbd84','#9b77dd','#e08844','#D4A830','#3AABB8','#D44E7A','#5DAD5D','#26C6DA','#7E57C2'];
+  /* Use LB_DATA for position/player filtered values when a filter is active */
+  var useFiltered = (G.pos !== 'all' || G.player !== 'all');
+  function getLbDrillVal(drillKey){
+    var lb = LB_DATA[drillKey];
+    if(!lb) return null;
+    var players = Object.values(lb).filter(function(p){
+      if(G.player !== 'all') return p.n && LB_DATA.sess[G.player] && p.n === LB_DATA.sess[G.player].n;
+      if(G.pos !== 'all') return p.pos === G.pos;
+      return true;
+    });
+    if(!players.length || players[0][metric] === undefined) return null;
+    var sum = players.reduce(function(a,p){ return a + (p[metric]||0); }, 0);
+    return sum / players.length;
+  }
   /* Collect drill/half values */
   var vals = Object.keys(drillData)
     .filter(function(dk){ return drillData[dk] && (drillData[dk][metric] !== undefined); })
-    .map(function(dk, i){ return {dk:dk, v:drillData[dk][metric]||0, name:drillData[dk].name||dk, i:i}; });
+    .map(function(dk, i){
+      var v = drillData[dk][metric]||0;
+      if(useFiltered){ var fv=getLbDrillVal(dk); if(fv!==null) v=fv; }
+      return {dk:dk, v:v, name:drillData[dk].name||dk, i:i};
+    });
   if(!vals.length){el.innerHTML='<div style="padding:16px;font-size:10px;color:var(--muted)">Metric not available</div>';return;}
   var maxV = Math.max.apply(null, vals.map(function(x){return x.v;}));
   var avgV = vals.reduce(function(a,b){return a+b.v;},0)/vals.length;
@@ -3698,7 +3732,14 @@ function renderDrillBars(){
   });
   html += '</div>';
   /* Units */
-  html += '<div style="font-size:8.5px;color:var(--muted);margin-top:4px;text-align:right">'+lbl+' ('+unit+')</div>';
+  var filterNote = '';
+  if(G.player !== 'all' && LB_DATA.sess[G.player]){
+    filterNote = ' · ' + LB_DATA.sess[G.player].n;
+  } else if(G.pos !== 'all'){
+    var POS_NAMES = {mid:'Middle 8', fwd:'Inside Fwd', def:'Inside Def'};
+    filterNote = ' · ' + (POS_NAMES[G.pos]||G.pos) + ' avg';
+  }
+  html += '<div style="font-size:8.5px;color:var(--muted);margin-top:4px;text-align:right">'+lbl+' ('+unit+')'+filterNote+'</div>';
   el.innerHTML = html;
 }
 
@@ -3792,99 +3833,99 @@ var POS_LBL = {mid:'M8', fwd:'FWD', def:'DEF'};
 /* ── Player data by drill context ────────────────────────────── */
 var LB_DATA = {
   sess:{
-    p1:{n:'L.Kelly',  pos:'mid',st:'mod',maxSpd:2.41,maxSpdP:92,maxAcc:4.8,maxAccP:88,maxDec:5.2,maxDecP:85,td:7240,hmld:1183,hsr:1852,acc:42,dec:38,tdMin:78.5,hmldMin:12.8,z6:485,z6Min:5.2,hsrMin:20.1,hmldPct:16.3},
-    p2:{n:'S.Gleeson',  pos:'mid',st:'mod',maxSpd:2.3,maxSpdP:87,maxAcc:4.5,maxAccP:82,maxDec:4.9,maxDecP:80,td:6890,hmld:978, hsr:1640,acc:38,dec:34,tdMin:74.8,hmldMin:10.6,z6:401,z6Min:4.3,hsrMin:17.8,hmldPct:14.2},
-    p3:{n:'P.Halinan', pos:'mid',st:'full',maxSpd:2.5,maxSpdP:95,maxAcc:5.1,maxAccP:93,maxDec:5.5,maxDecP:90,td:7580,hmld:1290,hsr:2100,acc:48,dec:44,tdMin:82.2,hmldMin:14.0,z6:529,z6Min:5.7,hsrMin:22.8,hmldPct:17.0},
-    p4:{n:'E.Cowzer',pos:'mid',st:'rtp',maxSpd:2.13,maxSpdP:81,maxAcc:3.9,maxAccP:71,maxDec:4.2,maxDecP:69,td:5420,hmld:780, hsr:1220,acc:28,dec:24,tdMin:58.9,hmldMin:8.5,z6:320,z6Min:3.5, hsrMin:13.3,hmldPct:14.4},
-    p5:{n:'S.Murphy', pos:'mid',st:'full',maxSpd:2.35,maxSpdP:89,maxAcc:4.6,maxAccP:84,maxDec:5.0,maxDecP:82,td:7120,hmld:1140,hsr:1780,acc:40,dec:36,tdMin:77.4,hmldMin:12.4,z6:467,z6Min:5.1,hsrMin:19.3,hmldPct:16.0},
-    p6:{n:'H.Martin',  pos:'mid',st:'full',maxSpd:2.23,maxSpdP:85,maxAcc:4.4,maxAccP:80,maxDec:4.8,maxDecP:79,td:6740,hmld:1050,hsr:1690,acc:36,dec:32,tdMin:73.2,hmldMin:11.4,z6:430,z6Min:4.7,hsrMin:18.4,hmldPct:15.6},
-    p7:{n:'C.Moran', pos:'fwd',st:'full',maxSpd:2.55,maxSpdP:97,maxAcc:5.3,maxAccP:97,maxDec:5.7,maxDecP:93,td:7820,hmld:1340,hsr:2280,acc:50,dec:46,tdMin:84.9,hmldMin:14.6,z6:549,z6Min:6.0,hsrMin:24.8,hmldPct:17.1},
-    p8:{n:'TJ.Nolan',pos:'fwd',st:'mod',maxSpd:2.45,maxSpdP:93,maxAcc:4.9,maxAccP:90,maxDec:5.3,maxDecP:87,td:7460,hmld:1220,hsr:1960,acc:44,dec:40,tdMin:81.1,hmldMin:13.3,z6:500,z6Min:5.5,hsrMin:21.3,hmldPct:16.4},
-    p9:{n:'A.Fitzpatrick',  pos:'fwd',st:'full',maxSpd:2.33,maxSpdP:88,maxAcc:4.7,maxAccP:86,maxDec:5.0,maxDecP:82,td:7180,hmld:1160,hsr:1820,acc:42,dec:38,tdMin:78.2,hmldMin:12.6,z6:476,z6Min:5.2,hsrMin:19.8,hmldPct:16.2},
-    p10:{n:'F.Dowling',pos:'fwd',st:'full',maxSpd:2.27,maxSpdP:86,maxAcc:4.5,maxAccP:82,maxDec:4.8,maxDecP:78,td:6980,hmld:1020,hsr:1720,acc:38,dec:34,tdMin:75.9,hmldMin:11.1,z6:418,z6Min:4.6,hsrMin:18.7,hmldPct:14.6},
-    p11:{n:'C.Keaveney',pos:'fwd',st:'full',maxSpd:2.53,maxSpdP:96,maxAcc:5.1,maxAccP:93,maxDec:5.5,maxDecP:90,td:7620,hmld:1280,hsr:2150,acc:47,dec:43,tdMin:82.8,hmldMin:13.9,z6:525,z6Min:5.7,hsrMin:23.4,hmldPct:16.8},
-    p12:{n:'R.Lawlor',  pos:'fwd',st:'full',maxSpd:2.19,maxSpdP:83,maxAcc:4.3,maxAccP:78,maxDec:4.6,maxDecP:75,td:6650,hmld:990, hsr:1650,acc:36,dec:32,tdMin:72.3,hmldMin:10.8,z6:406,z6Min:4.4,hsrMin:17.9,hmldPct:14.9},
-    p13:{n:'R.Kelly',  pos:'def',st:'full',maxSpd:2.24,maxSpdP:85,maxAcc:4.4,maxAccP:80,maxDec:4.8,maxDecP:79,td:6780,hmld:1060,hsr:1700,acc:37,dec:33,tdMin:73.7,hmldMin:11.5,z6:435,z6Min:4.7,hsrMin:18.5,hmldPct:15.6},
-    p14:{n:'S.Gallagher',   pos:'def',st:'full',maxSpd:2.43,maxSpdP:92,maxAcc:4.8,maxAccP:88,maxDec:5.1,maxDecP:84,td:7340,hmld:1200,hsr:1900,acc:43,dec:39,tdMin:79.8,hmldMin:13.0,z6:492,z6Min:5.3,hsrMin:20.7,hmldPct:16.3},
-    p15:{n:'C.Breen', pos:'def',st:'full',maxSpd:2.38,maxSpdP:90,maxAcc:4.6,maxAccP:84,maxDec:5.0,maxDecP:82,td:7050,hmld:1100,hsr:1760,acc:40,dec:36,tdMin:76.6,hmldMin:11.9,z6:451,z6Min:4.9,hsrMin:19.1,hmldPct:15.6},
-    p16:{n:'J.Lynch',  pos:'def',st:'full',maxSpd:2.21,maxSpdP:84,maxAcc:4.4,maxAccP:80,maxDec:4.7,maxDecP:77,td:6820,hmld:1040,hsr:1680,acc:37,dec:33,tdMin:74.1,hmldMin:11.3,z6:426,z6Min:4.6,hsrMin:18.3,hmldPct:15.2},
-    p17:{n:'A.Donegan',  pos:'def',st:'full',maxSpd:2.48,maxSpdP:94,maxAcc:5.0,maxAccP:91,maxDec:5.4,maxDecP:88,td:7490,hmld:1230,hsr:1980,acc:45,dec:41,tdMin:81.4,hmldMin:13.4,z6:504,z6Min:5.5,hsrMin:21.5,hmldPct:16.4}
+    p1:{n:'L.Kelly',  pos:'mid',st:'mod',maxSpd:8.19,maxSpdP:92,maxAcc:4.8,maxAccP:88,maxDec:5.2,maxDecP:85,td:7240,hmld:1183,hsr:1852,acc:42,dec:38,tdMin:78.5,hmldMin:12.8,z6:485,z6Min:5.2,hsrMin:20.1,hmldPct:16.3},
+    p2:{n:'S.Gleeson',  pos:'mid',st:'mod',maxSpd:7.82,maxSpdP:87,maxAcc:4.5,maxAccP:82,maxDec:4.9,maxDecP:80,td:6890,hmld:978, hsr:1640,acc:38,dec:34,tdMin:74.8,hmldMin:10.6,z6:401,z6Min:4.3,hsrMin:17.8,hmldPct:14.2},
+    p3:{n:'P.Halinan', pos:'mid',st:'full',maxSpd:8.5,maxSpdP:95,maxAcc:5.1,maxAccP:93,maxDec:5.5,maxDecP:90,td:7580,hmld:1290,hsr:2100,acc:48,dec:44,tdMin:82.2,hmldMin:14.0,z6:529,z6Min:5.7,hsrMin:22.8,hmldPct:17.0},
+    p4:{n:'E.Cowzer',pos:'mid',st:'rtp',maxSpd:7.24,maxSpdP:81,maxAcc:3.9,maxAccP:71,maxDec:4.2,maxDecP:69,td:5420,hmld:780, hsr:1220,acc:28,dec:24,tdMin:58.9,hmldMin:8.5,z6:320,z6Min:3.5, hsrMin:13.3,hmldPct:14.4},
+    p5:{n:'S.Murphy', pos:'mid',st:'full',maxSpd:7.99,maxSpdP:89,maxAcc:4.6,maxAccP:84,maxDec:5.0,maxDecP:82,td:7120,hmld:1140,hsr:1780,acc:40,dec:36,tdMin:77.4,hmldMin:12.4,z6:467,z6Min:5.1,hsrMin:19.3,hmldPct:16.0},
+    p6:{n:'H.Martin',  pos:'mid',st:'full',maxSpd:7.58,maxSpdP:85,maxAcc:4.4,maxAccP:80,maxDec:4.8,maxDecP:79,td:6740,hmld:1050,hsr:1690,acc:36,dec:32,tdMin:73.2,hmldMin:11.4,z6:430,z6Min:4.7,hsrMin:18.4,hmldPct:15.6},
+    p7:{n:'C.Moran', pos:'fwd',st:'full',maxSpd:8.67,maxSpdP:97,maxAcc:5.3,maxAccP:97,maxDec:5.7,maxDecP:93,td:7820,hmld:1340,hsr:2280,acc:50,dec:46,tdMin:84.9,hmldMin:14.6,z6:549,z6Min:6.0,hsrMin:24.8,hmldPct:17.1},
+    p8:{n:'TJ.Nolan',pos:'fwd',st:'mod',maxSpd:8.33,maxSpdP:93,maxAcc:4.9,maxAccP:90,maxDec:5.3,maxDecP:87,td:7460,hmld:1220,hsr:1960,acc:44,dec:40,tdMin:81.1,hmldMin:13.3,z6:500,z6Min:5.5,hsrMin:21.3,hmldPct:16.4},
+    p9:{n:'A.Fitzpatrick',  pos:'fwd',st:'full',maxSpd:7.92,maxSpdP:88,maxAcc:4.7,maxAccP:86,maxDec:5.0,maxDecP:82,td:7180,hmld:1160,hsr:1820,acc:42,dec:38,tdMin:78.2,hmldMin:12.6,z6:476,z6Min:5.2,hsrMin:19.8,hmldPct:16.2},
+    p10:{n:'F.Dowling',pos:'fwd',st:'full',maxSpd:7.72,maxSpdP:86,maxAcc:4.5,maxAccP:82,maxDec:4.8,maxDecP:78,td:6980,hmld:1020,hsr:1720,acc:38,dec:34,tdMin:75.9,hmldMin:11.1,z6:418,z6Min:4.6,hsrMin:18.7,hmldPct:14.6},
+    p11:{n:'C.Keaveney',pos:'fwd',st:'full',maxSpd:8.6,maxSpdP:96,maxAcc:5.1,maxAccP:93,maxDec:5.5,maxDecP:90,td:7620,hmld:1280,hsr:2150,acc:47,dec:43,tdMin:82.8,hmldMin:13.9,z6:525,z6Min:5.7,hsrMin:23.4,hmldPct:16.8},
+    p12:{n:'R.Lawlor',  pos:'fwd',st:'full',maxSpd:7.45,maxSpdP:83,maxAcc:4.3,maxAccP:78,maxDec:4.6,maxDecP:75,td:6650,hmld:990, hsr:1650,acc:36,dec:32,tdMin:72.3,hmldMin:10.8,z6:406,z6Min:4.4,hsrMin:17.9,hmldPct:14.9},
+    p13:{n:'R.Kelly',  pos:'def',st:'full',maxSpd:7.62,maxSpdP:85,maxAcc:4.4,maxAccP:80,maxDec:4.8,maxDecP:79,td:6780,hmld:1060,hsr:1700,acc:37,dec:33,tdMin:73.7,hmldMin:11.5,z6:435,z6Min:4.7,hsrMin:18.5,hmldPct:15.6},
+    p14:{n:'S.Gallagher',   pos:'def',st:'full',maxSpd:8.26,maxSpdP:92,maxAcc:4.8,maxAccP:88,maxDec:5.1,maxDecP:84,td:7340,hmld:1200,hsr:1900,acc:43,dec:39,tdMin:79.8,hmldMin:13.0,z6:492,z6Min:5.3,hsrMin:20.7,hmldPct:16.3},
+    p15:{n:'C.Breen', pos:'def',st:'full',maxSpd:8.09,maxSpdP:90,maxAcc:4.6,maxAccP:84,maxDec:5.0,maxDecP:82,td:7050,hmld:1100,hsr:1760,acc:40,dec:36,tdMin:76.6,hmldMin:11.9,z6:451,z6Min:4.9,hsrMin:19.1,hmldPct:15.6},
+    p16:{n:'J.Lynch',  pos:'def',st:'full',maxSpd:7.51,maxSpdP:84,maxAcc:4.4,maxAccP:80,maxDec:4.7,maxDecP:77,td:6820,hmld:1040,hsr:1680,acc:37,dec:33,tdMin:74.1,hmldMin:11.3,z6:426,z6Min:4.6,hsrMin:18.3,hmldPct:15.2},
+    p17:{n:'A.Donegan',  pos:'def',st:'full',maxSpd:8.43,maxSpdP:94,maxAcc:5.0,maxAccP:91,maxDec:5.4,maxDecP:88,td:7490,hmld:1230,hsr:1980,acc:45,dec:41,tdMin:81.4,hmldMin:13.4,z6:504,z6Min:5.5,hsrMin:21.5,hmldPct:16.4}
   },
   wu:{
-    p1:{n:'L.Kelly',  pos:'mid',st:'mod',maxSpd:1.91,maxSpdP:73,maxAcc:3.6,maxAccP:66,maxDec:3.9,maxDecP:64,td:1240,hmld:109,hsr:182,acc:8,dec:7,tdMin:103.3,hmldMin:9.1,z6:45,z6Min:3.7,hsrMin:15.2,hmldPct:8.8},
-    p2:{n:'S.Gleeson',  pos:'mid',st:'mod',maxSpd:1.82,maxSpdP:69,maxAcc:3.4,maxAccP:62,maxDec:3.7,maxDecP:61,td:1180,hmld:91, hsr:162,acc:7,dec:6,tdMin:98.3,hmldMin:7.6,z6:37,z6Min:3.1,hsrMin:13.5,hmldPct:7.7},
-    p3:{n:'P.Halinan', pos:'mid',st:'full',maxSpd:2.0,maxSpdP:76,maxAcc:3.9,maxAccP:71,maxDec:4.2,maxDecP:69,td:1380,hmld:128,hsr:218,acc:10,dec:9,tdMin:115.0,hmldMin:10.7,z6:52,z6Min:4.4,hsrMin:18.2,hmldPct:9.3},
-    p4:{n:'E.Cowzer',pos:'mid',st:'rtp',maxSpd:1.65,maxSpdP:63,maxAcc:2.9,maxAccP:53,maxDec:3.1,maxDecP:51,td:920,hmld:68, hsr:94, acc:5,dec:4,tdMin:76.7,hmldMin:5.7,z6:28,z6Min:2.3,hsrMin:7.8,hmldPct:7.4},
-    p5:{n:'S.Murphy', pos:'mid',st:'full',maxSpd:1.87,maxSpdP:71,maxAcc:3.5,maxAccP:64,maxDec:3.8,maxDecP:62,td:1220,hmld:102,hsr:172,acc:8,dec:7,tdMin:101.7,hmldMin:8.5,z6:42,z6Min:3.5,hsrMin:14.3,hmldPct:8.4},
-    p6:{n:'H.Martin',  pos:'mid',st:'full',maxSpd:1.76,maxSpdP:67,maxAcc:3.3,maxAccP:60,maxDec:3.6,maxDecP:59,td:1140,hmld:88, hsr:156,acc:7,dec:6,tdMin:95.0,hmldMin:7.3,z6:36,z6Min:3.0,hsrMin:13.0,hmldPct:7.7},
-    p7:{n:'C.Moran', pos:'fwd',st:'full',maxSpd:2.04,maxSpdP:77,maxAcc:4.0,maxAccP:73,maxDec:4.3,maxDecP:70,td:1420,hmld:138,hsr:242,acc:11,dec:10,tdMin:118.3,hmldMin:11.5,z6:57,z6Min:4.7,hsrMin:20.2,hmldPct:9.7},
-    p8:{n:'TJ.Nolan',pos:'fwd',st:'mod',maxSpd:1.94,maxSpdP:74,maxAcc:3.7,maxAccP:68,maxDec:4.0,maxDecP:65,td:1340,hmld:118,hsr:198,acc:9,dec:8,tdMin:111.7,hmldMin:9.8,z6:48,z6Min:4.0,hsrMin:16.5,hmldPct:8.8},
-    p9:{n:'A.Fitzpatrick',  pos:'fwd',st:'full',maxSpd:1.86,maxSpdP:70,maxAcc:3.6,maxAccP:66,maxDec:3.8,maxDecP:62,td:1280,hmld:108,hsr:178,acc:9,dec:8,tdMin:106.7,hmldMin:9.0,z6:44,z6Min:3.7,hsrMin:14.8,hmldPct:8.4},
-    p10:{n:'F.Dowling',pos:'fwd',st:'full',maxSpd:1.81,maxSpdP:68,maxAcc:3.4,maxAccP:62,maxDec:3.6,maxDecP:59,td:1200,hmld:96, hsr:168,acc:8,dec:7,tdMin:100.0,hmldMin:8.0,z6:39,z6Min:3.3,hsrMin:14.0,hmldPct:8.0},
-    p11:{n:'C.Keaveney',pos:'fwd',st:'full',maxSpd:2.01,maxSpdP:76,maxAcc:3.8,maxAccP:69,maxDec:4.1,maxDecP:67,td:1360,hmld:124,hsr:212,acc:10,dec:9,tdMin:113.3,hmldMin:10.3,z6:51,z6Min:4.2,hsrMin:17.7,hmldPct:9.1},
-    p12:{n:'R.Lawlor',  pos:'fwd',st:'full',maxSpd:1.71,maxSpdP:65,maxAcc:3.2,maxAccP:58,maxDec:3.4,maxDecP:56,td:1120,hmld:84, hsr:148,acc:7,dec:6,tdMin:93.3,hmldMin:7.0,z6:34,z6Min:2.9,hsrMin:12.3,hmldPct:7.5},
-    p13:{n:'R.Kelly',  pos:'def',st:'full',maxSpd:1.77,maxSpdP:67,maxAcc:3.3,maxAccP:60,maxDec:3.6,maxDecP:59,td:1160,hmld:90, hsr:162,acc:7,dec:6,tdMin:96.7,hmldMin:7.5,z6:37,z6Min:3.1,hsrMin:13.5,hmldPct:7.8},
-    p14:{n:'S.Gallagher',   pos:'def',st:'full',maxSpd:1.93,maxSpdP:73,maxAcc:3.7,maxAccP:68,maxDec:3.9,maxDecP:64,td:1300,hmld:112,hsr:186,acc:9,dec:8,tdMin:108.3,hmldMin:9.3,z6:46,z6Min:3.8,hsrMin:15.5,hmldPct:8.6},
-    p15:{n:'C.Breen', pos:'def',st:'full',maxSpd:1.88,maxSpdP:71,maxAcc:3.5,maxAccP:64,maxDec:3.8,maxDecP:62,td:1220,hmld:100,hsr:170,acc:8,dec:7,tdMin:101.7,hmldMin:8.3,z6:41,z6Min:3.4,hsrMin:14.2,hmldPct:8.2},
-    p16:{n:'J.Lynch',  pos:'def',st:'full',maxSpd:1.74,maxSpdP:66,maxAcc:3.3,maxAccP:60,maxDec:3.5,maxDecP:57,td:1160,hmld:88, hsr:156,acc:7,dec:6,tdMin:96.7,hmldMin:7.3,z6:36,z6Min:3.0,hsrMin:13.0,hmldPct:7.6},
-    p17:{n:'A.Donegan',  pos:'def',st:'full',maxSpd:1.98,maxSpdP:75,maxAcc:3.8,maxAccP:69,maxDec:4.1,maxDecP:67,td:1320,hmld:116,hsr:192,acc:9,dec:8,tdMin:110.0,hmldMin:9.7,z6:48,z6Min:4.0,hsrMin:16.0,hmldPct:8.8}
+    p1:{n:'L.Kelly',  pos:'mid',st:'mod',maxSpd:6.49,maxSpdP:73,maxAcc:3.6,maxAccP:66,maxDec:3.9,maxDecP:64,td:1240,hmld:109,hsr:182,acc:8,dec:7,tdMin:103.3,hmldMin:9.1,z6:45,z6Min:3.7,hsrMin:15.2,hmldPct:8.8},
+    p2:{n:'S.Gleeson',  pos:'mid',st:'mod',maxSpd:6.19,maxSpdP:69,maxAcc:3.4,maxAccP:62,maxDec:3.7,maxDecP:61,td:1180,hmld:91, hsr:162,acc:7,dec:6,tdMin:98.3,hmldMin:7.6,z6:37,z6Min:3.1,hsrMin:13.5,hmldPct:7.7},
+    p3:{n:'P.Halinan', pos:'mid',st:'full',maxSpd:6.8,maxSpdP:76,maxAcc:3.9,maxAccP:71,maxDec:4.2,maxDecP:69,td:1380,hmld:128,hsr:218,acc:10,dec:9,tdMin:115.0,hmldMin:10.7,z6:52,z6Min:4.4,hsrMin:18.2,hmldPct:9.3},
+    p4:{n:'E.Cowzer',pos:'mid',st:'rtp',maxSpd:5.61,maxSpdP:63,maxAcc:2.9,maxAccP:53,maxDec:3.1,maxDecP:51,td:920,hmld:68, hsr:94, acc:5,dec:4,tdMin:76.7,hmldMin:5.7,z6:28,z6Min:2.3,hsrMin:7.8,hmldPct:7.4},
+    p5:{n:'S.Murphy', pos:'mid',st:'full',maxSpd:6.36,maxSpdP:71,maxAcc:3.5,maxAccP:64,maxDec:3.8,maxDecP:62,td:1220,hmld:102,hsr:172,acc:8,dec:7,tdMin:101.7,hmldMin:8.5,z6:42,z6Min:3.5,hsrMin:14.3,hmldPct:8.4},
+    p6:{n:'H.Martin',  pos:'mid',st:'full',maxSpd:5.98,maxSpdP:67,maxAcc:3.3,maxAccP:60,maxDec:3.6,maxDecP:59,td:1140,hmld:88, hsr:156,acc:7,dec:6,tdMin:95.0,hmldMin:7.3,z6:36,z6Min:3.0,hsrMin:13.0,hmldPct:7.7},
+    p7:{n:'C.Moran', pos:'fwd',st:'full',maxSpd:6.94,maxSpdP:77,maxAcc:4.0,maxAccP:73,maxDec:4.3,maxDecP:70,td:1420,hmld:138,hsr:242,acc:11,dec:10,tdMin:118.3,hmldMin:11.5,z6:57,z6Min:4.7,hsrMin:20.2,hmldPct:9.7},
+    p8:{n:'TJ.Nolan',pos:'fwd',st:'mod',maxSpd:6.6,maxSpdP:74,maxAcc:3.7,maxAccP:68,maxDec:4.0,maxDecP:65,td:1340,hmld:118,hsr:198,acc:9,dec:8,tdMin:111.7,hmldMin:9.8,z6:48,z6Min:4.0,hsrMin:16.5,hmldPct:8.8},
+    p9:{n:'A.Fitzpatrick',  pos:'fwd',st:'full',maxSpd:6.32,maxSpdP:70,maxAcc:3.6,maxAccP:66,maxDec:3.8,maxDecP:62,td:1280,hmld:108,hsr:178,acc:9,dec:8,tdMin:106.7,hmldMin:9.0,z6:44,z6Min:3.7,hsrMin:14.8,hmldPct:8.4},
+    p10:{n:'F.Dowling',pos:'fwd',st:'full',maxSpd:6.15,maxSpdP:68,maxAcc:3.4,maxAccP:62,maxDec:3.6,maxDecP:59,td:1200,hmld:96, hsr:168,acc:8,dec:7,tdMin:100.0,hmldMin:8.0,z6:39,z6Min:3.3,hsrMin:14.0,hmldPct:8.0},
+    p11:{n:'C.Keaveney',pos:'fwd',st:'full',maxSpd:6.83,maxSpdP:76,maxAcc:3.8,maxAccP:69,maxDec:4.1,maxDecP:67,td:1360,hmld:124,hsr:212,acc:10,dec:9,tdMin:113.3,hmldMin:10.3,z6:51,z6Min:4.2,hsrMin:17.7,hmldPct:9.1},
+    p12:{n:'R.Lawlor',  pos:'fwd',st:'full',maxSpd:5.81,maxSpdP:65,maxAcc:3.2,maxAccP:58,maxDec:3.4,maxDecP:56,td:1120,hmld:84, hsr:148,acc:7,dec:6,tdMin:93.3,hmldMin:7.0,z6:34,z6Min:2.9,hsrMin:12.3,hmldPct:7.5},
+    p13:{n:'R.Kelly',  pos:'def',st:'full',maxSpd:6.02,maxSpdP:67,maxAcc:3.3,maxAccP:60,maxDec:3.6,maxDecP:59,td:1160,hmld:90, hsr:162,acc:7,dec:6,tdMin:96.7,hmldMin:7.5,z6:37,z6Min:3.1,hsrMin:13.5,hmldPct:7.8},
+    p14:{n:'S.Gallagher',   pos:'def',st:'full',maxSpd:6.56,maxSpdP:73,maxAcc:3.7,maxAccP:68,maxDec:3.9,maxDecP:64,td:1300,hmld:112,hsr:186,acc:9,dec:8,tdMin:108.3,hmldMin:9.3,z6:46,z6Min:3.8,hsrMin:15.5,hmldPct:8.6},
+    p15:{n:'C.Breen', pos:'def',st:'full',maxSpd:6.39,maxSpdP:71,maxAcc:3.5,maxAccP:64,maxDec:3.8,maxDecP:62,td:1220,hmld:100,hsr:170,acc:8,dec:7,tdMin:101.7,hmldMin:8.3,z6:41,z6Min:3.4,hsrMin:14.2,hmldPct:8.2},
+    p16:{n:'J.Lynch',  pos:'def',st:'full',maxSpd:5.92,maxSpdP:66,maxAcc:3.3,maxAccP:60,maxDec:3.5,maxDecP:57,td:1160,hmld:88, hsr:156,acc:7,dec:6,tdMin:96.7,hmldMin:7.3,z6:36,z6Min:3.0,hsrMin:13.0,hmldPct:7.6},
+    p17:{n:'A.Donegan',  pos:'def',st:'full',maxSpd:6.73,maxSpdP:75,maxAcc:3.8,maxAccP:69,maxDec:4.1,maxDecP:67,td:1320,hmld:116,hsr:192,acc:9,dec:8,tdMin:110.0,hmldMin:9.7,z6:48,z6Min:4.0,hsrMin:16.0,hmldPct:8.8}
   },
   ssg:{
-    p1:{n:'L.Kelly',  pos:'mid',st:'mod',maxSpd:2.21,maxSpdP:84,maxAcc:4.6,maxAccP:84,maxDec:5.0,maxDecP:82,td:2180,hmld:398,hsr:524,acc:14,dec:13,tdMin:109.0,hmldMin:19.9,z6:163,z6Min:8.2,hsrMin:26.2,hmldPct:18.3},
-    p2:{n:'S.Gleeson',  pos:'mid',st:'mod',maxSpd:2.1,maxSpdP:80,maxAcc:4.3,maxAccP:78,maxDec:4.7,maxDecP:77,td:2060,hmld:322,hsr:468,acc:12,dec:11,tdMin:103.0,hmldMin:16.1,z6:132,z6Min:6.6,hsrMin:23.4,hmldPct:15.6},
-    p3:{n:'P.Halinan', pos:'mid',st:'full',maxSpd:2.3,maxSpdP:87,maxAcc:4.9,maxAccP:89,maxDec:5.3,maxDecP:87,td:2340,hmld:440,hsr:622,acc:16,dec:15,tdMin:117.0,hmldMin:22.0,z6:180,z6Min:9.0,hsrMin:31.1,hmldPct:18.8},
-    p4:{n:'E.Cowzer',pos:'mid',st:'rtp',maxSpd:1.94,maxSpdP:74,maxAcc:3.7,maxAccP:67,maxDec:4.0,maxDecP:66,td:1620,hmld:248,hsr:342,acc:9, dec:8, tdMin:81.0, hmldMin:12.4,z6:102,z6Min:5.1,hsrMin:17.1,hmldPct:15.3},
-    p5:{n:'S.Murphy', pos:'mid',st:'full',maxSpd:2.17,maxSpdP:82,maxAcc:4.4,maxAccP:80,maxDec:4.8,maxDecP:79,td:2140,hmld:372,hsr:506,acc:13,dec:12,tdMin:107.0,hmldMin:18.6,z6:153,z6Min:7.6,hsrMin:25.3,hmldPct:17.4},
-    p6:{n:'H.Martin',  pos:'mid',st:'full',maxSpd:2.04,maxSpdP:77,maxAcc:4.2,maxAccP:76,maxDec:4.6,maxDecP:75,td:2020,hmld:338,hsr:480,acc:11,dec:10,tdMin:101.0,hmldMin:16.9,z6:139,z6Min:6.9,hsrMin:24.0,hmldPct:16.7},
-    p7:{n:'C.Moran', pos:'fwd',st:'full',maxSpd:2.34,maxSpdP:89,maxAcc:5.1,maxAccP:93,maxDec:5.5,maxDecP:90,td:2420,hmld:468,hsr:672,acc:17,dec:16,tdMin:121.0,hmldMin:23.4,z6:192,z6Min:9.6,hsrMin:33.6,hmldPct:19.3},
-    p8:{n:'TJ.Nolan',pos:'fwd',st:'mod',maxSpd:2.24,maxSpdP:85,maxAcc:4.7,maxAccP:86,maxDec:5.1,maxDecP:84,td:2260,hmld:412,hsr:578,acc:15,dec:14,tdMin:113.0,hmldMin:20.6,z6:169,z6Min:8.4,hsrMin:28.9,hmldPct:18.2},
-    p9:{n:'A.Fitzpatrick',  pos:'fwd',st:'full',maxSpd:2.14,maxSpdP:81,maxAcc:4.5,maxAccP:82,maxDec:4.8,maxDecP:79,td:2160,hmld:382,hsr:536,acc:14,dec:13,tdMin:108.0,hmldMin:19.1,z6:157,z6Min:7.8,hsrMin:26.8,hmldPct:17.7},
-    p10:{n:'F.Dowling',pos:'fwd',st:'full',maxSpd:2.08,maxSpdP:79,maxAcc:4.3,maxAccP:78,maxDec:4.6,maxDecP:75,td:2100,hmld:348,hsr:508,acc:13,dec:12,tdMin:105.0,hmldMin:17.4,z6:143,z6Min:7.1,hsrMin:25.4,hmldPct:16.6},
-    p11:{n:'C.Keaveney',pos:'fwd',st:'full',maxSpd:2.32,maxSpdP:88,maxAcc:4.9,maxAccP:89,maxDec:5.3,maxDecP:87,td:2380,hmld:446,hsr:638,acc:16,dec:15,tdMin:119.0,hmldMin:22.3,z6:183,z6Min:9.1,hsrMin:31.9,hmldPct:18.7},
-    p12:{n:'R.Lawlor',  pos:'fwd',st:'full',maxSpd:2.01,maxSpdP:76,maxAcc:4.1,maxAccP:75,maxDec:4.4,maxDecP:72,td:1980,hmld:318,hsr:462,acc:12,dec:11,tdMin:99.0, hmldMin:15.9,z6:130,z6Min:6.5,hsrMin:23.1,hmldPct:16.1},
-    p13:{n:'R.Kelly',  pos:'def',st:'full',maxSpd:2.05,maxSpdP:78,maxAcc:4.2,maxAccP:76,maxDec:4.6,maxDecP:75,td:2040,hmld:348,hsr:492,acc:12,dec:11,tdMin:102.0,hmldMin:17.4,z6:143,z6Min:7.1,hsrMin:24.6,hmldPct:17.1},
-    p14:{n:'S.Gallagher',   pos:'def',st:'full',maxSpd:2.22,maxSpdP:84,maxAcc:4.6,maxAccP:84,maxDec:4.9,maxDecP:80,td:2200,hmld:398,hsr:556,acc:14,dec:13,tdMin:110.0,hmldMin:19.9,z6:163,z6Min:8.2,hsrMin:27.8,hmldPct:18.1},
-    p15:{n:'C.Breen', pos:'def',st:'full',maxSpd:2.17,maxSpdP:82,maxAcc:4.4,maxAccP:80,maxDec:4.8,maxDecP:79,td:2120,hmld:362,hsr:518,acc:13,dec:12,tdMin:106.0,hmldMin:18.1,z6:148,z6Min:7.4,hsrMin:25.9,hmldPct:17.1},
-    p16:{n:'J.Lynch',  pos:'def',st:'full',maxSpd:2.02,maxSpdP:77,maxAcc:4.2,maxAccP:76,maxDec:4.5,maxDecP:74,td:2060,hmld:338,hsr:476,acc:12,dec:11,tdMin:103.0,hmldMin:16.9,z6:139,z6Min:6.9,hsrMin:23.8,hmldPct:16.4},
-    p17:{n:'A.Donegan',  pos:'def',st:'full',maxSpd:2.27,maxSpdP:86,maxAcc:4.8,maxAccP:87,maxDec:5.2,maxDecP:85,td:2260,hmld:416,hsr:582,acc:15,dec:14,tdMin:113.0,hmldMin:20.8,z6:171,z6Min:8.5,hsrMin:29.1,hmldPct:18.4}
+    p1:{n:'L.Kelly',  pos:'mid',st:'mod',maxSpd:7.51,maxSpdP:84,maxAcc:4.6,maxAccP:84,maxDec:5.0,maxDecP:82,td:2180,hmld:398,hsr:524,acc:14,dec:13,tdMin:109.0,hmldMin:19.9,z6:163,z6Min:8.2,hsrMin:26.2,hmldPct:18.3},
+    p2:{n:'S.Gleeson',  pos:'mid',st:'mod',maxSpd:7.14,maxSpdP:80,maxAcc:4.3,maxAccP:78,maxDec:4.7,maxDecP:77,td:2060,hmld:322,hsr:468,acc:12,dec:11,tdMin:103.0,hmldMin:16.1,z6:132,z6Min:6.6,hsrMin:23.4,hmldPct:15.6},
+    p3:{n:'P.Halinan', pos:'mid',st:'full',maxSpd:7.82,maxSpdP:87,maxAcc:4.9,maxAccP:89,maxDec:5.3,maxDecP:87,td:2340,hmld:440,hsr:622,acc:16,dec:15,tdMin:117.0,hmldMin:22.0,z6:180,z6Min:9.0,hsrMin:31.1,hmldPct:18.8},
+    p4:{n:'E.Cowzer',pos:'mid',st:'rtp',maxSpd:6.6,maxSpdP:74,maxAcc:3.7,maxAccP:67,maxDec:4.0,maxDecP:66,td:1620,hmld:248,hsr:342,acc:9, dec:8, tdMin:81.0, hmldMin:12.4,z6:102,z6Min:5.1,hsrMin:17.1,hmldPct:15.3},
+    p5:{n:'S.Murphy', pos:'mid',st:'full',maxSpd:7.38,maxSpdP:82,maxAcc:4.4,maxAccP:80,maxDec:4.8,maxDecP:79,td:2140,hmld:372,hsr:506,acc:13,dec:12,tdMin:107.0,hmldMin:18.6,z6:153,z6Min:7.6,hsrMin:25.3,hmldPct:17.4},
+    p6:{n:'H.Martin',  pos:'mid',st:'full',maxSpd:6.94,maxSpdP:77,maxAcc:4.2,maxAccP:76,maxDec:4.6,maxDecP:75,td:2020,hmld:338,hsr:480,acc:11,dec:10,tdMin:101.0,hmldMin:16.9,z6:139,z6Min:6.9,hsrMin:24.0,hmldPct:16.7},
+    p7:{n:'C.Moran', pos:'fwd',st:'full',maxSpd:7.96,maxSpdP:89,maxAcc:5.1,maxAccP:93,maxDec:5.5,maxDecP:90,td:2420,hmld:468,hsr:672,acc:17,dec:16,tdMin:121.0,hmldMin:23.4,z6:192,z6Min:9.6,hsrMin:33.6,hmldPct:19.3},
+    p8:{n:'TJ.Nolan',pos:'fwd',st:'mod',maxSpd:7.62,maxSpdP:85,maxAcc:4.7,maxAccP:86,maxDec:5.1,maxDecP:84,td:2260,hmld:412,hsr:578,acc:15,dec:14,tdMin:113.0,hmldMin:20.6,z6:169,z6Min:8.4,hsrMin:28.9,hmldPct:18.2},
+    p9:{n:'A.Fitzpatrick',  pos:'fwd',st:'full',maxSpd:7.28,maxSpdP:81,maxAcc:4.5,maxAccP:82,maxDec:4.8,maxDecP:79,td:2160,hmld:382,hsr:536,acc:14,dec:13,tdMin:108.0,hmldMin:19.1,z6:157,z6Min:7.8,hsrMin:26.8,hmldPct:17.7},
+    p10:{n:'F.Dowling',pos:'fwd',st:'full',maxSpd:7.07,maxSpdP:79,maxAcc:4.3,maxAccP:78,maxDec:4.6,maxDecP:75,td:2100,hmld:348,hsr:508,acc:13,dec:12,tdMin:105.0,hmldMin:17.4,z6:143,z6Min:7.1,hsrMin:25.4,hmldPct:16.6},
+    p11:{n:'C.Keaveney',pos:'fwd',st:'full',maxSpd:7.89,maxSpdP:88,maxAcc:4.9,maxAccP:89,maxDec:5.3,maxDecP:87,td:2380,hmld:446,hsr:638,acc:16,dec:15,tdMin:119.0,hmldMin:22.3,z6:183,z6Min:9.1,hsrMin:31.9,hmldPct:18.7},
+    p12:{n:'R.Lawlor',  pos:'fwd',st:'full',maxSpd:6.83,maxSpdP:76,maxAcc:4.1,maxAccP:75,maxDec:4.4,maxDecP:72,td:1980,hmld:318,hsr:462,acc:12,dec:11,tdMin:99.0, hmldMin:15.9,z6:130,z6Min:6.5,hsrMin:23.1,hmldPct:16.1},
+    p13:{n:'R.Kelly',  pos:'def',st:'full',maxSpd:6.97,maxSpdP:78,maxAcc:4.2,maxAccP:76,maxDec:4.6,maxDecP:75,td:2040,hmld:348,hsr:492,acc:12,dec:11,tdMin:102.0,hmldMin:17.4,z6:143,z6Min:7.1,hsrMin:24.6,hmldPct:17.1},
+    p14:{n:'S.Gallagher',   pos:'def',st:'full',maxSpd:7.55,maxSpdP:84,maxAcc:4.6,maxAccP:84,maxDec:4.9,maxDecP:80,td:2200,hmld:398,hsr:556,acc:14,dec:13,tdMin:110.0,hmldMin:19.9,z6:163,z6Min:8.2,hsrMin:27.8,hmldPct:18.1},
+    p15:{n:'C.Breen', pos:'def',st:'full',maxSpd:7.38,maxSpdP:82,maxAcc:4.4,maxAccP:80,maxDec:4.8,maxDecP:79,td:2120,hmld:362,hsr:518,acc:13,dec:12,tdMin:106.0,hmldMin:18.1,z6:148,z6Min:7.4,hsrMin:25.9,hmldPct:17.1},
+    p16:{n:'J.Lynch',  pos:'def',st:'full',maxSpd:6.87,maxSpdP:77,maxAcc:4.2,maxAccP:76,maxDec:4.5,maxDecP:74,td:2060,hmld:338,hsr:476,acc:12,dec:11,tdMin:103.0,hmldMin:16.9,z6:139,z6Min:6.9,hsrMin:23.8,hmldPct:16.4},
+    p17:{n:'A.Donegan',  pos:'def',st:'full',maxSpd:7.72,maxSpdP:86,maxAcc:4.8,maxAccP:87,maxDec:5.2,maxDecP:85,td:2260,hmld:416,hsr:582,acc:15,dec:14,tdMin:113.0,hmldMin:20.8,z6:171,z6Min:8.5,hsrMin:29.1,hmldPct:18.4}
   },
   poss:{
-    p1:{n:'L.Kelly',  pos:'mid',st:'mod',maxSpd:2.04,maxSpdP:77,maxAcc:4.2,maxAccP:76,maxDec:4.6,maxDecP:75,td:1480,hmld:238,hsr:346,acc:10,dec:9,tdMin:98.7,hmldMin:15.9,z6:98,z6Min:6.5,hsrMin:23.1,hmldPct:16.1},
-    p2:{n:'S.Gleeson',  pos:'mid',st:'mod',maxSpd:1.94,maxSpdP:74,maxAcc:4.0,maxAccP:73,maxDec:4.3,maxDecP:70,td:1380,hmld:194,hsr:294,acc:8, dec:7, tdMin:92.0, hmldMin:12.9,z6:80,z6Min:5.3,hsrMin:19.6,hmldPct:14.1},
-    p3:{n:'P.Halinan', pos:'mid',st:'full',maxSpd:2.14,maxSpdP:81,maxAcc:4.6,maxAccP:84,maxDec:5.0,maxDecP:82,td:1620,hmld:270,hsr:408,acc:12,dec:11,tdMin:108.0,hmldMin:18.0,z6:111,z6Min:7.4,hsrMin:27.2,hmldPct:16.7},
-    p4:{n:'E.Cowzer',pos:'mid',st:'rtp',maxSpd:1.79,maxSpdP:68,maxAcc:3.4,maxAccP:62,maxDec:3.6,maxDecP:59,td:1080,hmld:148,hsr:228,acc:6, dec:5, tdMin:72.0, hmldMin:9.9,z6:61,z6Min:4.1, hsrMin:15.2,hmldPct:13.7},
-    p5:{n:'S.Murphy', pos:'mid',st:'full',maxSpd:2.01,maxSpdP:76,maxAcc:4.1,maxAccP:75,maxDec:4.5,maxDecP:74,td:1440,hmld:224,hsr:322,acc:10,dec:9, tdMin:96.0, hmldMin:14.9,z6:92,z6Min:6.1,hsrMin:21.5,hmldPct:15.6},
-    p6:{n:'H.Martin',  pos:'mid',st:'full',maxSpd:1.9,maxSpdP:72,maxAcc:3.9,maxAccP:71,maxDec:4.2,maxDecP:69,td:1340,hmld:206,hsr:298,acc:9, dec:8, tdMin:89.3, hmldMin:13.7,z6:84,z6Min:5.6,hsrMin:19.9,hmldPct:15.4},
-    p7:{n:'C.Moran', pos:'fwd',st:'full',maxSpd:2.19,maxSpdP:83,maxAcc:4.8,maxAccP:87,maxDec:5.2,maxDecP:85,td:1720,hmld:296,hsr:448,acc:13,dec:12,tdMin:114.7,hmldMin:19.7,z6:121,z6Min:8.1,hsrMin:29.9,hmldPct:17.2},
-    p8:{n:'TJ.Nolan',pos:'fwd',st:'mod',maxSpd:2.1,maxSpdP:80,maxAcc:4.4,maxAccP:80,maxDec:4.8,maxDecP:79,td:1580,hmld:258,hsr:376,acc:11,dec:10,tdMin:105.3,hmldMin:17.2,z6:106,z6Min:7.1,hsrMin:25.1,hmldPct:16.3},
-    p9:{n:'A.Fitzpatrick',  pos:'fwd',st:'full',maxSpd:1.99,maxSpdP:75,maxAcc:4.2,maxAccP:76,maxDec:4.5,maxDecP:74,td:1500,hmld:234,hsr:344,acc:10,dec:9, tdMin:100.0,hmldMin:15.6,z6:96,z6Min:6.4,hsrMin:22.9,hmldPct:15.6},
-    p10:{n:'F.Dowling',pos:'fwd',st:'full',maxSpd:1.94,maxSpdP:74,maxAcc:4.0,maxAccP:73,maxDec:4.3,maxDecP:70,td:1440,hmld:212,hsr:316,acc:9, dec:8, tdMin:96.0, hmldMin:14.1,z6:87,z6Min:5.8,hsrMin:21.1,hmldPct:14.7},
-    p11:{n:'C.Keaveney',pos:'fwd',st:'full',maxSpd:2.16,maxSpdP:82,maxAcc:4.6,maxAccP:84,maxDec:5.0,maxDecP:82,td:1680,hmld:280,hsr:424,acc:12,dec:11,tdMin:112.0,hmldMin:18.7,z6:115,z6Min:7.7,hsrMin:28.3,hmldPct:16.7},
-    p12:{n:'R.Lawlor',  pos:'fwd',st:'full',maxSpd:1.88,maxSpdP:71,maxAcc:3.8,maxAccP:69,maxDec:4.1,maxDecP:67,td:1360,hmld:196,hsr:292,acc:9, dec:8, tdMin:90.7, hmldMin:13.1,z6:80,z6Min:5.4,hsrMin:19.5,hmldPct:14.4},
-    p13:{n:'R.Kelly',  pos:'def',st:'full',maxSpd:1.91,maxSpdP:73,maxAcc:3.9,maxAccP:71,maxDec:4.3,maxDecP:70,td:1380,hmld:210,hsr:312,acc:9, dec:8, tdMin:92.0, hmldMin:14.0,z6:86,z6Min:5.7,hsrMin:20.8,hmldPct:15.2},
-    p14:{n:'S.Gallagher',   pos:'def',st:'full',maxSpd:2.07,maxSpdP:78,maxAcc:4.3,maxAccP:78,maxDec:4.7,maxDecP:77,td:1520,hmld:246,hsr:364,acc:11,dec:10,tdMin:101.3,hmldMin:16.4,z6:101,z6Min:6.7,hsrMin:24.3,hmldPct:16.2},
-    p15:{n:'C.Breen', pos:'def',st:'full',maxSpd:2.02,maxSpdP:77,maxAcc:4.1,maxAccP:75,maxDec:4.5,maxDecP:74,td:1460,hmld:224,hsr:336,acc:10,dec:9, tdMin:97.3, hmldMin:14.9,z6:92,z6Min:6.1,hsrMin:22.4,hmldPct:15.3},
-    p16:{n:'J.Lynch',  pos:'def',st:'full',maxSpd:1.88,maxSpdP:71,maxAcc:3.9,maxAccP:71,maxDec:4.2,maxDecP:69,td:1380,hmld:204,hsr:298,acc:9, dec:8, tdMin:92.0, hmldMin:13.6,z6:84,z6Min:5.6,hsrMin:19.9,hmldPct:14.8},
-    p17:{n:'A.Donegan',  pos:'def',st:'full',maxSpd:2.11,maxSpdP:80,maxAcc:4.5,maxAccP:82,maxDec:4.9,maxDecP:80,td:1560,hmld:258,hsr:382,acc:11,dec:10,tdMin:104.0,hmldMin:17.2,z6:106,z6Min:7.1,hsrMin:25.5,hmldPct:16.5}
+    p1:{n:'L.Kelly',  pos:'mid',st:'mod',maxSpd:6.94,maxSpdP:77,maxAcc:4.2,maxAccP:76,maxDec:4.6,maxDecP:75,td:1480,hmld:238,hsr:346,acc:10,dec:9,tdMin:98.7,hmldMin:15.9,z6:98,z6Min:6.5,hsrMin:23.1,hmldPct:16.1},
+    p2:{n:'S.Gleeson',  pos:'mid',st:'mod',maxSpd:6.6,maxSpdP:74,maxAcc:4.0,maxAccP:73,maxDec:4.3,maxDecP:70,td:1380,hmld:194,hsr:294,acc:8, dec:7, tdMin:92.0, hmldMin:12.9,z6:80,z6Min:5.3,hsrMin:19.6,hmldPct:14.1},
+    p3:{n:'P.Halinan', pos:'mid',st:'full',maxSpd:7.28,maxSpdP:81,maxAcc:4.6,maxAccP:84,maxDec:5.0,maxDecP:82,td:1620,hmld:270,hsr:408,acc:12,dec:11,tdMin:108.0,hmldMin:18.0,z6:111,z6Min:7.4,hsrMin:27.2,hmldPct:16.7},
+    p4:{n:'E.Cowzer',pos:'mid',st:'rtp',maxSpd:6.09,maxSpdP:68,maxAcc:3.4,maxAccP:62,maxDec:3.6,maxDecP:59,td:1080,hmld:148,hsr:228,acc:6, dec:5, tdMin:72.0, hmldMin:9.9,z6:61,z6Min:4.1, hsrMin:15.2,hmldPct:13.7},
+    p5:{n:'S.Murphy', pos:'mid',st:'full',maxSpd:6.83,maxSpdP:76,maxAcc:4.1,maxAccP:75,maxDec:4.5,maxDecP:74,td:1440,hmld:224,hsr:322,acc:10,dec:9, tdMin:96.0, hmldMin:14.9,z6:92,z6Min:6.1,hsrMin:21.5,hmldPct:15.6},
+    p6:{n:'H.Martin',  pos:'mid',st:'full',maxSpd:6.46,maxSpdP:72,maxAcc:3.9,maxAccP:71,maxDec:4.2,maxDecP:69,td:1340,hmld:206,hsr:298,acc:9, dec:8, tdMin:89.3, hmldMin:13.7,z6:84,z6Min:5.6,hsrMin:19.9,hmldPct:15.4},
+    p7:{n:'C.Moran', pos:'fwd',st:'full',maxSpd:7.45,maxSpdP:83,maxAcc:4.8,maxAccP:87,maxDec:5.2,maxDecP:85,td:1720,hmld:296,hsr:448,acc:13,dec:12,tdMin:114.7,hmldMin:19.7,z6:121,z6Min:8.1,hsrMin:29.9,hmldPct:17.2},
+    p8:{n:'TJ.Nolan',pos:'fwd',st:'mod',maxSpd:7.14,maxSpdP:80,maxAcc:4.4,maxAccP:80,maxDec:4.8,maxDecP:79,td:1580,hmld:258,hsr:376,acc:11,dec:10,tdMin:105.3,hmldMin:17.2,z6:106,z6Min:7.1,hsrMin:25.1,hmldPct:16.3},
+    p9:{n:'A.Fitzpatrick',  pos:'fwd',st:'full',maxSpd:6.77,maxSpdP:75,maxAcc:4.2,maxAccP:76,maxDec:4.5,maxDecP:74,td:1500,hmld:234,hsr:344,acc:10,dec:9, tdMin:100.0,hmldMin:15.6,z6:96,z6Min:6.4,hsrMin:22.9,hmldPct:15.6},
+    p10:{n:'F.Dowling',pos:'fwd',st:'full',maxSpd:6.6,maxSpdP:74,maxAcc:4.0,maxAccP:73,maxDec:4.3,maxDecP:70,td:1440,hmld:212,hsr:316,acc:9, dec:8, tdMin:96.0, hmldMin:14.1,z6:87,z6Min:5.8,hsrMin:21.1,hmldPct:14.7},
+    p11:{n:'C.Keaveney',pos:'fwd',st:'full',maxSpd:7.34,maxSpdP:82,maxAcc:4.6,maxAccP:84,maxDec:5.0,maxDecP:82,td:1680,hmld:280,hsr:424,acc:12,dec:11,tdMin:112.0,hmldMin:18.7,z6:115,z6Min:7.7,hsrMin:28.3,hmldPct:16.7},
+    p12:{n:'R.Lawlor',  pos:'fwd',st:'full',maxSpd:6.39,maxSpdP:71,maxAcc:3.8,maxAccP:69,maxDec:4.1,maxDecP:67,td:1360,hmld:196,hsr:292,acc:9, dec:8, tdMin:90.7, hmldMin:13.1,z6:80,z6Min:5.4,hsrMin:19.5,hmldPct:14.4},
+    p13:{n:'R.Kelly',  pos:'def',st:'full',maxSpd:6.49,maxSpdP:73,maxAcc:3.9,maxAccP:71,maxDec:4.3,maxDecP:70,td:1380,hmld:210,hsr:312,acc:9, dec:8, tdMin:92.0, hmldMin:14.0,z6:86,z6Min:5.7,hsrMin:20.8,hmldPct:15.2},
+    p14:{n:'S.Gallagher',   pos:'def',st:'full',maxSpd:7.04,maxSpdP:78,maxAcc:4.3,maxAccP:78,maxDec:4.7,maxDecP:77,td:1520,hmld:246,hsr:364,acc:11,dec:10,tdMin:101.3,hmldMin:16.4,z6:101,z6Min:6.7,hsrMin:24.3,hmldPct:16.2},
+    p15:{n:'C.Breen', pos:'def',st:'full',maxSpd:6.87,maxSpdP:77,maxAcc:4.1,maxAccP:75,maxDec:4.5,maxDecP:74,td:1460,hmld:224,hsr:336,acc:10,dec:9, tdMin:97.3, hmldMin:14.9,z6:92,z6Min:6.1,hsrMin:22.4,hmldPct:15.3},
+    p16:{n:'J.Lynch',  pos:'def',st:'full',maxSpd:6.39,maxSpdP:71,maxAcc:3.9,maxAccP:71,maxDec:4.2,maxDecP:69,td:1380,hmld:204,hsr:298,acc:9, dec:8, tdMin:92.0, hmldMin:13.6,z6:84,z6Min:5.6,hsrMin:19.9,hmldPct:14.8},
+    p17:{n:'A.Donegan',  pos:'def',st:'full',maxSpd:7.17,maxSpdP:80,maxAcc:4.5,maxAccP:82,maxDec:4.9,maxDecP:80,td:1560,hmld:258,hsr:382,acc:11,dec:10,tdMin:104.0,hmldMin:17.2,z6:106,z6Min:7.1,hsrMin:25.5,hmldPct:16.5}
   },
   cg:{
-    p1:{n:'L.Kelly',  pos:'mid',st:'mod',maxSpd:2.36,maxSpdP:90,maxAcc:4.7,maxAccP:86,maxDec:5.1,maxDecP:84,td:2320,hmld:438,hsr:800,acc:20,dec:18,tdMin:100.9,hmldMin:19.0,z6:180,z6Min:7.8,hsrMin:34.8,hmldPct:18.9},
-    p2:{n:'S.Gleeson',  pos:'mid',st:'mod',maxSpd:2.25,maxSpdP:85,maxAcc:4.4,maxAccP:80,maxDec:4.8,maxDecP:79,td:2270,hmld:371,hsr:716,acc:19,dec:17,tdMin:98.7, hmldMin:16.1,z6:152,z6Min:6.6,hsrMin:31.1,hmldPct:16.3},
-    p3:{n:'P.Halinan', pos:'mid',st:'full',maxSpd:2.45,maxSpdP:93,maxAcc:5.0,maxAccP:91,maxDec:5.4,maxDecP:89,td:2540,hmld:452,hsr:870,acc:22,dec:20,tdMin:110.4,hmldMin:19.7,z6:185,z6Min:8.1,hsrMin:37.8,hmldPct:17.8},
-    p4:{n:'E.Cowzer',pos:'mid',st:'rtp',maxSpd:2.07,maxSpdP:78,maxAcc:3.8,maxAccP:69,maxDec:4.1,maxDecP:67,td:1800,hmld:364,hsr:556,acc:13,dec:11,tdMin:78.3, hmldMin:15.8,z6:149,z6Min:6.5,hsrMin:24.2,hmldPct:20.2},
-    p5:{n:'S.Murphy', pos:'mid',st:'full',maxSpd:2.31,maxSpdP:88,maxAcc:4.5,maxAccP:82,maxDec:4.9,maxDecP:80,td:2320,hmld:444,hsr:780,acc:20,dec:18,tdMin:100.9,hmldMin:19.3,z6:182,z6Min:7.9,hsrMin:33.9,hmldPct:19.1},
-    p6:{n:'H.Martin',  pos:'mid',st:'full',maxSpd:2.19,maxSpdP:83,maxAcc:4.3,maxAccP:78,maxDec:4.7,maxDecP:77,td:2240,hmld:418,hsr:736,acc:18,dec:16,tdMin:97.4, hmldMin:18.2,z6:171,z6Min:7.5,hsrMin:32.0,hmldPct:18.7},
-    p7:{n:'C.Moran', pos:'fwd',st:'full',maxSpd:2.52,maxSpdP:95,maxAcc:5.2,maxAccP:95,maxDec:5.6,maxDecP:92,td:2680,hmld:536,hsr:968,acc:23,dec:21,tdMin:116.5,hmldMin:23.3,z6:220,z6Min:9.6,hsrMin:42.1,hmldPct:20.0},
-    p8:{n:'TJ.Nolan',pos:'fwd',st:'mod',maxSpd:2.41,maxSpdP:91,maxAcc:4.8,maxAccP:87,maxDec:5.2,maxDecP:85,td:2460,hmld:490,hsr:826,acc:21,dec:19,tdMin:107.0,hmldMin:21.3,z6:201,z6Min:8.7,hsrMin:35.9,hmldPct:19.9},
-    p9:{n:'A.Fitzpatrick',  pos:'fwd',st:'full',maxSpd:2.28,maxSpdP:87,maxAcc:4.6,maxAccP:84,maxDec:4.9,maxDecP:80,td:2380,hmld:444,hsr:812,acc:21,dec:19,tdMin:103.5,hmldMin:19.3,z6:182,z6Min:7.9,hsrMin:35.3,hmldPct:18.7},
-    p10:{n:'F.Dowling',pos:'fwd',st:'full',maxSpd:2.22,maxSpdP:84,maxAcc:4.4,maxAccP:80,maxDec:4.7,maxDecP:77,td:2240,hmld:396,hsr:732,acc:18,dec:16,tdMin:97.4, hmldMin:17.2,z6:162,z6Min:7.1,hsrMin:31.8,hmldPct:17.7},
-    p11:{n:'C.Keaveney',pos:'fwd',st:'full',maxSpd:2.48,maxSpdP:94,maxAcc:5.0,maxAccP:91,maxDec:5.4,maxDecP:89,td:2580,hmld:510,hsr:914,acc:22,dec:20,tdMin:112.2,hmldMin:22.2,z6:209,z6Min:9.1,hsrMin:39.7,hmldPct:19.8},
-    p12:{n:'R.Lawlor',  pos:'fwd',st:'full',maxSpd:2.14,maxSpdP:81,maxAcc:4.2,maxAccP:76,maxDec:4.5,maxDecP:74,td:2190,hmld:380,hsr:700,acc:17,dec:15,tdMin:95.2, hmldMin:16.5,z6:156,z6Min:6.8,hsrMin:30.4,hmldPct:17.4},
-    p13:{n:'R.Kelly',  pos:'def',st:'full',maxSpd:2.21,maxSpdP:84,maxAcc:4.3,maxAccP:78,maxDec:4.7,maxDecP:77,td:2200,hmld:402,hsr:748,acc:18,dec:16,tdMin:95.7, hmldMin:17.5,z6:165,z6Min:7.2,hsrMin:32.5,hmldPct:18.3},
-    p14:{n:'S.Gallagher',   pos:'def',st:'full',maxSpd:2.38,maxSpdP:90,maxAcc:4.7,maxAccP:86,maxDec:5.0,maxDecP:82,td:2380,hmld:444,hsr:840,acc:20,dec:18,tdMin:103.5,hmldMin:19.3,z6:182,z6Min:7.9,hsrMin:36.5,hmldPct:18.7},
-    p15:{n:'C.Breen', pos:'def',st:'full',maxSpd:2.33,maxSpdP:88,maxAcc:4.5,maxAccP:82,maxDec:4.9,maxDecP:80,td:2300,hmld:422,hsr:804,acc:19,dec:17,tdMin:100.0,hmldMin:18.3,z6:173,z6Min:7.5,hsrMin:35.0,hmldPct:18.3},
-    p16:{n:'J.Lynch',  pos:'def',st:'full',maxSpd:2.16,maxSpdP:82,maxAcc:4.3,maxAccP:78,maxDec:4.6,maxDecP:75,td:2220,hmld:398,hsr:752,acc:18,dec:16,tdMin:96.5, hmldMin:17.3,z6:163,z6Min:7.1,hsrMin:32.7,hmldPct:17.9},
-    p17:{n:'A.Donegan',  pos:'def',st:'full',maxSpd:2.44,maxSpdP:92,maxAcc:4.9,maxAccP:89,maxDec:5.3,maxDecP:87,td:2440,hmld:476,hsr:858,acc:21,dec:19,tdMin:106.1,hmldMin:20.7,z6:195,z6Min:8.5,hsrMin:37.3,hmldPct:19.5}
+    p1:{n:'L.Kelly',  pos:'mid',st:'mod',maxSpd:8.02,maxSpdP:90,maxAcc:4.7,maxAccP:86,maxDec:5.1,maxDecP:84,td:2320,hmld:438,hsr:800,acc:20,dec:18,tdMin:100.9,hmldMin:19.0,z6:180,z6Min:7.8,hsrMin:34.8,hmldPct:18.9},
+    p2:{n:'S.Gleeson',  pos:'mid',st:'mod',maxSpd:7.65,maxSpdP:85,maxAcc:4.4,maxAccP:80,maxDec:4.8,maxDecP:79,td:2270,hmld:371,hsr:716,acc:19,dec:17,tdMin:98.7, hmldMin:16.1,z6:152,z6Min:6.6,hsrMin:31.1,hmldPct:16.3},
+    p3:{n:'P.Halinan', pos:'mid',st:'full',maxSpd:8.33,maxSpdP:93,maxAcc:5.0,maxAccP:91,maxDec:5.4,maxDecP:89,td:2540,hmld:452,hsr:870,acc:22,dec:20,tdMin:110.4,hmldMin:19.7,z6:185,z6Min:8.1,hsrMin:37.8,hmldPct:17.8},
+    p4:{n:'E.Cowzer',pos:'mid',st:'rtp',maxSpd:7.04,maxSpdP:78,maxAcc:3.8,maxAccP:69,maxDec:4.1,maxDecP:67,td:1800,hmld:364,hsr:556,acc:13,dec:11,tdMin:78.3, hmldMin:15.8,z6:149,z6Min:6.5,hsrMin:24.2,hmldPct:20.2},
+    p5:{n:'S.Murphy', pos:'mid',st:'full',maxSpd:7.85,maxSpdP:88,maxAcc:4.5,maxAccP:82,maxDec:4.9,maxDecP:80,td:2320,hmld:444,hsr:780,acc:20,dec:18,tdMin:100.9,hmldMin:19.3,z6:182,z6Min:7.9,hsrMin:33.9,hmldPct:19.1},
+    p6:{n:'H.Martin',  pos:'mid',st:'full',maxSpd:7.45,maxSpdP:83,maxAcc:4.3,maxAccP:78,maxDec:4.7,maxDecP:77,td:2240,hmld:418,hsr:736,acc:18,dec:16,tdMin:97.4, hmldMin:18.2,z6:171,z6Min:7.5,hsrMin:32.0,hmldPct:18.7},
+    p7:{n:'C.Moran', pos:'fwd',st:'full',maxSpd:8.57,maxSpdP:95,maxAcc:5.2,maxAccP:95,maxDec:5.6,maxDecP:92,td:2680,hmld:536,hsr:968,acc:23,dec:21,tdMin:116.5,hmldMin:23.3,z6:220,z6Min:9.6,hsrMin:42.1,hmldPct:20.0},
+    p8:{n:'TJ.Nolan',pos:'fwd',st:'mod',maxSpd:8.19,maxSpdP:91,maxAcc:4.8,maxAccP:87,maxDec:5.2,maxDecP:85,td:2460,hmld:490,hsr:826,acc:21,dec:19,tdMin:107.0,hmldMin:21.3,z6:201,z6Min:8.7,hsrMin:35.9,hmldPct:19.9},
+    p9:{n:'A.Fitzpatrick',  pos:'fwd',st:'full',maxSpd:7.75,maxSpdP:87,maxAcc:4.6,maxAccP:84,maxDec:4.9,maxDecP:80,td:2380,hmld:444,hsr:812,acc:21,dec:19,tdMin:103.5,hmldMin:19.3,z6:182,z6Min:7.9,hsrMin:35.3,hmldPct:18.7},
+    p10:{n:'F.Dowling',pos:'fwd',st:'full',maxSpd:7.55,maxSpdP:84,maxAcc:4.4,maxAccP:80,maxDec:4.7,maxDecP:77,td:2240,hmld:396,hsr:732,acc:18,dec:16,tdMin:97.4, hmldMin:17.2,z6:162,z6Min:7.1,hsrMin:31.8,hmldPct:17.7},
+    p11:{n:'C.Keaveney',pos:'fwd',st:'full',maxSpd:8.43,maxSpdP:94,maxAcc:5.0,maxAccP:91,maxDec:5.4,maxDecP:89,td:2580,hmld:510,hsr:914,acc:22,dec:20,tdMin:112.2,hmldMin:22.2,z6:209,z6Min:9.1,hsrMin:39.7,hmldPct:19.8},
+    p12:{n:'R.Lawlor',  pos:'fwd',st:'full',maxSpd:7.28,maxSpdP:81,maxAcc:4.2,maxAccP:76,maxDec:4.5,maxDecP:74,td:2190,hmld:380,hsr:700,acc:17,dec:15,tdMin:95.2, hmldMin:16.5,z6:156,z6Min:6.8,hsrMin:30.4,hmldPct:17.4},
+    p13:{n:'R.Kelly',  pos:'def',st:'full',maxSpd:7.51,maxSpdP:84,maxAcc:4.3,maxAccP:78,maxDec:4.7,maxDecP:77,td:2200,hmld:402,hsr:748,acc:18,dec:16,tdMin:95.7, hmldMin:17.5,z6:165,z6Min:7.2,hsrMin:32.5,hmldPct:18.3},
+    p14:{n:'S.Gallagher',   pos:'def',st:'full',maxSpd:8.09,maxSpdP:90,maxAcc:4.7,maxAccP:86,maxDec:5.0,maxDecP:82,td:2380,hmld:444,hsr:840,acc:20,dec:18,tdMin:103.5,hmldMin:19.3,z6:182,z6Min:7.9,hsrMin:36.5,hmldPct:18.7},
+    p15:{n:'C.Breen', pos:'def',st:'full',maxSpd:7.92,maxSpdP:88,maxAcc:4.5,maxAccP:82,maxDec:4.9,maxDecP:80,td:2300,hmld:422,hsr:804,acc:19,dec:17,tdMin:100.0,hmldMin:18.3,z6:173,z6Min:7.5,hsrMin:35.0,hmldPct:18.3},
+    p16:{n:'J.Lynch',  pos:'def',st:'full',maxSpd:7.34,maxSpdP:82,maxAcc:4.3,maxAccP:78,maxDec:4.6,maxDecP:75,td:2220,hmld:398,hsr:752,acc:18,dec:16,tdMin:96.5, hmldMin:17.3,z6:163,z6Min:7.1,hsrMin:32.7,hmldPct:17.9},
+    p17:{n:'A.Donegan',  pos:'def',st:'full',maxSpd:8.3,maxSpdP:92,maxAcc:4.9,maxAccP:89,maxDec:5.3,maxDecP:87,td:2440,hmld:476,hsr:858,acc:21,dec:19,tdMin:106.1,hmldMin:20.7,z6:195,z6Min:8.5,hsrMin:37.3,hmldPct:19.5}
   }
 };
 
@@ -4231,6 +4272,24 @@ function _rebuildSessionDropdowns(allDates, sessionMeta, drillMeta){
     msPanel.innerHTML=cbHtml;
     updateLabel('ms-dates');
   }
+
+  /* Compute nextFixture for sessions that have null (live/unknown sessions) */
+  var _skByDate = Object.keys(SESSION_DB).map(function(k){
+    var ds=k.replace('d','');
+    return {key:k, date:new Date(ds.substring(0,4)+'-'+ds.substring(4,6)+'-'+ds.substring(6,8))};
+  }).sort(function(a,b){return a.date-b.date;});
+  _skByDate.forEach(function(sd,i){
+    var sess=SESSION_DB[sd.key];
+    if(sess.nextFixture!==null&&sess.nextFixture!==undefined) return;
+    for(var j=i+1;j<_skByDate.length;j++){
+      var fut=SESSION_DB[_skByDate[j].key];
+      if(fut.typeLabel==='Championship'||fut.typeLabel==='Challenge Match'){
+        sess.nextFixture=fut.label+' — '+fut.typeLabel;
+        break;
+      }
+    }
+    if(!sess.nextFixture) sess.nextFixture='TBC';
+  });
 
   /* Re-render everything driven by session */
   try { gfChange(); } catch(e){}
