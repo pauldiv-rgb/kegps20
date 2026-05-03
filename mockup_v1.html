@@ -3593,6 +3593,27 @@ function gfChange(){
       drillEl.disabled = true;
     }
   }
+  /* ── Cascade global pos/player filter → scatter ms-personnel ── */
+  /* One-way cascade: top filters drive scatter. Scatter controls can override independently. */
+  var _perPanel = document.getElementById('ms-personnel-panel');
+  if(_perPanel){
+    var _allCb = _perPanel.querySelector('.ms-all-cb');
+    var _opts  = _perPanel.querySelectorAll('input:not(.ms-all-cb)');
+    if(G.player !== 'all'){
+      /* Single player selected: show only that player dot */
+      if(_allCb) _allCb.checked = false;
+      _opts.forEach(function(o){ o.checked = (o.value === G.player); });
+    } else if(G.pos !== 'all'){
+      /* Position group: show only that position */
+      if(_allCb) _allCb.checked = false;
+      _opts.forEach(function(o){ o.checked = (o.value === G.pos); });
+    } else {
+      /* All: reset scatter personnel to All */
+      if(_allCb) _allCb.checked = true;
+      _opts.forEach(function(o){ o.checked = false; });
+    }
+    updateLabel('ms-personnel');
+  }
   /* Render verdict cards and ACWR flags for selected session */
   renderSessionVerdict();
   renderACWRFlags();
