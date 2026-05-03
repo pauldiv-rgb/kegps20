@@ -931,7 +931,7 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
   </div>
 
   <!-- ─── SESSION VERDICT ─── -->
-  <div style="display:flex;align-items:stretch;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+  <div id="p0-verdict-wrap" style="display:flex;align-items:stretch;gap:10px;margin-bottom:16px;flex-wrap:wrap">
     <div style="background:rgba(239,159,39,.07);border:1px solid rgba(239,159,39,.25);border-left:3px solid var(--amber);border-radius:8px;padding:10px 16px;flex:1;min-width:160px">
       <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--amber);margin-bottom:3px">Session verdict</div>
       <div style="font-size:12px;font-weight:700;color:var(--text)">Adequate — MD−2</div>
@@ -955,7 +955,7 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
   </div>
 
   <!-- ─── [2] ACWR FLAG ROW ─── -->
-  <div style="display:flex;align-items:center;gap:10px;background:var(--s1);border:1px solid var(--border);border-left:3px solid var(--amber);border-radius:8px;padding:10px 16px;margin-bottom:20px;flex-wrap:wrap">
+  <div id="acwr-flags-row" style="display:flex;align-items:center;gap:10px;background:var(--s1);border:1px solid var(--border);border-left:3px solid var(--amber);border-radius:8px;padding:10px 16px;margin-bottom:20px;flex-wrap:wrap">
     <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--amber);flex-shrink:0">ACWR Flags <span style="font-weight:400;color:var(--dim);font-size:8px;text-transform:none">· HMLD-ACWR from GPS data · baked 1-May-2026</span></div>
     <div style="display:flex;gap:7px;flex-wrap:wrap;flex:1">
       <div style="display:flex;align-items:center;gap:6px;background:rgba(226,75,74,.08);border:1px solid rgba(226,75,74,.25);border-radius:5px;padding:4px 10px">
@@ -3009,11 +3009,24 @@ document.addEventListener('DOMContentLoaded',function(){
   renderDrillCards();
   renderDrillBars();
   renderPlayerProfile();
+  renderSessionVerdict();
+  renderACWRFlags();
+  /* Sync global header fixture to default session */
+  var _sess0=SESSION_DB[G.session];
+  if(_sess0){
+    var _hdr=document.querySelector('.hdr-match');
+    if(_hdr)_hdr.innerHTML='Next fixture: <strong>'+(_sess0.nextFixture||'TBC')+'</strong>';
+    var _att=document.querySelector('.att-note');
+    if(_att&&_sess0.attendance){
+      var _p0=_sess0.attendance.split('/');var _pr=parseInt(_p0[0])||0;var _to=parseInt(_p0[1])||0;var _ab=_to-_pr;
+      if(_ab<=0){_att.style.display='none';}else{_att.style.display='';_att.textContent='⚠ '+_ab+' absent — averages based on '+_pr+' players present';}
+    }
+  }
   var badge=document.querySelector('.badge');
   if(badge) badge.textContent='Baked · 1-May-2026';
   loadLiveData()
-    .then(function(){ applyFilters(); refreshAll(); })
-    .catch(function(e){ console.error('Live data load failed:',e); applyFilters(); refreshAll(); });
+    .then(function(){ applyFilters(); refreshAll(); renderSessionVerdict(); renderACWRFlags(); })
+    .catch(function(e){ console.error('Live data load failed:',e); applyFilters(); refreshAll(); renderSessionVerdict(); renderACWRFlags(); });
 });
 
 /* ══════════════════════════════════════════════════════════════
@@ -3383,7 +3396,7 @@ function setPlayer(idx,key){
   refreshAll();
 }
 
-function refreshAll(){refreshACWR();refreshMS();refreshIntensity();refreshDecAcc();}
+function refreshAll(){refreshACWR();refreshMS();refreshIntensity();refreshDecAcc();try{renderACWRFlags();}catch(e){}}
 
 
 function togglePlayer(key){
@@ -3421,6 +3434,119 @@ function setDensity(d){
 function setSparkMetric(m){/* retired */}
 ;
 
+/* ── Session verdict metadata ──────────────────────────── */
+var SESSION_VERDICT={
+  d20260429:{title:'Championship — Leinster SF',sub:'v Meath · match output only · no training verdict',col:'var(--blue)',decel:null},
+  d20260424:{title:'Adequate',sub:'Volume and density within targets · intensity gap on decel',col:'var(--amber)',decel:{pct:81,txt:'Training 3.4 vs match 3.9 m/s² · review drill constraints'}},
+  d20260423:{title:'Championship — QF Replay',sub:'v Westmeath · match output only · no training verdict',col:'var(--blue)',decel:null},
+  d20260421:{title:'Challenge Match',sub:'v UCD · full-game GPS · no training verdict applicable',col:'var(--blue)',decel:null},
+  d20260416:{title:'Adequate',sub:'Volume and density within MD+1 targets',col:'var(--green)',decel:null},
+  d20260407:{title:'Good',sub:'Mid-cycle building phase · volume appropriate for MD+6',col:'var(--green)',decel:null},
+  d20260402:{title:'Adequate',sub:'Volume and density within MD+1 targets · minor decel deficit',col:'var(--amber)',decel:{pct:89,txt:'Training 3.5 vs match 3.9 m/s² · monitor drill constraints'}},
+  d20260326:{title:'Moderate',sub:'Reduced squad · density maintained · recovery week volume',col:'var(--amber)',decel:null},
+  d20260320:{title:'Championship — Leinster Rd1',sub:'v Wicklow · match output only · no training verdict',col:'var(--blue)',decel:null},
+  d20260310:{title:'Good',sub:'Pre-competition block · building chronic load base',col:'var(--green)',decel:null}
+};
+
+/* Map session key → SPARK_DATA2 array index (8 baked sessions, oldest→newest) */
+var SESSION_IDX={d20260310:0,d20260320:1,d20260326:2,d20260402:3,d20260407:4,d20260416:5,d20260421:6,d20260424:7};
+
+function renderSessionVerdict(){
+  var wrap=document.getElementById('p0-verdict-wrap');
+  if(!wrap)return;
+  var sess=SESSION_DB[G.session];
+  var sv=SESSION_VERDICT[G.session]||{title:'Session loaded',sub:'See drill overview below',col:'var(--blue)',decel:null};
+  var matchBench=16.0;
+  var hmldDen=null;
+  if(sess&&sess.drills){
+    var tHmld=0,tDur=0;
+    Object.keys(sess.drills).forEach(function(k){
+      if(k!=='h1'&&k!=='h2'){tHmld+=sess.drills[k].hmld||0;tDur+=sess.drills[k].dur||0;}
+    });
+    if(tDur>0)hmldDen=(tHmld/tDur).toFixed(1);
+  }
+  var sidx=(SESSION_IDX[G.session]!==undefined)?SESSION_IDX[G.session]:7;
+  var highCnt=0,cautCnt=0;
+  Object.keys(SPARK_DATA2).forEach(function(k){
+    if(k==='squad')return;
+    var a=SPARK_DATA2[k].acwr[sidx];
+    if(a>=1.5)highCnt++;else if(a>=1.3)cautCnt++;
+  });
+  var acwrCol2=highCnt>0?'var(--red)':cautCnt>0?'var(--amber)':'var(--green)';
+  var acwrTxt=highCnt>0?(highCnt+' high · '+cautCnt+' caution'):cautCnt>0?(cautCnt+' caution'):'All clear';
+  var acwrBg=highCnt>0?'rgba(226,75,74,.06)':cautCnt>0?'rgba(239,159,39,.07)':'rgba(129,199,132,.07)';
+  var acwrBd=highCnt>0?'rgba(226,75,74,.2)':cautCnt>0?'rgba(239,159,39,.22)':'rgba(129,199,132,.2)';
+  var html='';
+  html+='<div style="background:rgba(239,159,39,.07);border:1px solid rgba(239,159,39,.25);border-left:3px solid '+sv.col+';border-radius:8px;padding:10px 16px;flex:1;min-width:160px">'
+    +'<div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:'+sv.col+';margin-bottom:3px">Session verdict</div>'
+    +'<div style="font-size:12px;font-weight:700;color:var(--text)">'+sv.title+(sess&&sess.matchProx?' — '+sess.matchProx:'')+'</div>'
+    +'<div style="font-size:9px;color:var(--dim);margin-top:2px">'+sv.sub+'</div>'
+    +'</div>';
+  if(hmldDen){
+    var pct=Math.round((parseFloat(hmldDen)/matchBench)*100);
+    html+='<div style="background:var(--s1);border:1px solid var(--border);border-radius:8px;padding:10px 16px;flex:1;min-width:160px">'
+      +'<div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:3px">HMLD density</div>'
+      +'<div style="font-size:12px;font-weight:700;color:var(--text)">'+hmldDen+' <span style="font-size:10px;font-weight:400;color:var(--dim)">m/min</span></div>'
+      +'<div style="font-size:9px;color:var(--dim);margin-top:2px">'+pct+'% of match benchmark (16.0)'+(sess&&sess.matchProx?' — expected '+sess.matchProx:'')+'</div>'
+      +'</div>';
+  }
+  if(sv.decel){
+    html+='<div style="background:rgba(226,75,74,.06);border:1px solid rgba(226,75,74,.2);border-radius:8px;padding:10px 16px;flex:1;min-width:160px">'
+      +'<div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--red);margin-bottom:3px">Peak decel gap</div>'
+      +'<div style="font-size:12px;font-weight:700;color:var(--red)">'+sv.decel.pct+'% <span style="font-size:10px;font-weight:400;color:var(--dim)">of 28d best</span></div>'
+      +'<div style="font-size:9px;color:var(--dim);margin-top:2px">'+sv.decel.txt+'</div>'
+      +'</div>';
+  }
+  html+='<div style="background:'+acwrBg+';border:1px solid '+acwrBd+';border-radius:8px;padding:10px 16px;flex:1;min-width:160px">'
+    +'<div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:'+acwrCol2+';margin-bottom:3px">ACWR flags</div>'
+    +'<div style="font-size:12px;font-weight:700;color:var(--text)">'+acwrTxt+'</div>'
+    +'<div style="font-size:9px;color:var(--dim);margin-top:2px">Full HMLD-ACWR trend → Page 1</div>'
+    +'</div>';
+  wrap.innerHTML=html;
+}
+
+function renderACWRFlags(){
+  var row=document.getElementById('acwr-flags-row');
+  if(!row)return;
+  var sidx=(SESSION_IDX[G.session]!==undefined)?SESSION_IDX[G.session]:7;
+  var flags=[];
+  Object.keys(SPARK_DATA2).forEach(function(k){
+    if(k==='squad')return;
+    var d=SPARK_DATA2[k];
+    var a=d.acwr[sidx];
+    if(!a||a<=0)return;
+    var prev=sidx>0?d.acwr[sidx-1]:a;
+    var arrow=a>prev?'↑':a<prev?'↓':'→';
+    var risk,col,bg,bd;
+    if(a>=1.5){risk='High risk';col='var(--red)';bg='rgba(226,75,74,.08)';bd='rgba(226,75,74,.25)';}
+    else if(a>=1.3){risk='Caution';col='var(--amber)';bg='rgba(239,159,39,.07)';bd='rgba(239,159,39,.22)';}
+    else if(a<0.8){risk='Under-loaded';col='var(--blue)';bg='rgba(79,195,247,.07)';bd='rgba(79,195,247,.2)';}
+    else return;
+    flags.push({name:d.label,pos:d.pos||'—',acwr:a,arrow:arrow,risk:risk,col:col,bg:bg,bd:bd});
+  });
+  flags.sort(function(a,b){var r=function(x){return x.risk==='High risk'?0:x.risk==='Caution'?1:2;};var d=r(a)-r(b);return d!==0?d:b.acwr-a.acwr;});
+  if(flags.length===0){
+    row.style.borderLeftColor='var(--green)';
+    row.innerHTML='<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--green);flex-shrink:0">ACWR — All Clear</div>'
+      +'<div style="font-size:9px;color:var(--dim);flex:1">No high-risk or under-loaded players · HMLD ACWR within optimal range for this session</div>'
+      +'<div style="font-size:9px;color:var(--muted);flex-shrink:0">Full trend → Page 1</div>';
+    return;
+  }
+  var hiCnt=flags.filter(function(f){return f.risk==='High risk';}).length;
+  row.style.borderLeftColor=hiCnt>0?'var(--red)':'var(--amber)';
+  var pills=flags.map(function(f){
+    return '<div style="display:flex;align-items:center;gap:6px;background:'+f.bg+';border:1px solid '+f.bd+';border-radius:5px;padding:4px 10px">'
+      +'<span style="font-size:10px;font-weight:600;color:var(--text)">'+f.name+'</span>'
+      +'<span style="font-size:8px;color:var(--dim);background:var(--s3);padding:1px 5px;border-radius:2px">'+f.pos+'</span>'
+      +'<span style="font-size:10px;font-weight:700;color:'+f.col+'">'+f.acwr.toFixed(2)+' '+f.arrow+'</span>'
+      +'<span style="font-size:8px;font-weight:700;color:'+f.col+';text-transform:uppercase;letter-spacing:.05em">'+f.risk+'</span>'
+      +'</div>';
+  }).join('');
+  row.innerHTML='<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--amber);flex-shrink:0">ACWR Flags <span style="font-weight:400;color:var(--dim);font-size:8px;text-transform:none">· HMLD-ACWR from GPS data</span></div>'
+    +'<div style="display:flex;gap:7px;flex-wrap:wrap;flex:1">'+pills+'</div>'
+    +'<div style="font-size:9px;color:var(--muted);flex-shrink:0">HMLD ACWR · full trend → Page 1<span style="font-size:8px;color:var(--muted);font-style:italic;margin-left:6px">&#9432; Per-player rolling load data at go-live</span></div>';
+}
+
 /* ── Global filter change handler ─────────────────────────────── */
 function gfChange(){
   G.session = document.getElementById('gf-session').value;
@@ -3435,9 +3561,25 @@ function gfChange(){
   var siProx=document.getElementById('si-prox'); if(siProx) siProx.textContent=sess.matchProx||'—';
   var siFixture=document.getElementById('si-fixture'); if(siFixture) siFixture.textContent=sess.nextFixture||'—';
   var siAtt=document.getElementById('si-att'); if(siAtt) siAtt.textContent=sess.attendance||'—';
+  /* Update global header fixture */
+  var hdrFix=document.querySelector('.hdr-match');
+  if(hdrFix) hdrFix.innerHTML='Next fixture: <strong>'+(sess.nextFixture||'TBC')+'</strong>';
+  /* Update absence note */
+  var attNote=document.querySelector('.att-note');
+  if(attNote&&sess.attendance){
+    var _ap=sess.attendance.split('/');
+    var _present=parseInt(_ap[0])||0;
+    var _total=parseInt(_ap[1])||0;
+    var _absent=_total-_present;
+    if(_absent<=0){attNote.style.display='none';}
+    else{attNote.style.display='';attNote.textContent='⚠ '+_absent+' absent — averages based on '+_present+' players present';}
+  }
   /* Show/hide drill filter in leaderboard based on session type */
   var drillEl = document.getElementById('lb-drill');
   if(drillEl) drillEl.disabled = !sess.drills;
+  /* Render verdict cards and ACWR flags for selected session */
+  renderSessionVerdict();
+  renderACWRFlags();
   /* Render all components */
   renderAll();
 }
@@ -3447,6 +3589,7 @@ function renderAll(){
   renderDrillBars();
   lbSyncGlobal();
   applyFilters();
+  try{updateScatterAxes();}catch(e){}
 }
 
 /* ── Drill cards renderer ─────────────────────────────────────── */
