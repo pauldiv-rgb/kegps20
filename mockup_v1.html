@@ -4705,6 +4705,13 @@ function loadLiveData(){
           var dr=Math.round(bd);
           SESSION_DB[k].matchProx=dr===0?'MD':dr>0?'MD+'+dr:'MD−'+Math.abs(dr);
         });
+        /* Re-push si-prox to DOM now that backfill is complete */
+        var _gf=document.getElementById('gf-session');
+        var _ck=_gf?_gf.value:null;
+        if(_ck&&SESSION_DB[_ck]){
+          var _sp=document.getElementById('si-prox');
+          if(_sp) _sp.textContent=SESSION_DB[_ck].matchProx||'—';
+        }
       }
       var badge=document.querySelector('.badge');
       if(badge) badge.textContent='Live · '+last8[7];
