@@ -1570,7 +1570,7 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
     </div>
     <div class="tbl-wrap" style="max-height:360px;overflow-y:auto;margin-bottom:0">
       <table>
-        <thead style="position:sticky;top:0;background:var(--s1);z-index:2"><tr><th>Player</th><th>Pos</th><th>Status</th><th>HMLD</th><th>HMLD/min</th><th>HMLD%</th><th>Z6</th><th>TD</th><th>TD/min</th><th>HSR</th><th>Acc</th><th>Dec</th><th>Dec:Acc</th><th>Max V</th><th>vs Pos avg</th></tr></thead>
+        <thead style="position:sticky;top:0;background:var(--s1);z-index:2"><tr><th>Player</th><th>Pos</th><th>Status</th><th>HMLD</th><th>HMLD/min</th><th>HMLD%</th><th>Sprint</th><th>TD</th><th>TD/min</th><th>HSR</th><th>Acc</th><th>Dec</th><th>Dec:Acc</th><th>Max V</th><th>vs Pos avg</th></tr></thead>
         <tbody id="full-table-body"></tbody>
       </table>
     </div>
@@ -2197,7 +2197,7 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
 
   <!-- [2] FLAGGED PLAYER CARDS -->
   <div class="sec-label">[2] Flagged players — action required</div>
-    <div class="flags">
+    <div class="flags" id="live-flags">
     <div class="flag" style="border-left-color:var(--red)">
       <div class="flag-hdr">
         <div><div class="flag-name">Liam Kelly</div><div class="flag-pos">Middle 8</div></div>
@@ -3840,10 +3840,52 @@ function lbSyncGlobal(){
 /* Plot area bounds in the 660×330 SVG */
 var SC_PL = 62, SC_PR = 640, SC_PT = 20, SC_PB = 286;
 
+/* ── Live scatter data helpers ───────────────────────────────── */
+/* Convert LIVE_SESSION_DATA rows for a given session to a pX-keyed object */
+function _liveScatterData(sessKey, matchOnly){
+  if(!window.LIVE_SESSION_DATA||!sessKey) return null;
+  var rows=window.LIVE_SESSION_DATA[sessKey];
+  if(!rows||!rows.length) return null;
+  if(matchOnly){
+    var hm=rows.some(function(r){return r.matchType==='Match';});
+    if(hm) rows=rows.filter(function(r){return r.matchType==='Match';});
+  }
+  var result={};
+  rows.forEach(function(r){
+    if(!window._PM_NAME_MAP) return;
+    var pKey=window._PM_NAME_MAP[_normPlayerName(r.player)];
+    if(!pKey) return;
+    var pm=PLAYER_META[pKey];
+    result[pKey]={
+      pos:pm?pm.pos:r.pos,
+      tdMin:r.tdMin||0, hmldMin:r.hmldMin||0,
+      sprintMin:r.sprintMin||0, z6Min:r.sprintMin||0,
+      hsrMin:r.hsrMin||0, hmldPct:0
+    };
+  });
+  return Object.keys(result).length?result:null;
+}
+/* Find the chronologically latest session key that contains match rows */
+function _latestMatchSessKey(){
+  if(!window.LIVE_SESSION_DATA) return null;
+  var keys=Object.keys(window.LIVE_SESSION_DATA).sort();
+  for(var i=keys.length-1;i>=0;i--){
+    var rs=window.LIVE_SESSION_DATA[keys[i]];
+    if(rs&&rs.some(function(r){return r.matchType==='Match';})) return keys[i];
+  }
+  return null;
+}
+
 function getScatterData(){
-  /* Use leaderboard data (sess context matches global session for training) */
-  var dk = (document.getElementById('lb-drill')||{value:'sess'}).value || 'sess';
-  return LB_DATA[dk] || LB_DATA.sess;
+  /* Prefer live LIVE_SESSION_DATA for 'sess' context; fall back to LB_DATA */
+  var gfSess=document.getElementById('gf-session');
+  var sessKey=gfSess?gfSess.value:null;
+  var dk=(document.getElementById('lb-drill')||{value:'sess'}).value||'sess';
+  if(dk==='sess'&&sessKey){
+    var ld=_liveScatterData(sessKey,false);
+    if(ld) return ld;
+  }
+  return LB_DATA[dk]||LB_DATA.sess;
 }
 
 function updateScatterAxes(){
@@ -3890,6 +3932,87 @@ function updateScatterAxes(){
         {t.textContent=METRIC_LABELS[yKey]+' ('+METRIC_UNITS[yKey]+')';t.setAttribute('data-axis','y');}
     });
   }
+  /* Store current scale globally so crosshair updater uses same coordinate system */
+  window._SC_toX=toX; window._SC_toY=toY;
+  /* Update session squad-avg crosshair with real values */
+  _updateScatterSessCrosshair(toX,toY,players,xKey,yKey);
+}
+
+/* Reposition session squad-avg crosshair */
+function _updateScatterSessCrosshair(toX,toY,players,xKey,yKey){
+  var avgX=players.reduce(function(a,e){return a+(e[1][xKey]||0);},0)/(players.length||1);
+  var avgY=players.reduce(function(a,e){return a+(e[1][yKey]||0);},0)/(players.length||1);
+  var cx=toX(avgX),cy=toY(avgY);
+  var cxh=document.querySelector('.sc-xhair-sess');
+  if(!cxh) return;
+  var lns=cxh.querySelectorAll('line'),crs=cxh.querySelectorAll('circle'),txts=cxh.querySelectorAll('text');
+  if(lns[0]){lns[0].setAttribute('x1',cx.toFixed(1));lns[0].setAttribute('x2',cx.toFixed(1));}
+  if(lns[1]){lns[1].setAttribute('y1',cy.toFixed(1));lns[1].setAttribute('y2',cy.toFixed(1));}
+  if(crs[0]){crs[0].setAttribute('cx',cx.toFixed(1));crs[0].setAttribute('cy',cy.toFixed(1));}
+  if(txts[0]){txts[0].setAttribute('x',(cx+5).toFixed(1));txts[0].setAttribute('y',(cy-3).toFixed(1));}
+}
+
+/* Reposition match dots + match squad-avg crosshair from latest match session */
+function updateScatterMatchDots(){
+  var mk=_latestMatchSessKey();
+  if(!mk) return;
+  var md=_liveScatterData(mk,true);
+  if(!md||!Object.keys(md).length) return;
+  var xKey=(document.getElementById('sc-x-axis')||{value:'tdMin'}).value||'tdMin';
+  var yKey=(document.getElementById('sc-y-axis')||{value:'hmldMin'}).value||'hmldMin';
+  var entries=Object.entries(md);
+  var xVals=entries.map(function(e){return e[1][xKey]||0;});
+  var yVals=entries.map(function(e){return e[1][yKey]||0;});
+  var xMn=Math.min.apply(null,xVals),xMx=Math.max.apply(null,xVals);
+  var yMn=Math.min.apply(null,yVals),yMx=Math.max.apply(null,yVals);
+  var xPad=(xMx-xMn)*0.15||5,yPad=(yMx-yMn)*0.15||1;
+  xMn-=xPad;xMx+=xPad;yMn-=yPad;yMx+=yPad;
+  function mtoX(v){return SC_PL+(v-xMn)/(xMx-xMn)*(SC_PR-SC_PL);}
+  function mtoY(v){return SC_PB-(v-yMn)/(yMx-yMn)*(SC_PB-SC_PT);}
+  /* Reposition full-match dots per player */
+  entries.forEach(function(entry){
+    var pid=entry[0],pdat=entry[1];
+    var pn=pid.replace('p','');
+    var nx=mtoX(pdat[xKey]||0),ny=mtoY(pdat[yKey]||0);
+    if(isNaN(nx)||isNaN(ny)) return;
+    var mDots=document.querySelectorAll('.sc-p'+pn+'.sc-match-dot.sc-half-full-dot');
+    mDots.forEach(function(g){
+      var c=g.querySelector('circle'),t=g.querySelector('text');
+      if(c){c.setAttribute('cx',nx.toFixed(1));c.setAttribute('cy',ny.toFixed(1));}
+      if(t){t.setAttribute('x',nx.toFixed(1));t.setAttribute('y',(ny-7.5).toFixed(1));}
+    });
+  });
+  /* ── H1 / H2 dots from LIVE_HALF_DATA ── */
+  if(window.LIVE_HALF_DATA&&window.LIVE_HALF_DATA[mk]){
+    ['h1','h2'].forEach(function(hk){
+      var halfPlayers=window.LIVE_HALF_DATA[mk][hk]||{};
+      Object.keys(halfPlayers).forEach(function(playerName){
+        var pKey=window._PM_NAME_MAP?window._PM_NAME_MAP[_normPlayerName(playerName)]:null;
+        if(!pKey) return;
+        var pn=pKey.replace('p','');
+        var pd=halfPlayers[playerName];
+        var nx=mtoX(pd[xKey]||0),ny=mtoY(pd[yKey]||0);
+        if(isNaN(nx)||isNaN(ny)) return;
+        var dotCls=hk==='h1'?'sc-h1-dot':'sc-h2-dot';
+        document.querySelectorAll('.sc-p'+pn+'.sc-match-dot.'+dotCls).forEach(function(g){
+          var c=g.querySelector('circle'),t=g.querySelector('text');
+          if(c){c.setAttribute('cx',nx.toFixed(1));c.setAttribute('cy',ny.toFixed(1));}
+          if(t){t.setAttribute('x',nx.toFixed(1));t.setAttribute('y',(ny-7.5).toFixed(1));}
+        });
+      });
+    });
+  }
+  /* Match squad-avg crosshair */
+  var avgX=xVals.reduce(function(a,v){return a+v;},0)/(xVals.length||1);
+  var avgY=yVals.reduce(function(a,v){return a+v;},0)/(yVals.length||1);
+  var cx=mtoX(avgX),cy=mtoY(avgY);
+  var cxh=document.querySelector('.sc-xhair-match');
+  if(!cxh) return;
+  var lns=cxh.querySelectorAll('line'),crs=cxh.querySelectorAll('circle'),txts=cxh.querySelectorAll('text');
+  if(lns[0]){lns[0].setAttribute('x1',cx.toFixed(1));lns[0].setAttribute('x2',cx.toFixed(1));}
+  if(lns[1]){lns[1].setAttribute('y1',cy.toFixed(1));lns[1].setAttribute('y2',cy.toFixed(1));}
+  if(crs[0]){crs[0].setAttribute('cx',cx.toFixed(1));crs[0].setAttribute('cy',cy.toFixed(1));}
+  if(txts[0]){txts[0].setAttribute('x',(cx+5).toFixed(1));txts[0].setAttribute('y',(cy-3).toFixed(1));}
 }
 
 function resetScatterAxes(){
@@ -3911,14 +4034,23 @@ function scTipMove(evt, svgEl){
   var pid = null;
   g.classList.forEach(function(c){ var m=c.match(/^sc-p(\d+)$/); if(m) pid='p'+m[1]; });
   if(!pid) { tip.style.display='none'; return; }
-  /* Pull current drill context */
+  /* Pull player data — prefer live session data */
   var drill = (document.getElementById('lb-drill')||{value:'sess'}).value||'sess';
-  var ds = LB_DATA[drill] || LB_DATA.sess;
-  var pd = ds[pid]; var pm = PLAYER_META[pid];
-  if(!pd || !pm) { tip.style.display='none'; return; }
+  var pm = PLAYER_META[pid];
+  var pd = null;
+  if(drill==='sess'){
+    var gfSess=document.getElementById('gf-session');
+    var sk=gfSess?gfSess.value:null;
+    var ld=sk?_liveScatterData(sk,false):null;
+    pd=ld?ld[pid]:null;
+    /* If coming from match mode, try latest match data */
+    if(!pd){var lmd=_liveScatterData(_latestMatchSessKey(),true);pd=lmd?lmd[pid]:null;}
+  }
+  if(!pd) pd=(LB_DATA[drill]||LB_DATA.sess)[pid];
+  if(!pd||!pm){ tip.style.display='none'; return; }
   document.getElementById('sct-name').textContent = pm.fullName;
-  document.getElementById('sct-hmld').textContent = pd.hmldMin.toFixed(1) + ' m/min';
-  document.getElementById('sct-td').textContent   = pd.tdMin.toFixed(1)   + ' m/min';
+  document.getElementById('sct-hmld').textContent = (pd.hmldMin||0).toFixed(1) + ' m/min';
+  document.getElementById('sct-td').textContent   = (pd.tdMin||0).toFixed(1)   + ' m/min';
   document.getElementById('sct-pos').textContent  = _SC_POS_LBL[pd.pos] || pd.pos;
   tip.style.display = 'block';
   tip.style.left = (evt.clientX + 14) + 'px';
@@ -4542,6 +4674,7 @@ function loadLiveData(){
 
     /* ── Parse LS_Drill_Data → drillMeta[dateKey][drillSlug] ── */
     var drillMeta={};
+    window.LIVE_HALF_DATA={}; /* {dateKey:{h1:{playerName:{tdMin,hmldMin,...}},h2:{...}}} */
     if(ddTxt){
       var ddLines=ddTxt.trim().split(/\r?\n/);
       for(var di=1;di<ddLines.length;di++){
@@ -4556,6 +4689,20 @@ function loadLiveData(){
         var dmm=String(dpd.getMonth()+1).padStart(2,'0');
         var ddd=String(dpd.getDate()).padStart(2,'0');
         var dkey='d'+dpd.getFullYear()+dmm+ddd;
+        /* ── Detect match half rows ── */
+        var _dnameLow=drillName.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+        var _halfKey=null;
+        if(_dnameLow==='1st half'||_dnameLow==='half 1'||_dnameLow==='h1'||_dnameLow==='first half') _halfKey='h1';
+        else if(_dnameLow==='2nd half'||_dnameLow==='half 2'||_dnameLow==='h2'||_dnameLow==='second half') _halfKey='h2';
+        if(_halfKey&&ddur>0){
+          if(!window.LIVE_HALF_DATA[dkey]) window.LIVE_HALF_DATA[dkey]={h1:{},h2:{}};
+          window.LIVE_HALF_DATA[dkey][_halfKey][player]={
+            dur:ddur,td:dtd,hmld:dhmld,hsr:dhsr,sprint:dz6,maxSpd:dmaxSpd,
+            tdMin:parseFloat((dtd/ddur).toFixed(1)),hmldMin:parseFloat((dhmld/ddur).toFixed(1)),
+            sprintMin:parseFloat((dz6/ddur).toFixed(2)),z6Min:parseFloat((dz6/ddur).toFixed(2)),
+            hsrMin:parseFloat((dhsr/ddur).toFixed(2))
+          };
+        }
         /* slug: lowercase, alphanum+underscore, max 24 chars */
         var dslug=drillName.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'').substring(0,24);
         if(!drillMeta[dkey]) drillMeta[dkey]={};
@@ -4740,7 +4887,163 @@ function loadLiveData(){
       var badge=document.querySelector('.badge');
       if(badge) badge.textContent='Live · '+last8[7];
       try { updateAcwrStrip(); } catch(e){ console.warn('updateAcwrStrip post-load:', e); }
+      try { updateScatterAxes(); } catch(e){ console.warn('updateScatterAxes post-load:', e); }
+      try { updateScatterMatchDots(); } catch(e){ console.warn('updateScatterMatchDots post-load:', e); }
+      try { updateDecAccChart(); } catch(e){ console.warn('updateDecAccChart post-load:', e); }
+      try { renderFlagCards(); } catch(e){ console.warn('renderFlagCards post-load:', e); }
     });
+}
+
+/* ── Flagged player cards — rebuilt from LIVE_ACWR on every load ── */
+function _escHtml(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function _flagPosLabel(pos){
+  var p=(pos||'').toLowerCase();
+  if(p.indexOf('mid')>-1) return 'Middle 8';
+  if(p.indexOf('fwd')>-1||p.indexOf('forward')>-1) return 'Inside Forward';
+  if(p.indexOf('def')>-1) return 'Inside Defender';
+  return pos||'';
+}
+function _flagTrendLbl(acwr,arrow){
+  if(arrow==='↑') return acwr>=1.5?'Sharp rise':'Rising';
+  if(arrow==='↓') return acwr<=0.70?'Low load':'Settling';
+  return 'Stable';
+}
+function _flagAction(risk,acwr,arrow){
+  if(risk==='high'&&arrow==='↑') return 'Sharp ACWR spike — confirm session count. If legitimate, reduce next training volume significantly. Priority case MD−2 onwards.';
+  if(risk==='high') return 'ACWR ≥1.50 — reduce volume into match week. No additional sessions. Monitor response.';
+  if(risk==='caution'&&arrow==='↓') return 'Peaked above 1.50, now settling. Avoid load spike MD−2. Monitor response before clearing.';
+  if(risk==='caution') return 'ACWR ≥1.30 — elevated for consecutive weeks. Watch cumulative strain into match week.';
+  return 'Under-loaded relative to chronic base. Confirm availability. Do not push to full squad load without chronic rebuild period.';
+}
+function renderFlagCards(){
+  var container=document.getElementById('live-flags');
+  if(!container) return;
+  if(!Object.keys(LIVE_ACWR).length) return; /* keep baked cards if no live data */
+
+  /* Build sorted flag list */
+  var flagged=[];
+  Object.keys(LIVE_ACWR).forEach(function(key){
+    var rec=LIVE_ACWR[key];
+    if(!rec.acwr||rec.acwr<=0) return;
+    var risk=rec.acwr>=1.5?'high':rec.acwr>=1.3?'caution':rec.acwr<=0.70?'low':null;
+    if(!risk) return;
+    /* Arrow: ACWR>1.10 rising, <0.90 declining */
+    var arrow=rec.acwr>1.10?'↑':rec.acwr<0.90?'↓':'→';
+    /* Latest peak speed: scan LIVE_SESSION_DATA newest→oldest */
+    var peakSpd=null;
+    if(window.LIVE_SESSION_DATA){
+      var skeys=Object.keys(window.LIVE_SESSION_DATA).sort().reverse();
+      outer: for(var i=0;i<skeys.length;i++){
+        var rows=window.LIVE_SESSION_DATA[skeys[i]]||[];
+        for(var j=0;j<rows.length;j++){
+          if(_normPlayerName(rows[j].player)===key&&rows[j].maxSpd){
+            peakSpd=parseFloat((rows[j].maxSpd*3.6).toFixed(1));
+            break outer;
+          }
+        }
+      }
+    }
+    flagged.push({key:key,name:rec.name,pos:_flagPosLabel(rec.pos),
+      acwr:rec.acwr,acute:rec.acute,risk:risk,arrow:arrow,peakSpd:peakSpd});
+  });
+
+  var rOrd={high:0,caution:1,low:2};
+  flagged.sort(function(a,b){var d=rOrd[a.risk]-rOrd[b.risk];return d!==0?d:b.acwr-a.acwr;});
+
+  if(!flagged.length){
+    container.innerHTML='<div style="padding:16px;text-align:center;font-size:11px;color:var(--muted)">No players flagged — all ACWR within range</div>';
+    return;
+  }
+
+  var html='';
+  flagged.forEach(function(p){
+    var col=p.risk==='high'?'var(--red)':p.risk==='caution'?'var(--amber)':'var(--blue)';
+    var pillCls=p.risk==='high'?'p-red':p.risk==='caution'?'p-amber':'p-blue';
+    var pillLbl=p.risk==='high'?'High Risk':p.risk==='caution'?'Caution':'Under-Loaded';
+    var vCls=p.risk==='high'?'c-red':p.risk==='caution'?'c-amber':'c-blue';
+    html+='<div class="flag" style="border-left-color:'+col+'">'
+      +'<div class="flag-hdr"><div><div class="flag-name">'+_escHtml(p.name)+'</div>'
+      +'<div class="flag-pos">'+_escHtml(p.pos)+'</div></div>'
+      +'<span class="pill '+pillCls+'">'+pillLbl+'</span></div>'
+      +'<div class="flag-mets">'
+      +'<div class="fm"><div class="fm-lbl">HMLD ACWR</div><div class="fm-val '+vCls+'">'+p.acwr.toFixed(2)+' '+p.arrow+'</div></div>'
+      +'<div class="fm"><div class="fm-lbl">7d HMLD</div><div class="fm-val">'+(p.acute?Math.round(p.acute).toLocaleString()+' m':'—')+'</div></div>'
+      +'<div class="fm"><div class="fm-lbl">Peak Spd</div><div class="fm-val">'+(p.peakSpd?p.peakSpd+' km/h':'—')+'</div></div>'
+      +'<div class="fm"><div class="fm-lbl">Trend</div><div class="fm-val '+vCls+'">'+p.arrow+' '+_flagTrendLbl(p.acwr,p.arrow)+'</div></div>'
+      +'</div>'
+      +'<div class="flag-action">'+_flagAction(p.risk,p.acwr,p.arrow)+'</div>'
+      +'</div>';
+  });
+  container.innerHTML=html;
+}
+
+/* ── Dec:Acc trend chart — populate from real LIVE_SESSION_DATA ── */
+function updateDecAccChart(){
+  if(!window.LIVE_SESSION_DATA) return;
+  var sortedKeys=Object.keys(window.LIVE_SESSION_DATA).sort();
+  var hist8=sortedKeys.slice(-8);
+  if(!hist8.length) return;
+  var xPos=[45.0,112.1,179.3,246.4,313.6,380.7,447.9,515.0];
+  var MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  /* Per-session squad-avg Dec:Acc (training rows preferred; fall back to all) */
+  var daVals=[];
+  hist8.forEach(function(k){
+    var rows=window.LIVE_SESSION_DATA[k];
+    var trainRows=rows.filter(function(r){return r.matchType!=='Match';});
+    var useRows=trainRows.length?trainRows:rows;
+    var valid=useRows.filter(function(r){return (r.acc||0)>0;});
+    if(!valid.length){daVals.push(null);return;}
+    var avg=valid.reduce(function(a,r){return a+((r.dec||0)/(r.acc||1));},0)/valid.length;
+    daVals.push(parseFloat(avg.toFixed(3)));
+  });
+
+  /* Y scale: 1.0→y=43, 1.15→y=34.3; slope=58 SVG units per ratio unit */
+  function _daY(v){return Math.max(8,Math.min(78,43.0-(v-1.0)*58));}
+  function _daCol(v){return v>1.15?'#E24B4A':v>1.0?'#EF9F27':'#81C784';}
+
+  /* Reposition dots + polyline */
+  var pts=[];
+  for(var i=0;i<hist8.length;i++){
+    var v=daVals[i], x=xPos[i];
+    if(v===null){pts.push(x+',43.0');continue;}
+    var y=_daY(v);
+    pts.push(x+','+y.toFixed(1));
+    var dot=document.getElementById('da-dot-'+i);
+    if(dot){dot.setAttribute('cx',x);dot.setAttribute('cy',y.toFixed(1));dot.setAttribute('fill',_daCol(v));}
+  }
+  var daLine=document.getElementById('da-line');
+  if(daLine) daLine.setAttribute('points',pts.join(' '));
+
+  /* Update session date labels (text elements at y=93 in the containing SVG) */
+  var daSvg=document.getElementById('da-dot-0')?document.getElementById('da-dot-0').closest('svg'):null;
+  if(daSvg){
+    var dateLbls=Array.from(daSvg.querySelectorAll('text')).filter(function(t){return t.getAttribute('y')==='93';});
+    dateLbls.forEach(function(t,i){
+      if(i>=hist8.length) return;
+      var ks=hist8[i].slice(1);
+      var dy=parseInt(ks.slice(6,8)),mo=parseInt(ks.slice(4,6))-1;
+      t.textContent=dy+' '+MON[mo];
+    });
+  }
+
+  /* Summary box */
+  var last=null,prev=null;
+  for(var j=daVals.length-1;j>=0;j--){
+    if(daVals[j]!==null){if(last===null)last=daVals[j];else if(prev===null){prev=daVals[j];break;}}
+  }
+  if(last!==null){
+    var daEl=document.getElementById('da-val');
+    if(daEl){daEl.textContent=last.toFixed(2);daEl.style.color=_daCol(last);}
+    var tEl=document.getElementById('da-trend');
+    if(tEl&&prev!==null){
+      var diff=last-prev;
+      tEl.textContent=(diff>0?'+':'')+diff.toFixed(2)+' '+(Math.abs(diff)<0.005?'→':diff>0?'↑':'↓');
+      tEl.style.color=_daCol(last);
+    }
+    var nEl=document.getElementById('da-note');
+    if(nEl) nEl.textContent=last>1.15?'Dec load elevated — eccentric risk flagged':last>1.0?'Decel slightly dominant — monitor':'Deceleration load balanced';
+  }
 }
 
 /* ── ACWR strip: populate Sprint/min and HMLD/min current values ── */
@@ -4749,10 +5052,9 @@ function updateAcwrStrip(){
   var gfSess=document.getElementById('gf-session');
   var sessKey=gfSess?gfSess.value:(typeof G!=='undefined'?G.session:null);
   var liveRows=(window.LIVE_SESSION_DATA&&sessKey)?window.LIVE_SESSION_DATA[sessKey]||[]:[];
-  var sessDb=(typeof SESSION_DB!=='undefined'&&sessKey)?SESSION_DB[sessKey]:{};
-  var isMatch=sessDb&&sessDb.typeLabel&&sessDb.typeLabel.indexOf('Match')>-1;
-  /* For match sessions filter to match rows only (excludes short pre-match warmups) */
-  var rows=isMatch?liveRows.filter(function(r){return r.matchType==='Match';}):liveRows;
+  /* Filter to match rows if any exist (handles Championship, Challenge Match, etc.) */
+  var hasMatchRows=liveRows.some(function(r){return r.matchType==='Match';});
+  var rows=hasMatchRows?liveRows.filter(function(r){return r.matchType==='Match';}):liveRows;
   if(!rows.length) rows=liveRows;
   var avgZ6Min, avgHmldMin;
   if(rows.length){
@@ -4776,7 +5078,7 @@ function updateAcwrStrip(){
   if(acwrVals.length){
     var avgChronic=acwrVals.reduce(function(a,p){return a+p.chronic;},0)/acwrVals.length;
     mdRef=avgChronic/225;   /* HMLD/min: chronic weekly HMLD ÷ 225 session-min */
-    maRef=mdRef*0.35;       /* Sprint/min ≈ 35% of HMLD in training */
+    maRef=mdRef*0.10;       /* Sprint Distance/min ≈ 10% of HMLD (high-threshold zone) */
     /* Sync SVG reference line labels to computed values */
     var mdLbl=document.getElementById('md-ref-lbl');
     var maLbl=document.getElementById('ma-ref-lbl');
@@ -4799,6 +5101,95 @@ function updateAcwrStrip(){
   var mdCol=mdPctVal>=100?'#81C784':mdPctVal>=85?'#EF9F27':'#E24B4A';
   if(mdEl) mdEl.style.color=mdCol;
   if(mdPct){ mdPct.textContent=mdPctVal+'%'; mdPct.style.color=mdCol; }
+
+  /* ── Populate historical sparklines from LIVE_SESSION_DATA ─────── */
+  if(!window.LIVE_SESSION_DATA) return;
+  var allSessKeys=Object.keys(window.LIVE_SESSION_DATA).sort(); /* dYYYYMMDD sorts lexicographically = chronologically */
+  var hist8=allSessKeys.slice(-8);
+  if(!hist8.length) return;
+  var xPos=[10,87.1,164.3,241.4,318.6,395.7,472.9,550];
+
+  /* Per-session team averages (match rows only when any exist) */
+  var maHist=[], mdHist=[];
+  hist8.forEach(function(k){
+    var rs=window.LIVE_SESSION_DATA[k];
+    var hm=rs.some(function(r){return r.matchType==='Match';});
+    var fr=hm?rs.filter(function(r){return r.matchType==='Match';}):rs;
+    if(!fr.length) fr=rs;
+    var nn=fr.length;
+    maHist.push(nn?fr.reduce(function(a,r){return a+(r.sprintMin||0);},0)/nn:0);
+    mdHist.push(nn?fr.reduce(function(a,r){return a+(r.hmldMin||0);},0)/nn:0);
+  });
+
+  /* Scale function: data value → SVG y coordinate (higher value = lower y) */
+  function _scaleY(vals,ref,yTop,yBot){
+    /* Include reference line in range so it always fits */
+    var allV=vals.concat(ref>0?[ref]:[]);
+    var mn=Math.min.apply(null,allV), mx=Math.max.apply(null,allV);
+    var pad=(mx-mn)*0.25||0.5;
+    var lo=mn-pad, hi=mx+pad;
+    return function(v){return yTop+(yBot-yTop)*(1-(v-lo)/(hi-lo));};
+  }
+
+  /* Colour helper */
+  function _col(v,ref){var p=ref>0?v/ref*100:100;return p>=100?'#81C784':p>=85?'#EF9F27':'#E24B4A';}
+
+  /* Update one sparkline set */
+  function _updateSpk(pfx,vals,ref,yTop,yBot){
+    if(!vals.length) return;
+    var sc=_scaleY(vals,ref,yTop,yBot);
+    var pts=[];
+    for(var i=0;i<hist8.length;i++){
+      var x=xPos[i]||xPos[xPos.length-1], v=vals[i]||0, y=sc(v);
+      pts.push(x+','+y.toFixed(1));
+      var dot=document.getElementById(pfx+'-dot-'+i);
+      if(dot){dot.setAttribute('cx',x);dot.setAttribute('cy',y.toFixed(1));dot.setAttribute('r',i===hist8.length-1?'5':'4');dot.setAttribute('fill',_col(v,ref));}
+      var lbl=document.getElementById(pfx+'-lbl-'+i);
+      if(lbl){lbl.setAttribute('x',x);lbl.setAttribute('y',(y-5).toFixed(1));lbl.textContent=v.toFixed(1);lbl.setAttribute('fill',_col(v,ref));}
+    }
+    var line=document.getElementById(pfx+'-line');
+    if(line) line.setAttribute('points',pts.join(' '));
+    /* Reposition reference line to correct y */
+    if(ref>0){
+      var ry=sc(ref);
+      var rl=document.getElementById(pfx+'-ref');
+      if(rl){rl.setAttribute('y1',ry.toFixed(1));rl.setAttribute('y2',ry.toFixed(1));}
+      var rt=document.getElementById(pfx+'-ref-lbl');
+      if(rt) rt.setAttribute('y',(ry+4).toFixed(1));
+    }
+  }
+
+  /* ma = Sprint/min (viewBox 0 0 560 62 → usable y 8–55) */
+  _updateSpk('ma',maHist,maRef,8,55);
+  /* md = HMLD/min  (viewBox 0 0 560 74 → usable y 8–60) */
+  _updateSpk('md',mdHist,mdRef,8,60);
+
+  /* mv = Max V (km/h) — squad avg of per-player peak speed per session */
+  var mvHist=[],mvRef=0;
+  hist8.forEach(function(k){
+    var rs=window.LIVE_SESSION_DATA[k];
+    if(!rs||!rs.length){mvHist.push(0);return;}
+    /* Use match rows when present, else all rows */
+    var hmr=rs.some(function(r){return r.matchType==='Match';});
+    var mvRows=hmr?rs.filter(function(r){return r.matchType==='Match';}):rs;
+    if(!mvRows.length) mvRows=rs;
+    var avg=mvRows.reduce(function(a,r){return a+(r.maxSpd||0)*3.6;},0)/mvRows.length;
+    mvHist.push(parseFloat(avg.toFixed(1)));
+  });
+  if(mvHist.filter(function(v){return v>0;}).length)
+    mvRef=mvHist.reduce(function(a,v){return a+v;},0)/mvHist.length;
+  _updateSpk('mv',mvHist,mvRef,8,55);
+  /* Update mv-val / mv-pct for the currently selected session */
+  var mvSessRows=liveRows.length?liveRows:[];
+  if(mvSessRows.length){
+    var mvFilt=hasMatchRows?mvSessRows.filter(function(r){return r.matchType==='Match';}):mvSessRows;
+    if(!mvFilt.length) mvFilt=mvSessRows;
+    var mvAvg=mvFilt.reduce(function(a,r){return a+(r.maxSpd||0)*3.6;},0)/mvFilt.length;
+    var mvEl=document.getElementById('mv-val');
+    if(mvEl){mvEl.textContent=mvAvg.toFixed(1);if(mvRef>0)mvEl.style.color=_col(mvAvg,mvRef);}
+    var mvPctEl=document.getElementById('mv-pct');
+    if(mvPctEl&&mvRef>0){var mp=Math.round(mvAvg/mvRef*100);mvPctEl.textContent=mp+'%';mvPctEl.style.color=_col(mvAvg,mvRef);}
+  }
 }
 
 /* ── Immediate unconditional render ──────────────────────────── */
@@ -4919,8 +5310,9 @@ function renderFullTable(){
 
   if(useLive && sessKey && window.LIVE_SESSION_DATA[sessKey]){
     var rawRows = window.LIVE_SESSION_DATA[sessKey];
-    /* For match sessions exclude short pre-match warmup rows */
-    var rows = isMatch ? rawRows.filter(function(r){return r.matchType==='Match';}) : rawRows;
+    /* Filter to match rows if any exist (handles Championship, Challenge Match, etc.) */
+    var hasMatchRowsFT = rawRows.some(function(r){return r.matchType==='Match';});
+    var rows = hasMatchRowsFT ? rawRows.filter(function(r){return r.matchType==='Match';}) : rawRows;
     if(!rows.length) rows = rawRows;
 
     /* Apply filters */
