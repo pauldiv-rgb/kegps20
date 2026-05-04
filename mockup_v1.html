@@ -4606,19 +4606,42 @@ function loadLiveData(){
         var v=_parseCSVLine(lines[i]);
         var dur=parseFloat(v[7])||0, hmld=parseFloat(v[13])||0;
         var spd=parseFloat(v[12])||0, ms=parseFloat(v[14])||0;
+        var hsr=parseFloat(v[10])||0;
         all.push({dateStr:v[0],date:_parseDate(v[0]),player:v[1],pos:v[3],sessionType:v[4],matchType:v[6],
-          dur:dur,totalDist:parseFloat(v[8])||0,hmld:hmld,hsr:parseFloat(v[10])||0,
-          sprintDist:spd,maxSpdKmh:parseFloat((ms*3.6).toFixed(1)),
+          dur:dur,totalDist:parseFloat(v[8])||0,hmld:hmld,hsr:hsr,
+          sprintDist:spd,maxSpd:ms,maxSpdKmh:parseFloat((ms*3.6).toFixed(1)),
           accEvents:parseFloat(v[15])||0,decEvents:parseFloat(v[16])||0,
           speedZ4:parseFloat(v[22])||0,speedZ5:parseFloat(v[23])||0,
           hmldMin:dur>0?parseFloat((hmld/dur).toFixed(1)):0,
           sprintMin:dur>0?parseFloat((spd/dur).toFixed(2)):0,
+          hsrMin:dur>0?parseFloat((hsr/dur).toFixed(1)):0,
           tdMin:parseFloat(v[9])||0});
       }
       all.sort(function(a,b){return a.date-b.date;});
       var dSet={},allDates=[];
       all.forEach(function(s){if(!dSet[s.dateStr]){dSet[s.dateStr]=true;allDates.push(s.dateStr);}});
       var last8=allDates.slice(-8);
+      /* ── Store per-session player rows globally for live squad stats ── */
+      window.LIVE_SESSION_DATA={};
+      var _posNorm=function(p){var pl=(p||'').toLowerCase();return pl.indexOf('middle')>-1?'mid':pl.indexOf('forward')>-1?'fwd':pl.indexOf('defend')>-1?'def':'mid';};
+      all.forEach(function(s){
+        var k=_dateKey(s.dateStr);
+        if(!window.LIVE_SESSION_DATA[k]) window.LIVE_SESSION_DATA[k]=[];
+        window.LIVE_SESSION_DATA[k].push({
+          player:s.player,pos:_posNorm(s.pos),matchType:s.matchType,
+          dur:s.dur,td:Math.round(s.totalDist),hmld:Math.round(s.hmld),
+          hsr:Math.round(s.hsr),sprint:Math.round(s.sprintDist),maxSpd:s.maxSpd,
+          acc:Math.round(s.accEvents),dec:Math.round(s.decEvents),
+          tdMin:s.tdMin,hmldMin:s.hmldMin,sprintMin:s.sprintMin,hsrMin:s.hsrMin
+        });
+      });
+      /* Reverse-map PLAYER_META names for status lookup */
+      window._PM_NAME_MAP={};
+      if(typeof PLAYER_META!=='undefined'){
+        Object.keys(PLAYER_META).forEach(function(k){
+          window._PM_NAME_MAP[_normPlayerName(PLAYER_META[k].fullName)]=k;
+        });
+      }
       var pMap={};
       all.forEach(function(s){
         var k=_slug(s.player);
@@ -4721,11 +4744,27 @@ function loadLiveData(){
 
 /* ── ACWR strip: populate Sprint/min and HMLD/min current values ── */
 function updateAcwrStrip(){
-  var players=Object.values(LB_DATA.sess||{}).filter(function(p){ return p.hmldMin!==undefined; });
-  if(!players.length) return;
-  var n=players.length;
-  var avgZ6Min=players.reduce(function(a,p){ return a+(p.z6Min||0); },0)/n;
-  var avgHmldMin=players.reduce(function(a,p){ return a+(p.hmldMin||0); },0)/n;
+  /* Use live session data if available; fall back to LB_DATA.sess */
+  var gfSess=document.getElementById('gf-session');
+  var sessKey=gfSess?gfSess.value:(typeof G!=='undefined'?G.session:null);
+  var liveRows=(window.LIVE_SESSION_DATA&&sessKey)?window.LIVE_SESSION_DATA[sessKey]||[]:[];
+  var sessDb=(typeof SESSION_DB!=='undefined'&&sessKey)?SESSION_DB[sessKey]:{};
+  var isMatch=sessDb&&sessDb.typeLabel&&sessDb.typeLabel.indexOf('Match')>-1;
+  /* For match sessions filter to match rows only (excludes short pre-match warmups) */
+  var rows=isMatch?liveRows.filter(function(r){return r.matchType==='Match';}):liveRows;
+  if(!rows.length) rows=liveRows;
+  var avgZ6Min, avgHmldMin;
+  if(rows.length){
+    var n=rows.length;
+    avgZ6Min=rows.reduce(function(a,r){return a+(r.sprintMin||0);},0)/n;
+    avgHmldMin=rows.reduce(function(a,r){return a+(r.hmldMin||0);},0)/n;
+  } else {
+    var fbPlayers=Object.values(LB_DATA.sess||{}).filter(function(p){return p.hmldMin!==undefined;});
+    if(!fbPlayers.length) return;
+    var n2=fbPlayers.length;
+    avgZ6Min=fbPlayers.reduce(function(a,p){return a+(p.z6Min||0);},0)/n2;
+    avgHmldMin=fbPlayers.reduce(function(a,p){return a+(p.hmldMin||0);},0)/n2;
+  }
   /* Compute reference values from LIVE_ACWR chronic (28d avg weekly HMLD).
      Assumes 3 sessions/week × 75 min = 225 session-minutes/week.
      Sprint/min ref ≈ 35% of HMLD/min (typical training session ratio).
@@ -4867,19 +4906,100 @@ function renderFullTable(){
   var note  = document.getElementById('full-table-note');
   if(!tbody) return;
   var drill  = (document.getElementById('lb-drill')||{value:'sess'}).value||'sess';
-  var pos    = (document.getElementById('ft-pos')||{value:'all'}).value||'all';
-  var status = (document.getElementById('ft-status')||{value:'all'}).value||'all';
+  var posF   = (document.getElementById('ft-pos')||{value:'all'}).value||'all';
+  var statusF= (document.getElementById('ft-status')||{value:'all'}).value||'all';
   var search = ((document.getElementById('ft-search')||{value:''}).value||'').toLowerCase().trim();
-  var ds    = LB_DATA[drill] || LB_DATA.sess;
+
+  /* ── Use LIVE_SESSION_DATA for session-level view ── */
+  var useLive = drill==='sess' && window.LIVE_SESSION_DATA;
+  var sessKey = typeof G!=='undefined' ? G.session : ((document.getElementById('gf-session')||{}).value||'');
+  var sessDb  = (typeof SESSION_DB!=='undefined'&&sessKey) ? SESSION_DB[sessKey]:{};
+  var isMatch = sessDb&&sessDb.typeLabel&&sessDb.typeLabel.indexOf('Match')>-1;
+
+  if(useLive && sessKey && window.LIVE_SESSION_DATA[sessKey]){
+    var rawRows = window.LIVE_SESSION_DATA[sessKey];
+    /* For match sessions exclude short pre-match warmup rows */
+    var rows = isMatch ? rawRows.filter(function(r){return r.matchType==='Match';}) : rawRows;
+    if(!rows.length) rows = rawRows;
+
+    /* Apply filters */
+    rows = rows.filter(function(r){
+      if(posF!=='all' && r.pos!==posF) return false;
+      if(search && r.player.toLowerCase().indexOf(search)===-1) return false;
+      /* Status filter: try to match from PLAYER_META */
+      if(statusF!=='all'){
+        var pmKey=window._PM_NAME_MAP?window._PM_NAME_MAP[_normPlayerName(r.player)]:null;
+        var pmStatus=pmKey&&PLAYER_META[pmKey]?PLAYER_META[pmKey].status:'full';
+        if(pmStatus!==statusF) return false;
+      }
+      return true;
+    });
+
+    /* Compute session total HMLD for hmldPct */
+    var totalHmld = rows.reduce(function(a,r){return a+r.hmld;},0)||1;
+
+    /* Position averages */
+    var posG={};
+    rows.forEach(function(r){if(!posG[r.pos])posG[r.pos]=[];posG[r.pos].push(r);});
+    function posAvgL(p,k){var g=posG[p];if(!g||!g.length)return 0;return g.reduce(function(a,r){return a+r[k];},0)/g.length;}
+
+    /* Sort by HMLD descending */
+    rows.sort(function(a,b){return b.hmld-a.hmld;});
+
+    var html='';
+    rows.forEach(function(r){
+      var col=POS_COL[r.pos]||'#aaa';
+      var pmKey=window._PM_NAME_MAP?window._PM_NAME_MAP[_normPlayerName(r.player)]:null;
+      var pm=pmKey?PLAYER_META[pmKey]:null;
+      var stCls=pm?(pm.status==='rtp'?'c-blue':pm.status==='mod'?'c-amber':''):'';
+      var stLbl=pm?(pm.status==='rtp'?' ⊕':pm.status==='mod'?' ◐':''):'';
+      var pAvgHmld=posAvgL(r.pos,'hmld');
+      var delta=pAvgHmld?((r.hmld-pAvgHmld)/pAvgHmld*100):0;
+      var dSign=delta>=0?'+':'';
+      var pillCls=delta>5?'p-green':delta<-5?'p-red':'p-amber';
+      var hmldCls=r.hmld>pAvgHmld*1.1?'c-green':r.hmld<pAvgHmld*0.9?'c-red':'';
+      var hmldPct=(r.hmld/totalHmld*100);
+      var hmldPctCls=hmldPct>=15?'c-green':hmldPct>=12?'c-amber':'c-red';
+      var decAcc=r.acc?(r.dec/r.acc).toFixed(2):'—';
+      var decAccCls=parseFloat(decAcc)>1.1?'c-amber':'c-green';
+      /* ACWR from LIVE_ACWR */
+      var acwrKey=_normPlayerName(r.player);
+      var acwrVal=typeof LIVE_ACWR!=='undefined'&&LIVE_ACWR[acwrKey]?LIVE_ACWR[acwrKey].acwr:null;
+      var acwrStr=acwrVal!==null?acwrVal.toFixed(2):'—';
+      var acwrCls=acwrVal!==null?(acwrVal>1.5?'c-red':acwrVal>1.3?'c-amber':acwrVal<0.8?'c-blue':'c-green'):'';
+      html+='<tr>'
+        +'<td style="font-weight:600"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+col+';margin-right:6px;vertical-align:middle"></span>'+r.player+'<span class="'+stCls+'">'+stLbl+'</span></td>'
+        +'<td style="color:'+col+'">'+r.pos.toUpperCase()+'</td>'
+        +'<td class="'+acwrCls+'" style="font-size:9px">'+acwrStr+'</td>'
+        +'<td class="'+hmldCls+'"><strong>'+r.hmld.toLocaleString()+'</strong></td>'
+        +'<td>'+r.hmldMin.toFixed(1)+'</td>'
+        +'<td class="'+hmldPctCls+'">'+hmldPct.toFixed(1)+'%</td>'
+        +'<td>'+r.sprint.toLocaleString()+'</td>'
+        +'<td>'+r.td.toLocaleString()+'</td>'
+        +'<td>'+r.tdMin.toFixed(1)+'</td>'
+        +'<td>'+r.hsr.toLocaleString()+'</td>'
+        +'<td>'+r.acc+'</td>'
+        +'<td>'+r.dec+'</td>'
+        +'<td class="'+decAccCls+'">'+decAcc+'</td>'
+        +'<td>'+r.maxSpd.toFixed(2)+'</td>'
+        +'<td><span class="pill '+pillCls+'">'+dSign+delta.toFixed(0)+'%</span></td>'
+        +'</tr>';
+    });
+    tbody.innerHTML=html||'<tr><td colspan="15" style="color:var(--muted);padding:12px;text-align:center">No players match filter</td></tr>';
+    if(note) note.textContent='Live GPS data · '+rows.length+' players · '+sessDb.typeLabel+(isMatch?' (match rows only)':'');
+    return;
+  }
+
+  /* ── Fallback: LB_DATA (mock / drill-level) ── */
+  var ds = LB_DATA[drill] || LB_DATA.sess;
   var players = Object.entries(ds).filter(function(e){
     var pm = PLAYER_META[e[0]];
     if(!pm) return false;
-    if(pos !== 'all' && e[1].pos !== pos) return false;
-    if(status !== 'all' && pm.status !== status) return false;
+    if(posF !== 'all' && e[1].pos !== posF) return false;
+    if(statusF !== 'all' && pm.status !== statusF) return false;
     if(search && pm.fullName.toLowerCase().indexOf(search) === -1) return false;
     return true;
   });
-  /* Position averages */
   var posGroups = {};
   players.forEach(function(e){
     var p = e[1]; if(!posGroups[p.pos]) posGroups[p.pos]=[];
@@ -4889,7 +5009,6 @@ function renderFullTable(){
     var g = posGroups[pos]; if(!g||!g.length) return 0;
     return g.reduce(function(a,b){return a+b[key];},0)/g.length;
   }
-  /* Sort by HMLD descending */
   players.sort(function(a,b){return b[1].hmld - a[1].hmld;});
   var html = '';
   players.forEach(function(entry){
@@ -4899,7 +5018,6 @@ function renderFullTable(){
     var pAvgHmld = posAvg(p.pos,'hmld');
     var delta = pAvgHmld ? ((p.hmld - pAvgHmld)/pAvgHmld*100) : 0;
     var dSign = delta>=0?'+':'';
-    var dCls = delta>5?'c-green':delta<-5?'c-red':'c-amber';
     var pillCls = delta>5?'p-green':delta<-5?'p-red':'p-amber';
     var decAcc = p.acc ? (p.dec/p.acc).toFixed(2) : '—';
     var decAccCls = parseFloat(decAcc)>1.1?'c-amber':'c-green';
