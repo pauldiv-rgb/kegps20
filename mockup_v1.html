@@ -3000,6 +3000,8 @@ function applyFilters(){
     var visible=pPass&&aPass&&dPass&&sPass&&dtPass;
     dot.style.display=visible?'block':'none';
   });
+  /* Keep drill bar avg in sync with drill filter */
+  renderDrillBars();
 }
 
 /* ── Init on load ────────────────────────────────────────────── */
@@ -3712,7 +3714,7 @@ function renderDrillBars(){
   var showAvg = document.getElementById('db-avgline').checked;
   var unit = METRIC_UNITS[metric] || '';
   var lbl = METRIC_LABELS[metric] || metric;
-  var BAR_COLORS = {wu:'#5a9be8',ssg:'#3dbd84',poss:'#9b77dd',cg:'#e08844',swu:'#D4A830',dk:'#3AABB8',ov1:'#D44E7A',ov4:'#5DAD5D',pos:'#8877CC',hup:'#D49040',h1:'#26C6DA',h2:'#7E57C2'};
+  var BAR_COLORS = {wu:'#5a9be8',ssg:'#3dbd84',poss:'#9b77dd',cg:'#e08844',swu:'#D4A830',dk:'#3AABB8',ov1:'#D44E7A',ov4:'#5DAD5D',pos:'#8877CC',hup:'#D49040',h1:'#26C6Da',h2:'#7E57C2'};
   var PAL_BAR  = ['#5a9be8','#3dbd84','#9b77dd','#e08844','#D4A830','#3AABB8','#D44E7A','#5DAD5D','#26C6DA','#7E57C2'];
   /* Use LB_DATA for position/player filtered values when a filter is active */
   var useFiltered = (G.pos !== 'all' || G.player !== 'all');
@@ -3728,17 +3730,39 @@ function renderDrillBars(){
     var sum = players.reduce(function(a,p){ return a + (p[metric]||0); }, 0);
     return sum / players.length;
   }
-  /* Collect drill/half values */
+  /* Classify drill by name for filter matching */
+  function getDrillCat(name){
+    var n=(name||'').toLowerCase();
+    if(/warm|s&c|strength.*cond/.test(n)) return 'wu';
+    if(/small.?sided|ssg/.test(n)) return 'ssg';
+    if(/possess/.test(n)) return 'poss';
+    if(/condition/.test(n)) return 'cg';
+    return 'other';
+  }
+  /* Current drill filter from scatter panel */
+  var drillFilter=getVals('ms-drill-panel');
+  var filterAll=(drillFilter[0]==='all'||drillFilter[0]==='session');
+  /* Collect drill/half values — include dur for weighted avg */
   var vals = Object.keys(drillData)
     .filter(function(dk){ return drillData[dk] && (drillData[dk][metric] !== undefined); })
     .map(function(dk, i){
       var v = drillData[dk][metric]||0;
       if(useFiltered){ var fv=getLbDrillVal(dk); if(fv!==null) v=fv; }
-      return {dk:dk, v:v, name:drillData[dk].name||dk, i:i};
+      var name=drillData[dk].name||dk;
+      var dur=drillData[dk].dur||0;
+      var cat=getDrillCat(name);
+      var active=filterAll||(drillFilter.indexOf(cat)>-1);
+      return {dk:dk, v:v, dur:dur, name:name, i:i, cat:cat, active:active};
     });
   if(!vals.length){el.innerHTML='<div style="padding:16px;font-size:10px;color:var(--muted)">Metric not available</div>';return;}
+  /* Avg uses active drills only; duration-weighted */
+  var avgVals=(filterAll?vals:vals.filter(function(x){return x.active;}));
+  if(!avgVals.length) avgVals=vals;
+  var totalDur=avgVals.reduce(function(a,b){return a+(b.dur||0);},0);
+  var avgV=totalDur>0
+    ?avgVals.reduce(function(a,b){return a+b.v*(b.dur||0);},0)/totalDur
+    :avgVals.reduce(function(a,b){return a+b.v;},0)/avgVals.length;
   var maxV = Math.max.apply(null, vals.map(function(x){return x.v;}));
-  var avgV = vals.reduce(function(a,b){return a+b.v;},0)/vals.length;
   maxV = maxV * 1.12; /* headroom */
   /* Build HTML bar chart */
   var html = '<div style="display:flex;align-items:flex-end;gap:6px;height:130px;position:relative;padding-top:16px">';
@@ -3753,9 +3777,10 @@ function renderDrillBars(){
   vals.forEach(function(item){
     var pct = (item.v/maxV)*100;
     var col = BAR_COLORS[item.dk] || PAL_BAR[item.i % PAL_BAR.length];
+    var opacity=item.active?'.85':'.22';
     html += '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;position:relative">'
-      +'<div style="font-size:9px;font-weight:700;color:var(--text);margin-bottom:3px;position:relative;z-index:1">'+fmtMetric(item.v,metric)+'</div>'
-      +'<div style="width:100%;background:'+col+';border-radius:4px 4px 0 0;height:'+pct.toFixed(1)+'%;min-height:4px;opacity:.85;position:relative;z-index:1"></div>'
+      +'<div style="font-size:9px;font-weight:700;color:'+(item.active?'var(--text)':'var(--dim)')+';margin-bottom:3px;position:relative;z-index:1">'+fmtMetric(item.v,metric)+'</div>'
+      +'<div style="width:100%;background:'+col+';border-radius:4px 4px 0 0;height:'+pct.toFixed(1)+'%;min-height:4px;opacity:'+opacity+';position:relative;z-index:1"></div>'
       +'</div>';
   });
   html += '</div>';
@@ -3763,18 +3788,20 @@ function renderDrillBars(){
   html += '<div style="display:flex;gap:6px;margin-top:4px">';
   vals.forEach(function(item){
     var col = BAR_COLORS[item.dk] || PAL_BAR[item.i % PAL_BAR.length];
-    /* Abbreviate name to ~10 chars for narrow bars */
     var nm = item.name.length > 12 ? item.name.substring(0,11)+'…' : item.name;
-    html += '<div style="flex:1;text-align:center;font-size:8.5px;color:'+col+';font-weight:600;overflow:hidden;white-space:nowraw;text-overflow:ellipsis">'+nm+'</div>';
+    html += '<div style="flex:1;text-align:center;font-size:8.5px;color:'+(item.active?col:'var(--dim)')+';font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">'+nm+'</div>';
   });
   html += '</div>';
-  /* Units */
+  /* Units + filter context note */
   var filterNote = '';
   if(G.player !== 'all' && LB_DATA.sess[G.player]){
     filterNote = ' · ' + LB_DATA.sess[G.player].n;
   } else if(G.pos !== 'all'){
     var POS_NAMES = {mid:'Middle 8', fwd:'Inside Fwd', def:'Inside Def'};
     filterNote = ' · ' + (POS_NAMES[G.pos]||G.pos) + ' avg';
+  }
+  if(!filterAll && avgVals.length < vals.length){
+    filterNote += ' · avg: filtered drills';
   }
   html += '<div style="font-size:8.5px;color:var(--muted);margin-top:4px;text-align:right">'+lbl+' ('+unit+')'+filterNote+'</div>';
   el.innerHTML = html;
