@@ -2950,8 +2950,9 @@ function applyFilters(){
     }
 
     /* ── Activity ── */
+    /* When a date is selected, bypass activity filter — dateActClasses handles it. */
     var aPass=false;
-    if(activity[0]==='all'){
+    if(activity[0]==='all' || dateActClasses!==null){
       aPass=true;
     } else {
       if(activity.indexOf('training')>-1&&cls.contains('sc-sess-dot')) aPass=true;
