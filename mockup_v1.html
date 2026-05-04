@@ -4726,9 +4726,23 @@ function updateAcwrStrip(){
   var n=players.length;
   var avgZ6Min=players.reduce(function(a,p){ return a+(p.z6Min||0); },0)/n;
   var avgHmldMin=players.reduce(function(a,p){ return a+(p.hmldMin||0); },0)/n;
-  /* Reference values baked into SVG labels */
-  var maRef=parseFloat(((document.getElementById('ma-ref-lbl')||{}).textContent)||'3.25')||3.25;
+  /* Compute reference values from LIVE_ACWR chronic (28d avg weekly HMLD).
+     Assumes 3 sessions/week × 75 min = 225 session-minutes/week.
+     Sprint/min ref ≈ 35% of HMLD/min (typical training session ratio).
+     Falls back to baked SVG labels if LIVE_ACWR not yet loaded. */
   var mdRef=parseFloat(((document.getElementById('md-ref-lbl')||{}).textContent)||'3.52')||3.52;
+  var maRef=parseFloat(((document.getElementById('ma-ref-lbl')||{}).textContent)||'3.25')||3.25;
+  var acwrVals=Object.values(typeof LIVE_ACWR!=='undefined'?LIVE_ACWR:{}).filter(function(p){return p.chronic>0;});
+  if(acwrVals.length){
+    var avgChronic=acwrVals.reduce(function(a,p){return a+p.chronic;},0)/acwrVals.length;
+    mdRef=avgChronic/225;   /* HMLD/min: chronic weekly HMLD ÷ 225 session-min */
+    maRef=mdRef*0.35;       /* Sprint/min ≈ 35% of HMLD in training */
+    /* Sync SVG reference line labels to computed values */
+    var mdLbl=document.getElementById('md-ref-lbl');
+    var maLbl=document.getElementById('ma-ref-lbl');
+    if(mdLbl) mdLbl.textContent=mdRef.toFixed(2);
+    if(maLbl) maLbl.textContent=maRef.toFixed(2);
+  }
   /* Sprint/min */
   var maEl=document.getElementById('ma-val');
   var maPct=document.getElementById('ma-pct');
