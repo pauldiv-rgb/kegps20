@@ -4693,6 +4693,19 @@ function loadLiveData(){
         m.playerCount=m.count;
       });
       _rebuildSessionDropdowns(allDates,sessionMeta,drillMeta);
+      /* Backfill matchProx for any SESSION_DB entries still null (e.g. pre-built mock sessions) */
+      if(window._LIVE_ALL_MATCH_DATES&&window._LIVE_ALL_MATCH_DATES.length){
+        Object.keys(SESSION_DB).forEach(function(k){
+          if(SESSION_DB[k].matchProx!==null&&SESSION_DB[k].matchProx!==undefined) return;
+          var ks=k.slice(1); /* e.g. '20260429' */
+          var yr=parseInt(ks.slice(0,4)),mo=parseInt(ks.slice(4,6))-1,dy=parseInt(ks.slice(6,8));
+          var sd=new Date(yr,mo,dy);
+          var allMD=window._LIVE_ALL_MATCH_DATES, bd=Infinity;
+          for(var i=0;i<allMD.length;i++){var df=(sd-allMD[i])/86400000;if(Math.abs(df)<Math.abs(bd))bd=df;}
+          var dr=Math.round(bd);
+          SESSION_DB[k].matchProx=dr===0?'MD':dr>0?'MD+'+dr:'MD−'+Math.abs(dr);
+        });
+      }
       var badge=document.querySelector('.badge');
       if(badge) badge.textContent='Live · '+last8[7];
       try { updateAcwrStrip(); } catch(e){ console.warn('updateAcwrStrip post-load:', e); }
