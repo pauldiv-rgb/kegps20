@@ -2269,7 +2269,7 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
     <!-- [3] SQUAD DOT PLOT -->
   <div class="dotplot">
     <div class="sec-label" style="margin-bottom:14px">[3] Squad ACWR distribution — position grouped</div>
-    <svg width="100%" height="200" viewBox="0 0 900 200" style="overflow:visible">
+    <svg id="dotplot-svg" width="100%" height="200" viewBox="0 0 900 200" style="overflow:visible">
       <!-- Zone bands -->
       <rect x="0" y="20" width="900" height="160" fill="rgba(76,175,80,0.06)" rx="4"/>
       <!-- High risk zone (>1.5 = right 20%) -->
@@ -2337,27 +2337,27 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
   <div class="cards c4">
     <div class="card">
       <div class="card-lbl">Team Avg 7d TD</div>
-      <div class="card-val c-teal">17,840 m</div>
-      <div class="card-sub">vs prior week: 16,210 m</div>
-      <div class="card-ind c-green">↑ +10.1% week-on-week</div>
+      <div class="card-val c-teal" id="p2-7dtd-val">—</div>
+      <div class="card-sub" id="p2-7dtd-sub">7-day total distance · team avg</div>
+      <div class="card-ind c-green" id="p2-7dtd-ind">loading…</div>
     </div>
     <div class="card">
       <div class="card-lbl">Sessions Delivered</div>
-      <div class="card-val">3 / 3</div>
-      <div class="card-sub">Planned: 3 · all delivered</div>
-      <div class="card-ind c-green">↑ Full week</div>
+      <div class="card-val" id="p2-sess-val">—</div>
+      <div class="card-sub">Training sessions in 7-day window</div>
+      <div class="card-ind c-green">↑ from live data</div>
     </div>
     <div class="card">
       <div class="card-lbl">Avg HMLD / Session</div>
-      <div class="card-val c-teal">362 m</div>
-      <div class="card-sub">Prior week: 341 m</div>
-      <div class="card-ind c-green">↑ +6.2%</div>
+      <div class="card-val c-teal" id="p2-hmld-val">—</div>
+      <div class="card-sub" id="p2-hmld-sub">Avg HMLD per training session</div>
+      <div class="card-ind c-green">↑ from live data</div>
     </div>
     <div class="card">
       <div class="card-lbl">Avg 7d HSR</div>
-      <div class="card-val">840 m</div>
-      <div class="card-sub">Prior week: 780 m</div>
-      <div class="card-ind c-green">↑ +7.7%</div>
+      <div class="card-val" id="p2-hsr-val">—</div>
+      <div class="card-sub">7-day accumulated HSR · team avg</div>
+      <div class="card-ind c-green" id="p2-hsr-ind">loading…</div>
     </div>
   </div>
 
@@ -2365,53 +2365,36 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
   <div class="bench-wrap">
     <div class="sec-label" style="margin-bottom:14px">[2] 7d Total Distance vs positional benchmark · sorted by % achieved</div>
     <div style="font-size:9px;color:var(--muted);margin-bottom:16px">Benchmark line = position group average from team GPS data this season · green ≥90% · amber 70–89% · red &lt;70% · teal &gt;110%</div>
-
-    <div class="b-group-lbl" style="margin-top:0;padding-top:0;border-top:none">Midfielders · benchmark 20,400 m</div>
-    <div class="bench-row"><div class="b-name">Liam Kelly</div><div class="b-pos">MID</div><div class="b-track"><div class="b-fill" style="width:108%;background:rgba(159,225,203,0.7)"></div><div class="b-line" style="left:92.6%"></div></div><div class="b-val c-teal">22,040 m</div><div class="b-pct c-teal">108%</div></div>
-    <div class="bench-row"><div class="b-name">Sean Gleeson</div><div class="b-pos">MID</div><div class="b-track"><div class="b-fill" style="width:98%;background:rgba(76,175,80,0.6)"></div><div class="b-line" style="left:92.6%"></div></div><div class="b-val c-green">19,990 m</div><div class="b-pct c-green">98%</div></div>
-    <div class="bench-row"><div class="b-name">Philip Halinan</div><div class="b-pos">MID</div><div class="b-track"><div class="b-fill" style="width:93%;background:rgba(76,175,80,0.6)"></div><div class="b-line" style="left:92.6%"></div></div><div class="b-val c-green">18,970 m</div><div class="b-pct c-green">93%</div></div>
-    <div class="bench-row"><div class="b-name">Euan Cowzer</div><div class="b-pos">MID</div><div class="b-track"><div class="b-fill" style="width:52%;background:rgba(226,75,74,0.6)"></div><div class="b-line" style="left:92.6%"></div></div><div class="b-val c-red">10,600 m</div><div class="b-pct c-red">52% ↑</div></div>
-
-    <div class="b-group-lbl">Forwards · benchmark 18,200 m</div>
-    <div class="bench-row"><div class="b-name">Colm Moran</div><div class="b-pos">FWD</div><div class="b-track"><div class="b-fill" style="width:112%;background:rgba(159,225,203,0.7)"></div><div class="b-line" style="left:89.3%"></div></div><div class="b-val c-teal">20,380 m</div><div class="b-pct c-teal">112%</div></div>
-    <div class="bench-row"><div class="b-name">TJ Nolan</div><div class="b-pos">FWD</div><div class="b-track"><div class="b-fill" style="width:104%;background:rgba(159,225,203,0.7)"></div><div class="b-line" style="left:89.3%"></div></div><div class="b-val c-teal">18,930 m</div><div class="b-pct c-teal">104%</div></div>
-    <div class="bench-row"><div class="b-name">Finn Dowling</div><div class="b-pos">FWD</div><div class="b-track"><div class="b-fill" style="width:96%;background:rgba(76,175,80,0.6)"></div><div class="b-line" style="left:89.3%"></div></div><div class="b-val c-green">17,470 m</div><div class="b-pct c-green">96%</div></div>
-    <div class="bench-row"><div class="b-name">Adam Fitzpatrick</div><div class="b-pos">FWD</div><div class="b-track"><div class="b-fill" style="width:91%;background:rgba(76,175,80,0.6)"></div><div class="b-line" style="left:89.3%"></div></div><div class="b-val c-green">16,560 m</div><div class="b-pct c-green">91%</div></div>
-    <div class="bench-row"><div class="b-name">Cian Keaveney</div><div class="b-pos">FWD</div><div class="b-track"><div class="b-fill" style="width:87%;background:rgba(239,159,39,0.6)"></div><div class="b-line" style="left:89.3%"></div></div><div class="b-val c-amber">15,830 m</div><div class="b-pct c-amber">87%</div></div>
-    <div class="bench-row"><div class="b-name">Ruairi Lawlor</div><div class="b-pos">FWD</div><div class="b-track"><div class="b-fill" style="width:84%;background:rgba(239,159,39,0.6)"></div><div class="b-line" style="left:89.3%"></div></div><div class="b-val c-amber">15,290 m</div><div class="b-pct c-amber">84%</div></div>
-
-    <div class="b-group-lbl">Defenders · benchmark 16,500 m</div>
-    <div class="bench-row"><div class="b-name">Ronan Kelly</div><div class="b-pos">DEF</div><div class="b-track"><div class="b-fill" style="width:101%;background:rgba(76,175,80,0.6)"></div><div class="b-line" style="left:90.9%"></div></div><div class="b-val c-green">16,670 m</div><div class="b-pct c-green">101%</div></div>
-    <div class="bench-row"><div class="b-name">Senan Gallagher</div><div class="b-pos">DEF</div><div class="b-track"><div class="b-fill" style="width:97%;background:rgba(76,175,80,0.6)"></div><div class="b-line" style="left:90.9%"></div></div><div class="b-val c-green">16,010 m</div><div class="b-pct c-green">97%</div></div>
-    <div class="bench-row"><div class="b-name">Conor Breen</div><div class="b-pos">DEF</div><div class="b-track"><div class="b-fill" style="width:95%;background:rgba(76,175,80,0.6)"></div><div class="b-line" style="left:90.9%"></div></div><div class="b-val c-green">15,680 m</div><div class="b-pct c-green">95%</div></div>
-    <div class="bench-row"><div class="b-name">Hugh Martin</div><div class="b-pos">DEF</div><div class="b-track"><div class="b-fill" style="width:78%;background:rgba(239,159,39,0.6)"></div><div class="b-line" style="left:90.9%"></div></div><div class="b-val c-amber">12,870 m</div><div class="b-pct c-amber">78%</div></div>
-    <div style="font-size:9px;color:var(--muted);margin-top:12px">Benchmark = position group season average from team GPS data · Euan Cowzer excluded from benchmark (illness return) · Hugh Martin trending down 3rd week</div>
+    <div id="bench-rows">
+      <div style="font-size:9px;color:var(--muted);padding:10px 0">Loading live data…</div>
+    </div>
+    <div style="font-size:9px;color:var(--muted);margin-top:12px">Benchmark = position group average (7d TD) from live GPS data · computed from current 7-day window</div>
   </div>
 
   <!-- [3] ACUTE/CHRONIC SPLIT -->
   <div class="sec-label">[4] Acute / chronic split — team averages</div>
   <div class="cards c4">
     <div class="card">
-      <div class="card-lbl">7d TD (Acute)</div>
-      <div class="card-val c-teal">17,840 m</div>
-      <div class="card-sub">Rolling 7-day total</div>
+      <div class="card-lbl">7d HMLD (Acute)</div>
+      <div class="card-val c-teal" id="ac-acute-val">—</div>
+      <div class="card-sub">Rolling 7-day avg weekly HMLD · team avg</div>
     </div>
     <div class="card">
-      <div class="card-lbl">28d TD avg (Chronic)</div>
-      <div class="card-val">15,920 m</div>
-      <div class="card-sub">Rolling 28-day avg per week</div>
+      <div class="card-lbl">28d HMLD (Chronic)</div>
+      <div class="card-val" id="ac-chronic-val">—</div>
+      <div class="card-sub">Rolling 28-day avg weekly HMLD · team avg</div>
     </div>
     <div class="card">
       <div class="card-lbl">HMLD ACWR</div>
-      <div class="card-val c-amber">1.21</div>
+      <div class="card-val" id="ac-acwr-val">—</div>
       <div class="card-sub">7d ÷ 28d · team average</div>
-      <div class="card-ind c-green">Within optimal zone</div>
+      <div class="card-ind" id="ac-acwr-ind">—</div>
     </div>
     <div class="card">
-      <div class="card-lbl">Load Distribution</div>
-      <div class="card-val" style="font-size:14px">Balanced</div>
-      <div class="card-sub">Mon 34% · Wed 38% · Thu 28%</div>
-      <div class="card-ind c-green">Not front-loaded</div>
+      <div class="card-lbl">Players Flagged</div>
+      <div class="card-val" id="ac-flagged-val" style="font-size:18px">—</div>
+      <div class="card-sub" id="ac-flagged-sub">High risk + Caution</div>
+      <div class="card-ind" id="ac-flagged-ind">—</div>
     </div>
   </div>
 </div>
@@ -2425,60 +2408,43 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
 
   <!-- [1] QUALITY SIGNAL CARDS -->
   <div class="cards c4">
-    <div class="card" style="background:rgba(76,175,80,.08);border-color:rgba(76,175,80,.2)">
+    <div class="card">
       <div class="card-lbl">Squad Avg TD/min</div>
-      <div class="card-val c-green">70.8 m/min</div>
+      <div class="card-val c-green" id="p3-tdmin-val">—</div>
       <div class="card-sub">Match demand: 70–80 m/min</div>
-      <div class="card-ind c-green">↑ On target</div>
-    </div>
-    <div class="card" style="background:rgba(76,175,80,.08);border-color:rgba(76,175,80,.2)">
-      <div class="card-lbl">Squad Avg 7d HSR</div>
-      <div class="card-val c-green">840 m</div>
-      <div class="card-sub">Target: &gt;750 m / week</div>
-      <div class="card-ind c-green">↑ Above threshold</div>
-    </div>
-    <div class="card" style="background:rgba(239,159,39,.08);border-color:rgba(239,159,39,.2)">
-      <div class="card-lbl">Squad Avg Dec:Acc</div>
-      <div class="card-val c-amber">1.09</div>
-      <div class="card-sub">Threshold: &lt; 1.15 · 3 players above</div>
-      <div class="card-ind c-amber">⚠ Monitor flagged players</div>
+      <div class="card-ind c-green" id="p3-tdmin-ind">loading…</div>
     </div>
     <div class="card">
-      <div class="card-lbl">Total Efforts / Week</div>
-      <div class="card-val">142</div>
-      <div class="card-sub">Acc 74 + Dec 68 events</div>
-      <div class="card-ind c-green">↑ +8% vs prior week</div>
+      <div class="card-lbl">Squad Avg 7d HSR</div>
+      <div class="card-val c-green" id="p3-hsr-val">—</div>
+      <div class="card-sub">Target: &gt;750 m / week</div>
+      <div class="card-ind c-green" id="p3-hsr-ind">loading…</div>
+    </div>
+    <div class="card">
+      <div class="card-lbl">Squad Avg Dec:Acc</div>
+      <div class="card-val c-amber" id="p3-decacc-val">—</div>
+      <div class="card-sub" id="p3-decacc-sub">Threshold: &lt; 1.15</div>
+      <div class="card-ind c-amber" id="p3-decacc-ind">loading…</div>
+    </div>
+    <div class="card">
+      <div class="card-lbl">Total Efforts / Session</div>
+      <div class="card-val" id="p3-efforts-val">—</div>
+      <div class="card-sub" id="p3-efforts-sub">Acc + Dec events</div>
+      <div class="card-ind c-green">↑ from live data</div>
     </div>
   </div>
 
   <!-- [2] QUALITY READ STRIP -->
   <div class="sec-label">[2] Player quality classification</div>
-  <div class="q-strip">
-    <div class="q-chip qc-risk">Liam Kelly — High quality · high risk</div>
-    <div class="q-chip qc-risk">Colm Moran — High quality · high risk</div>
-    <div class="q-chip qc-good">Sean Gleeson — Good quality</div>
-    <div class="q-chip qc-good">Senan Gallagher — Good quality</div>
-    <div class="q-chip qc-good">Philip Halinan — Good quality</div>
-    <div class="q-chip qc-good">TJ Nolan — Good quality</div>
-    <div class="q-chip qc-good">Ronan Kelly — Good quality</div>
-    <div class="q-chip qc-good">Finn Dowling — Good quality</div>
-    <div class="q-chip qc-good">Conor Breen — Good quality</div>
-    <div class="q-chip qc-good">Adam Fitzpatrick — Good quality</div>
-    <div class="q-chip qc-good">Cian Keaveney — Good quality</div>
-    <div class="q-chip qc-low">Hugh Martin — Low quality</div>
-    <div class="q-chip qc-low">Ruairi Lawlor — Low quality</div>
-    <div class="q-chip qc-low">Cian McKevitt — Low quality</div>
-    <div class="q-chip qc-rtp">Euan Cowzer — RTP expected</div>
-    <div class="q-chip qc-good">Seanan Murphy — Good quality</div>
-    <div class="q-chip qc-good">Austin Donegan — Good quality</div>
-    <div class="q-chip qc-good">Donnacha Kinch — Good quality</div>
+  <div class="q-strip" id="q-strip-live">
+    <div class="q-chip qc-good" style="font-style:italic;color:var(--muted)">Loading live data…</div>
   </div>
   <div style="font-size:9px;color:var(--muted);margin-bottom:18px">Good quality = TD/min on target + Dec:Acc &lt;1.15 · High quality/high risk = good metrics + ACWR &gt;1.30 · Low quality = TD/min below match demand · RTP expected = post-illness/injury return</div>
 
   <!-- [3] INTENSITY SCATTER -->
   <div class="scatter">
     <div class="sec-label" style="margin-bottom:14px">[3] Intensity scatter — TD/min (x) vs HMLD/session (y)</div>
-    <svg width="100%" height="300" viewBox="0 0 700 280">
+    <svg id="p3-scatter-svg" width="100%" height="300" viewBox="0 0 700 280">
       <!-- Grid -->
       <rect x="60" y="10" width="620" height="230" fill="rgba(22,35,54,0.4)" rx="4"/>
       <!-- Quadrant shading -->
@@ -2506,18 +2472,7 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
       <text x="55" y="240" text-anchor="end" fill="#2e4a62" font-size="9" font-family="Inter,sans-serif">250</text>
       <text x="55" y="125" text-anchor="end" fill="#2e4a62" font-size="9" font-family="Inter,sans-serif">380</text>
       <text x="55" y="15" text-anchor="end" fill="#2e4a62" font-size="9" font-family="Inter,sans-serif">510</text>
-      <!-- Player dots: MID=teal, FWD=blue, DEF=green, GK=dim -->
-      <circle cx="520" cy="55" r="9" fill="rgba(226,75,74,0.7)" stroke="#E24B4A" stroke-width="1.5"/><text x="520" y="59" text-anchor="middle" font-size="7" fill="#fff" font-family="Inter,sans-serif">LK</text>
-      <circle cx="505" cy="72" r="8" fill="rgba(226,75,74,0.7)" stroke="#E24B4A" stroke-width="1.5"/><text x="505" y="76" text-anchor="middle" font-size="7" fill="#fff" font-family="Inter,sans-serif">CM</text>
-      <circle cx="450" cy="90" r="8" fill="rgba(239,159,39,0.7)" stroke="#EF9F27" stroke-width="1.5"/><text x="450" y="94" text-anchor="middle" font-size="7" fill="#fff" font-family="Inter,sans-serif">SG</text>
-      <circle cx="430" cy="118" r="7" fill="rgba(79,195,247,0.6)" stroke="#4FC3F7" stroke-width="1.5"/><text x="430" y="122" text-anchor="middle" font-size="7" fill="#fff" font-family="Inter,sans-serif">SGl</text>
-      <circle cx="440" cy="108" r="7" fill="rgba(159,225,203,0.6)" stroke="#9FE1CB" stroke-width="1.5"/><text x="440" y="112" text-anchor="middle" font-size="7" fill="#fff" font-family="Inter,sans-serif">PH</text>
-      <circle cx="420" cy="130" r="7" fill="rgba(76,175,80,0.6)" stroke="#4CAF50" stroke-width="1.5"/><text x="420" y="134" text-anchor="middle" font-size="7" fill="#fff" font-family="Inter,sans-serif">FD</text>
-      <circle cx="410" cy="145" r="7" fill="rgba(76,175,80,0.6)" stroke="#4CAF50" stroke-width="1.5"/><text x="410" y="149" text-anchor="middle" font-size="7" fill="#fff" font-family="Inter,sans-serif">AF</text>
-      <circle cx="400" cy="155" r="7" fill="rgba(76,175,80,0.6)" stroke="#4CAF50" stroke-width="1.5"/><text x="400" y="159" text-anchor="middle" font-size="7" fill="#fff" font-family="Inter,sans-serif">RK</text>
-      <circle cx="300" cy="170" r="7" fill="rgba(107,130,153,0.5)" stroke="#6b8299" stroke-width="1.5"/><text x="300" y="174" text-anchor="middle" font-size="7" fill="#fff" font-family="Inter,sans-serif">HM</text>
-      <circle cx="285" cy="180" r="7" fill="rgba(107,130,153,0.5)" stroke="#6b8299" stroke-width="1.5"/><text x="285" y="184" text-anchor="middle" font-size="7" fill="#fff" font-family="Inter,sans-serif">RL</text>
-      <circle cx="130" cy="185" r="7" fill="rgba(79,195,247,0.4)" stroke="#4FC3F7" stroke-width="1.5" stroke-dasharray="3,2"/><text x="130" y="189" text-anchor="middle" font-size="7" fill="#4FC3F7" font-family="Inter,sans-serif">EC</text>
+      <!-- Player dots populated by updateTrainingQualityPage() from live LIVE_SESSION_DATA -->
       <!-- Legend -->
       <circle cx="80" cy="272" r="5" fill="rgba(226,75,74,0.7)" stroke="#E24B4A" stroke-width="1"/><text x="90" y="276" fill="#6b8299" font-size="9" font-family="Inter,sans-serif">High risk</text>
       <circle cx="155" cy="272" r="5" fill="rgba(239,159,39,0.7)" stroke="#EF9F27" stroke-width="1"/><text x="165" y="276" fill="#6b8299" font-size="9" font-family="Inter,sans-serif">Caution</text>
@@ -2534,15 +2489,10 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
       <span style="display:flex;align-items:center;gap:5px"><span style="display:inline-block;width:12px;height:8px;border-radius:1px;background:rgba(239,159,39,.55)"></span>Dec events</span>
       <span>| Ratio: red = above 1.15 threshold</span>
     </div>
-    <div class="eff-row"><div class="eff-name">Colm Moran</div><div class="eff-bars"><div class="eff-acc" style="width:46%"></div><div class="eff-dec" style="width:54%"></div></div><div class="eff-ratio c-amber">1.18</div><div class="eff-thresh c-amber">watch</div></div>
-    <div class="eff-row"><div class="eff-name">Finn Dowling</div><div class="eff-bars"><div class="eff-acc" style="width:46%"></div><div class="eff-dec" style="width:54%"></div></div><div class="eff-ratio c-amber">1.16</div><div class="eff-thresh c-amber">watch</div></div>
-    <div class="eff-row"><div class="eff-name">Senan Gallagher</div><div class="eff-bars"><div class="eff-acc" style="width:48%"></div><div class="eff-dec" style="width:52%"></div></div><div class="eff-ratio c-green">1.08</div><div class="eff-thresh"></div></div>
-    <div class="eff-row"><div class="eff-name">Liam Kelly</div><div class="eff-bars"><div class="eff-acc" style="width:52%"></div><div class="eff-dec" style="width:48%"></div></div><div class="eff-ratio c-green">0.92</div><div class="eff-thresh"></div></div>
-    <div class="eff-row"><div class="eff-name">Sean Gleeson</div><div class="eff-bars"><div class="eff-acc" style="width:51%"></div><div class="eff-dec" style="width:49%"></div></div><div class="eff-ratio c-green">0.95</div><div class="eff-thresh"></div></div>
-    <div class="eff-row"><div class="eff-name">Seanan Murphy</div><div class="eff-bars"><div class="eff-acc" style="width:51%"></div><div class="eff-dec" style="width:49%"></div></div><div class="eff-ratio c-green">0.97</div><div class="eff-thresh"></div></div>
-    <div class="eff-row"><div class="eff-name">Ronan Kelly</div><div class="eff-bars"><div class="eff-acc" style="width:48%"></div><div class="eff-dec" style="width:52%"></div></div><div class="eff-ratio c-green">1.07</div><div class="eff-thresh"></div></div>
-    <div class="eff-row"><div class="eff-name">Adam Fitzpatrick</div><div class="eff-bars"><div class="eff-acc" style="width:50%"></div><div class="eff-dec" style="width:50%"></div></div><div class="eff-ratio c-green">1.01</div><div class="eff-thresh"></div></div>
-    <div style="font-size:9px;color:var(--muted);margin-top:10px">Dec:Acc threshold = 1.15 · above threshold = elevated eccentric load · soft tissue risk flag · 2 players currently above</div>
+    <div id="eff-rows-live">
+      <div style="font-size:9px;color:var(--muted);padding:10px 0">Loading live data…</div>
+    </div>
+    <div style="font-size:9px;color:var(--muted);margin-top:10px">Dec:Acc threshold = 1.15 · above threshold = elevated eccentric load · soft tissue risk flag · from most recent training session</div>
   </div>
 </div>
 
@@ -4891,6 +4841,10 @@ function loadLiveData(){
       try { updateScatterMatchDots(); } catch(e){ console.warn('updateScatterMatchDots post-load:', e); }
       try { updateDecAccChart(); } catch(e){ console.warn('updateDecAccChart post-load:', e); }
       try { renderFlagCards(); } catch(e){ console.warn('renderFlagCards post-load:', e); }
+      try { renderDotPlot(); } catch(e){ console.warn('renderDotPlot post-load:', e); }
+      try { updateAcwrSummaryCards(); } catch(e){ console.warn('updateAcwrSummaryCards post-load:', e); }
+      try { updateWeeklyTargetPage(); } catch(e){ console.warn('updateWeeklyTargetPage post-load:', e); }
+      try { updateTrainingQualityPage(); } catch(e){ console.warn('updateTrainingQualityPage post-load:', e); }
     });
 }
 
@@ -4915,6 +4869,368 @@ function _flagAction(risk,acwr,arrow){
   if(risk==='caution') return 'ACWR ≥1.30 — elevated for consecutive weeks. Watch cumulative strain into match week.';
   return 'Under-loaded relative to chronic base. Confirm availability. Do not push to full squad load without chronic rebuild period.';
 }
+/* ── Acute / chronic summary cards ──────────────────────────── */
+function updateAcwrSummaryCards(){
+  var vals=Object.values(LIVE_ACWR).filter(function(r){return r.acwr>0&&r.chronic>0;});
+  if(!vals.length) return;
+  var n=vals.length;
+  var avgAcute=Math.round(vals.reduce(function(a,r){return a+r.acute;},0)/n);
+  var avgChronic=Math.round(vals.reduce(function(a,r){return a+r.chronic;},0)/n);
+  var avgAcwr=parseFloat((vals.reduce(function(a,r){return a+r.acwr;},0)/n).toFixed(2));
+  var highCnt=vals.filter(function(r){return r.acwr>=1.5;}).length;
+  var cautCnt=vals.filter(function(r){return r.acwr>=1.3&&r.acwr<1.5;}).length;
+  var acwrCol=avgAcwr>=1.5?'c-red':avgAcwr>=1.3?'c-amber':avgAcwr<=0.8?'c-blue':'c-teal';
+  var acwrInd=avgAcwr>=1.5?'c-red':avgAcwr>=1.3?'c-amber':'c-green';
+  var acwrLbl=avgAcwr>=1.5?'Team avg — High Risk':avgAcwr>=1.3?'Team avg — elevated':avgAcwr<=0.8?'Team avg — under-loaded':'Within optimal zone';
+  var el;
+  el=document.getElementById('ac-acute-val'); if(el) el.textContent=avgAcute.toLocaleString()+' m';
+  el=document.getElementById('ac-chronic-val'); if(el) el.textContent=avgChronic.toLocaleString()+' m';
+  el=document.getElementById('ac-acwr-val');
+  if(el){el.textContent=avgAcwr.toFixed(2);el.className='card-val '+acwrCol;}
+  el=document.getElementById('ac-acwr-ind');
+  if(el){el.textContent=acwrLbl;el.className='card-ind '+acwrInd;}
+  var flagTot=highCnt+cautCnt;
+  el=document.getElementById('ac-flagged-val');
+  if(el){el.textContent=flagTot;el.className='card-val '+(highCnt>0?'c-red':cautCnt>0?'c-amber':'c-green');el.style.fontSize='18px';}
+  el=document.getElementById('ac-flagged-sub');
+  if(el) el.textContent=highCnt+' high risk · '+cautCnt+' caution · '+n+' tracked';
+  el=document.getElementById('ac-flagged-ind');
+  if(el){el.textContent=flagTot===0?'All clear':highCnt>0?'Action required':'Monitor';
+    el.className='card-ind '+(flagTot===0?'c-green':highCnt>0?'c-red':'c-amber');}
+}
+
+/* ── Page 2: Weekly targets — rebuild from LIVE_SESSION_DATA ── */
+function updateWeeklyTargetPage(){
+  if(!window.LIVE_SESSION_DATA) return;
+  var allKeys=Object.keys(window.LIVE_SESSION_DATA).sort();
+  if(!allKeys.length) return;
+
+  function _keyToDate(k){var y=parseInt(k.substring(1,5)),m=parseInt(k.substring(5,7))-1,d=parseInt(k.substring(7,9));return new Date(y,m,d);}
+
+  /* Last 7 calendar days from most recent session */
+  var latestDate=_keyToDate(allKeys[allKeys.length-1]);
+  var cutoff7=new Date(latestDate); cutoff7.setDate(cutoff7.getDate()-6);
+  var week7Keys=allKeys.filter(function(k){return _keyToDate(k)>=cutoff7;});
+
+  /* Per-player 7d totals */
+  var playerMap={};
+  week7Keys.forEach(function(k){
+    var rows=window.LIVE_SESSION_DATA[k];
+    rows.forEach(function(r){
+      if(!r.player) return;
+      var pk=_normPlayerName(r.player);
+      if(!playerMap[pk]) playerMap[pk]={name:r.player,pos:r.pos,td:0,hmld:0,hsr:0};
+      playerMap[pk].td+=(r.td||0);
+      playerMap[pk].hmld+=(r.hmld||0);
+      playerMap[pk].hsr+=(r.hsr||0);
+    });
+  });
+  var players=Object.values(playerMap);
+  if(!players.length) return;
+  var n=players.length;
+
+  /* Summary metrics */
+  var avgTd=Math.round(players.reduce(function(a,p){return a+p.td;},0)/n);
+  var sessionCount=week7Keys.filter(function(k){
+    return window.LIVE_SESSION_DATA[k].some(function(r){return r.matchType!=='Match';});
+  }).length;
+
+  var hmldSessVals=[];
+  week7Keys.forEach(function(k){
+    var trainR=window.LIVE_SESSION_DATA[k].filter(function(r){return r.matchType!=='Match';});
+    if(!trainR.length) return;
+    hmldSessVals.push(Math.round(trainR.reduce(function(a,r){return a+(r.hmld||0);},0)/trainR.length));
+  });
+  var avgHmldSess=hmldSessVals.length?Math.round(hmldSessVals.reduce(function(a,v){return a+v;},0)/hmldSessVals.length):0;
+  var avgHsr=Math.round(players.reduce(function(a,p){return a+p.hsr;},0)/n);
+
+  /* Update summary cards */
+  var el;
+  el=document.getElementById('p2-7dtd-val'); if(el){el.textContent=avgTd.toLocaleString()+' m';el.className='card-val c-teal';}
+  el=document.getElementById('p2-7dtd-sub'); if(el) el.textContent='7-day total distance · team avg ('+n+' players)';
+  el=document.getElementById('p2-7dtd-ind'); if(el){el.textContent=sessionCount+' session'+(sessionCount!==1?'s':'')+' in 7d window';el.className='card-ind c-green';}
+  el=document.getElementById('p2-sess-val'); if(el) el.textContent=sessionCount;
+  el=document.getElementById('p2-hmld-val'); if(el){el.textContent=avgHmldSess.toLocaleString()+' m';el.className='card-val c-teal';}
+  el=document.getElementById('p2-hmld-sub'); if(el) el.textContent='Avg HMLD per training session · '+week7Keys.length+' sessions';
+  el=document.getElementById('p2-hsr-val'); if(el) el.textContent=avgHsr.toLocaleString()+' m';
+  el=document.getElementById('p2-hsr-ind'); if(el){el.textContent=avgHsr>=750?'↑ Above threshold':'↓ Below 750m target';el.className='card-ind '+(avgHsr>=750?'c-green':'c-amber');}
+
+  /* Benchmark bar chart */
+  var benchRows=document.getElementById('bench-rows');
+  if(!benchRows) return;
+
+  function _benchPos(pos){
+    var p=(pos||'').toLowerCase();
+    if(p.indexOf('forward')>-1||p.indexOf('fwd')>-1) return 'FWD';
+    if(p.indexOf('def')>-1||p.indexOf('back')>-1) return 'DEF';
+    if(p.indexOf('goal')>-1||p==='gk') return 'GK';
+    return 'MID';
+  }
+  var groups={MID:[],FWD:[],DEF:[],GK:[]};
+  players.forEach(function(p){groups[_benchPos(p.pos)].push(p);});
+  function _grpAvg(arr){return arr.length?Math.round(arr.reduce(function(a,p){return a+p.td;},0)/arr.length):0;}
+  var benchmarks={MID:_grpAvg(groups.MID),FWD:_grpAvg(groups.FWD),DEF:_grpAvg(groups.DEF),GK:_grpAvg(groups.GK)};
+  function _barFill(pct){
+    if(pct>=110) return 'rgba(159,225,203,0.7)';
+    if(pct>=90)  return 'rgba(76,175,80,0.6)';
+    if(pct>=70)  return 'rgba(239,159,39,0.6)';
+    return 'rgba(226,75,74,0.6)';
+  }
+  function _pctCls(pct){return pct>=110?'c-teal':pct>=90?'c-green':pct>=70?'c-amber':'c-red';}
+
+  var html='';
+  var posLabels={MID:'Midfielders',FWD:'Forwards',DEF:'Defenders',GK:'Goalkeepers'};
+  ['MID','FWD','DEF','GK'].forEach(function(pg,gi){
+    var grp=groups[pg]; if(!grp.length) return;
+    var bm=benchmarks[pg];
+    var maxTd=Math.max.apply(null,grp.map(function(p){return p.td;}));
+    var barMax=Math.max(maxTd,bm)*1.15;
+    grp.sort(function(a,b){return b.td-a.td;});
+    html+='<div class="b-group-lbl"'+(gi===0?' style="margin-top:0;padding-top:0;border-top:none"':'')+'>'+posLabels[pg]+' · benchmark '+bm.toLocaleString()+' m</div>';
+    grp.forEach(function(p){
+      var pct=bm>0?Math.round(p.td/bm*100):0;
+      var cls=_pctCls(pct);
+      var fillW=barMax>0?Math.min(115,Math.round(p.td/barMax*100)):0;
+      var lineLeft=barMax>0?Math.min(99,Math.round(bm/barMax*100)):90;
+      html+='<div class="bench-row">'
+        +'<div class="b-name">'+_escHtml(p.name)+'</div>'
+        +'<div class="b-pos">'+pg+'</div>'
+        +'<div class="b-track"><div class="b-fill" style="width:'+fillW+'%;background:'+_barFill(pct)+'"></div>'
+        +'<div class="b-line" style="left:'+lineLeft+'%"></div></div>'
+        +'<div class="b-val '+cls+'">'+p.td.toLocaleString()+' m</div>'
+        +'<div class="b-pct '+cls+'">'+pct+'%</div></div>';
+    });
+  });
+  benchRows.innerHTML=html||'<div style="font-size:9px;color:var(--muted);padding:8px">No player data in 7-day window</div>';
+}
+
+/* ── Page 3: Training quality — rebuild from LIVE_SESSION_DATA ── */
+function updateTrainingQualityPage(){
+  if(!window.LIVE_SESSION_DATA) return;
+  var allKeys=Object.keys(window.LIVE_SESSION_DATA).sort();
+  if(!allKeys.length) return;
+
+  function _keyToDate(k){var y=parseInt(k.substring(1,5)),m=parseInt(k.substring(5,7))-1,d=parseInt(k.substring(7,9));return new Date(y,m,d);}
+
+  /* Most recent training session (non-match preferred) */
+  var trainKey=null;
+  for(var i=allKeys.length-1;i>=0;i--){
+    var rs=window.LIVE_SESSION_DATA[allKeys[i]];
+    if(rs.some(function(r){return r.matchType!=='Match';})){trainKey=allKeys[i];break;}
+  }
+  if(!trainKey) trainKey=allKeys[allKeys.length-1];
+
+  var sessRows=window.LIVE_SESSION_DATA[trainKey];
+  var trainRows=sessRows.filter(function(r){return r.matchType!=='Match';});
+  if(!trainRows.length) trainRows=sessRows;
+  var n=trainRows.length||1;
+
+  /* Squad quality card metrics */
+  var avgTdMin=parseFloat((trainRows.reduce(function(a,r){return a+(r.tdMin||0);},0)/n).toFixed(1));
+  var validDA=trainRows.filter(function(r){return (r.acc||0)>0;});
+  var avgDA=validDA.length?parseFloat((validDA.reduce(function(a,r){return a+(r.dec||0)/(r.acc||1);},0)/validDA.length).toFixed(2)):null;
+  var aboveDA=validDA.filter(function(r){return (r.dec||0)/(r.acc||1)>1.15;}).length;
+  var totalAcc=trainRows.reduce(function(a,r){return a+(r.acc||0);},0);
+  var totalDec=trainRows.reduce(function(a,r){return a+(r.dec||0);},0);
+
+  /* 7d avg HSR per player */
+  var latestDate=_keyToDate(allKeys[allKeys.length-1]);
+  var cutoff7=new Date(latestDate); cutoff7.setDate(cutoff7.getDate()-6);
+  var hsrPP={};
+  allKeys.filter(function(k){return _keyToDate(k)>=cutoff7;}).forEach(function(k){
+    window.LIVE_SESSION_DATA[k].forEach(function(r){
+      var pk=_normPlayerName(r.player);
+      hsrPP[pk]=(hsrPP[pk]||0)+(r.hsr||0);
+    });
+  });
+  var hsrVals=Object.values(hsrPP);
+  var avgHsr7d=hsrVals.length?Math.round(hsrVals.reduce(function(a,v){return a+v;},0)/hsrVals.length):0;
+
+  /* Update quality signal cards */
+  var el;
+  var tdCol=avgTdMin>=70?'c-green':avgTdMin>=60?'c-amber':'c-red';
+  el=document.getElementById('p3-tdmin-val'); if(el){el.textContent=avgTdMin.toFixed(1)+' m/min';el.className='card-val '+tdCol;}
+  el=document.getElementById('p3-tdmin-ind'); if(el){el.textContent=avgTdMin>=70?'↑ On target':avgTdMin>=60?'⚠ Below 70 m/min target':'↓ Well below match demand';el.className='card-ind '+tdCol;}
+  var hsrCol=avgHsr7d>=750?'c-green':avgHsr7d>=500?'c-amber':'c-red';
+  el=document.getElementById('p3-hsr-val'); if(el){el.textContent=avgHsr7d.toLocaleString()+' m';el.className='card-val '+hsrCol;}
+  el=document.getElementById('p3-hsr-ind'); if(el){el.textContent=avgHsr7d>=750?'↑ Above threshold':avgHsr7d>=500?'⚠ Below 750m target':'↓ Low HSR week';el.className='card-ind '+hsrCol;}
+  if(avgDA!==null){
+    var daCol=avgDA>=1.15?'c-red':avgDA>=1.05?'c-amber':'c-green';
+    el=document.getElementById('p3-decacc-val'); if(el){el.textContent=avgDA.toFixed(2);el.className='card-val '+daCol;}
+    el=document.getElementById('p3-decacc-sub'); if(el) el.textContent='Threshold: < 1.15 · '+aboveDA+' player'+(aboveDA!==1?'s':'')+' above';
+    el=document.getElementById('p3-decacc-ind'); if(el){el.textContent=avgDA>=1.15?'⚡ Eccentric overload risk':avgDA>=1.05?'⚠ Monitor flagged players':'✓ Deceleration load balanced';el.className='card-ind '+daCol;}
+  }
+  el=document.getElementById('p3-efforts-val'); if(el) el.textContent=totalAcc+totalDec;
+  el=document.getElementById('p3-efforts-sub'); if(el) el.textContent='Acc '+totalAcc+' + Dec '+totalDec+' events';
+
+  /* Quality classification strip */
+  var qStrip=document.getElementById('q-strip-live');
+  if(qStrip){
+    var qPlayers=[];
+    trainRows.forEach(function(r){
+      if(!r.player) return;
+      var pkey=_normPlayerName(r.player);
+      var acwrRec=LIVE_ACWR[pkey];
+      var acwr=acwrRec?acwrRec.acwr:0;
+      var tdm=r.tdMin||0;
+      var cat=tdm>=70&&acwr>=1.30?'risk':tdm>=70?'good':'low';
+      qPlayers.push({name:r.player,cat:cat});
+    });
+    qPlayers.sort(function(a,b){return ({risk:0,good:1,low:2})[a.cat]-({risk:0,good:1,low:2})[b.cat];});
+    var clsMap={risk:'qc-risk',good:'qc-good',low:'qc-low'};
+    var lblMap={risk:'High quality · high risk',good:'Good quality',low:'Low stimulus'};
+    qStrip.innerHTML=qPlayers.length
+      ?qPlayers.map(function(p){return '<div class="q-chip '+clsMap[p.cat]+'">'+_escHtml(p.name)+' — '+lblMap[p.cat]+'</div>';}).join('')
+      :'<div style="font-size:9px;color:var(--muted);padding:8px">No data</div>';
+  }
+
+  /* Intensity scatter — rebuild live player dots */
+  var scSvg=document.getElementById('p3-scatter-svg');
+  if(scSvg){
+    scSvg.querySelectorAll('.p3-dot').forEach(function(el){el.remove();});
+    var ns='http://www.w3.org/2000/svg';
+    /* x-axis 55–85 m/min → SVG x 60–680; y-axis 250–510 m HMLD → SVG y 240–10 */
+    function _scX(tdm){return Math.max(65,Math.min(675,60+(tdm-55)/30*620));}
+    function _scY(hml){return Math.max(14,Math.min(236,240-(hml-250)/260*230));}
+    function _scFill(acwr,tdm){
+      if(acwr>=1.3&&tdm>=70) return {f:'rgba(226,75,74,0.75)',s:'#E24B4A'};
+      if(acwr>=1.3)           return {f:'rgba(239,159,39,0.75)',s:'#EF9F27'};
+      if(tdm>=70)             return {f:'rgba(76,175,80,0.7)',s:'#4CAF50'};
+      return                         {f:'rgba(107,130,153,0.55)',s:'#6b8299'};
+    }
+    /* Nudge overlapping dots */
+    var usedPos=[];
+    trainRows.forEach(function(r){
+      if(!r.player) return;
+      var pkey=_normPlayerName(r.player);
+      var acwr=(LIVE_ACWR[pkey]||{}).acwr||0;
+      var cx=_scX(r.tdMin||0), cy=_scY(r.hmld||0);
+      var tries=0;
+      while(usedPos.some(function(p){return Math.abs(p.x-cx)<14&&Math.abs(p.y-cy)<14;})&&tries<6){cx+=12;tries++;}
+      usedPos.push({x:cx,y:cy});
+      var st=_scFill(acwr,r.tdMin||0);
+      var initials=(function(name){var pts=(name||'').trim().split(/\s+/);return pts.length>=2?(pts[0][0]+pts[pts.length-1][0]).toUpperCase():(name||'').substring(0,2).toUpperCase();})(r.player);
+      var g=document.createElementNS(ns,'g');g.setAttribute('class','p3-dot');
+      var c=document.createElementNS(ns,'circle');
+      c.setAttribute('cx',cx.toFixed(0));c.setAttribute('cy',cy.toFixed(0));
+      c.setAttribute('r','8');c.setAttribute('fill',st.f);c.setAttribute('stroke',st.s);c.setAttribute('stroke-width','1.5');
+      g.appendChild(c);
+      var t=document.createElementNS(ns,'text');
+      t.setAttribute('x',cx.toFixed(0));t.setAttribute('y',(cy+4).toFixed(0));
+      t.setAttribute('text-anchor','middle');t.setAttribute('font-size','7');t.setAttribute('fill','#fff');t.setAttribute('font-family','Inter,sans-serif');
+      t.textContent=initials;
+      g.appendChild(t);
+      scSvg.appendChild(g);
+    });
+  }
+
+  /* Efforts bar — rebuild from live acc/dec */
+  var effRows=document.getElementById('eff-rows-live');
+  if(effRows){
+    var effPlayers=[];
+    trainRows.forEach(function(r){
+      if(!r.player) return;
+      var acc=r.acc||0,dec=r.dec||0;
+      if(acc+dec===0) return;
+      var ratio=acc>0?parseFloat((dec/acc).toFixed(2)):0;
+      effPlayers.push({name:r.player,acc:acc,dec:dec,ratio:ratio});
+    });
+    effPlayers.sort(function(a,b){return b.ratio-a.ratio;});
+    var maxEff=effPlayers.length?Math.max.apply(null,effPlayers.map(function(p){return p.acc+p.dec;})):1;
+    var html='';
+    effPlayers.forEach(function(p){
+      var rCls=p.ratio>1.15?'c-amber':'c-green';
+      var rTxt=p.ratio>1.15?'watch':'';
+      var accW=p.acc+p.dec>0?Math.round(p.acc/(p.acc+p.dec)*100):50;
+      var decW=100-accW;
+      html+='<div class="eff-row">'
+        +'<div class="eff-name">'+_escHtml(p.name)+'</div>'
+        +'<div class="eff-bars"><div class="eff-acc" style="width:'+accW+'%"></div><div class="eff-dec" style="width:'+decW+'%"></div></div>'
+        +'<div class="eff-ratio '+rCls+'">'+p.ratio.toFixed(2)+'</div>'
+        +'<div class="eff-thresh '+rCls+'">'+rTxt+'</div></div>';
+    });
+    effRows.innerHTML=html||'<div style="font-size:9px;color:var(--muted);padding:8px">No effort data in session</div>';
+  }
+}
+
+/* ── Squad ACWR dot plot ─────────────────────────────────────── */
+function renderDotPlot(){
+  var svg=document.getElementById('dotplot-svg');
+  if(!svg||!Object.keys(LIVE_ACWR).length) return;
+
+  /* Remove old player dots (leave zone/axis/label elements) */
+  svg.querySelectorAll('.dp-dot').forEach(function(el){el.remove();});
+
+  /* Position row config: cy = circle centre, ty = text baseline */
+  function _dpRow(pos){
+    var p=(pos||'').toLowerCase();
+    if(p.indexOf('goal')>-1||p==='gk') return {cy:48,ty:52};
+    if(p.indexOf('def')>-1||p.indexOf('back')>-1) return {cy:96,ty:100};
+    if(p.indexOf('fwd')>-1||p.indexOf('forward')>-1||p.indexOf('attack')>-1) return {cy:181,ty:185};
+    return {cy:144,ty:148}; /* default MID */
+  }
+  /* Colour by ACWR zone */
+  function _dpFill(a){
+    if(a>=1.5) return {fill:'rgba(226,75,74,0.75)',stroke:'#E24B4A',r:8};
+    if(a>=1.3) return {fill:'rgba(239,159,39,0.75)',stroke:'#EF9F27',r:7};
+    if(a<=0.80) return {fill:'rgba(79,195,247,0.75)',stroke:'#4FC3F7',r:7};
+    return {fill:'rgba(159,225,203,0.65)',stroke:'#9FE1CB',r:7};
+  }
+  /* 2-char initials from display name */
+  function _initials(name){
+    var parts=(name||'').trim().split(/\s+/);
+    if(parts.length>=2) return (parts[0][0]+(parts[parts.length-1][0])).toUpperCase();
+    return (name||'').substring(0,2).toUpperCase();
+  }
+  /* x coordinate: ACWR 0–2 → cx 0–900, clamped */
+  function _dpX(a){return Math.max(14,Math.min(886,a*450));}
+
+  /* Group by row so we can jitter overlapping dots */
+  var rows={};
+  Object.keys(LIVE_ACWR).forEach(function(key){
+    var rec=LIVE_ACWR[key];
+    if(!rec.acwr||rec.acwr<=0) return;
+    var row=_dpRow(rec.pos);
+    var rowKey=row.cy;
+    if(!rows[rowKey]) rows[rowKey]={row:row,players:[]};
+    rows[rowKey].players.push({name:rec.name,acwr:rec.acwr,key:key});
+  });
+
+  /* Render each row — sort by ACWR, jitter y if cx collision */
+  var ns='http://www.w3.org/2000/svg';
+  Object.keys(rows).forEach(function(rk){
+    var rd=rows[rk];
+    rd.players.sort(function(a,b){return a.acwr-b.acwr;});
+    var usedX=[];
+    rd.players.forEach(function(p){
+      var st=_dpFill(p.acwr);
+      var cx=_dpX(p.acwr);
+      /* Nudge cx if occupied */
+      var tries=0;
+      while(usedX.some(function(x){return Math.abs(x-cx)<16;})&&tries<8){cx+=16;tries++;}
+      usedX.push(cx);
+      var cy=rd.row.cy, ty=rd.row.ty;
+      /* Group */
+      var g=document.createElementNS(ns,'g');
+      g.setAttribute('class','dp-dot');
+      /* Circle */
+      var c=document.createElementNS(ns,'circle');
+      c.setAttribute('cx',cx.toFixed(0));c.setAttribute('cy',cy);
+      c.setAttribute('r',st.r);c.setAttribute('fill',st.fill);
+      c.setAttribute('stroke',st.stroke);c.setAttribute('stroke-width',st.r===8?'2':'1.5');
+      g.appendChild(c);
+      /* Label */
+      var t=document.createElementNS(ns,'text');
+      t.setAttribute('x',cx.toFixed(0));t.setAttribute('y',ty);
+      t.setAttribute('text-anchor','middle');t.setAttribute('font-size','7');
+      t.setAttribute('fill','#fff');t.setAttribute('font-family','Inter,sans-serif');
+      t.textContent=_initials(p.name);
+      g.appendChild(t);
+      svg.appendChild(g);
+    });
+  });
+}
+
 function renderFlagCards(){
   var container=document.getElementById('live-flags');
   if(!container) return;
