@@ -4624,8 +4624,9 @@ function loadLiveData(){
       /* ── Store per-session player rows globally for live squad stats ── */
       window.LIVE_SESSION_DATA={};
       var _posNorm=function(p){var pl=(p||'').toLowerCase();return pl.indexOf('middle')>-1?'mid':pl.indexOf('forward')>-1?'fwd':pl.indexOf('defend')>-1?'def':'mid';};
+      var _lsdDateKey=function(d){var mm=String(d.getMonth()+1).padStart(2,'0'),dd=String(d.getDate()).padStart(2,'0');return 'd'+d.getFullYear()+mm+dd;};
       all.forEach(function(s){
-        var k=_dateKey(s.dateStr);
+        var k=_lsdDateKey(s.date);
         if(!window.LIVE_SESSION_DATA[k]) window.LIVE_SESSION_DATA[k]=[];
         window.LIVE_SESSION_DATA[k].push({
           player:s.player,pos:_posNorm(s.pos),matchType:s.matchType,
