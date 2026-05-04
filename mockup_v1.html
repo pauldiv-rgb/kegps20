@@ -2323,31 +2323,6 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
     </svg>
   </div>
 
-  <!-- [4] SQUAD TABLE — collapsed by default -->
-  <details style="margin-bottom:22px">
-    <summary style="font-size:10px;color:var(--dim);cursor:pointer;padding:10px 14px;background:var(--s1);border:1px solid var(--border);border-radius:8px;list-style:none">[4] Full squad table — click to expand</summary>
-    <div class="tbl-wrap" style="margin-top:8px;margin-bottom:0">
-      <table>
-        <thead><tr><th>Player</th><th>Pos</th><th>ACWR</th><th>7d HSR</th><th>Sessions/7d</th><th>Dec:Acc</th><th>Status</th></tr></thead>
-        <tbody>
-          <tr><td>Liam Kelly</td><td>MID</td><td class="c-red"><strong>1.90</strong></td><td>2,087 m</td><td>5</td><td>0.92</td><td><span class="pill p-red">High Risk</span></td></tr>
-          <tr><td>Colm Moran</td><td>FWD</td><td class="c-red"><strong>1.82</strong></td><td>3,946 m</td><td>5</td><td class="c-amber">1.18</td><td><span class="pill p-red">High Risk</span></td></tr>
-          <tr><td>Senan Gallagher</td><td>DEF</td><td class="c-amber">1.40</td><td>3,002 m</td><td>5</td><td>1.08</td><td><span class="pill p-amber">Caution</span></td></tr>
-          <tr><td>Sean Gleeson</td><td>MID</td><td class="c-amber">1.30</td><td>3,639 m</td><td>5</td><td class="c-green">0.95</td><td><span class="pill p-amber">Caution</span></td></tr>
-          <tr><td>Philip Halinan</td><td>MID</td><td class="c-green">1.24</td><td>2,810 m</td><td>4</td><td>1.04</td><td><span class="pill p-green">Optimal</span></td></tr>
-          <tr><td>TJ Nolan</td><td>FWD</td><td class="c-green">1.21</td><td>2,640 m</td><td>5</td><td>0.98</td><td><span class="pill p-green">Optimal</span></td></tr>
-          <tr><td>Ronan Kelly</td><td>DEF</td><td class="c-green">1.18</td><td>2,540 m</td><td>4</td><td>1.07</td><td><span class="pill p-green">Optimal</span></td></tr>
-          <tr><td>Finn Dowling</td><td>FWD</td><td class="c-green">1.15</td><td>2,460 m</td><td>4</td><td class="c-amber">1.16</td><td><span class="pill p-green">Optimal</span></td></tr>
-          <tr><td>Conor Breen</td><td>DEF</td><td class="c-green">1.12</td><td>2,390 m</td><td>4</td><td>0.93</td><td><span class="pill p-green">Optimal</span></td></tr>
-          <tr><td>Seanan Murphy</td><td>MID</td><td class="c-green">1.10</td><td>2,350 m</td><td>4</td><td>0.97</td><td><span class="pill p-green">Optimal</span></td></tr>
-          <tr><td>Adam Fitzpatrick</td><td>FWD</td><td class="c-green">1.08</td><td>2,290 m</td><td>4</td><td>1.01</td><td><span class="pill p-green">Optimal</span></td></tr>
-          <tr><td>Hugh Martin</td><td>MID</td><td class="c-green">1.06</td><td>2,180 m</td><td>4</td><td>1.03</td><td><span class="pill p-green">Optimal</span></td></tr>
-          <tr><td>Euan Cowzer</td><td>MID</td><td class="c-blue">0.44</td><td>845 m</td><td>2</td><td>0.88</td><td><span class="pill p-blue">Under-Loaded</span></td></tr>
-          <tr><td>Cian Keaveney</td><td>FWD</td><td class="c-green">1.04</td><td>2,140 m</td><td>4</td><td>0.95</td><td><span class="pill p-green">Optimal</span></td></tr>
-        </tbody>
-      </table>
-    </div>
-  </details>
   <div style="font-size:9px;color:var(--muted)">HMLD ACWR = rolling 7d avg ÷ 28d avg · position average as comparator · flag criteria: Dec:Acc threshold 1.15</div>
 </div>
 
@@ -4360,7 +4335,20 @@ function _rebuildSessionDropdowns(allDates, sessionMeta, drillMeta){
       typeLabel: m.typeLabel||'Field Training',
       duration:  m.duration||75,
       drillCount:liveDrills?Object.keys(liveDrills).length:null,
-      matchProx: null,
+      matchProx: (function(){
+        var allMD=window._LIVE_ALL_MATCH_DATES;
+        if(!allMD||!allMD.length) return null;
+        var sessDate=new Date(d); sessDate.setHours(0,0,0,0);
+        var bestDiff=Infinity;
+        for(var i=0;i<allMD.length;i++){
+          var diff=(sessDate-allMD[i])/86400000;
+          if(Math.abs(diff)<Math.abs(bestDiff)) bestDiff=diff;
+        }
+        var dr=Math.round(bestDiff);
+        if(dr===0) return 'MD';
+        if(dr>0) return 'MD+'+dr;
+        return 'MD−'+Math.abs(dr);
+      })(),
       nextFixture:null,
       attendance:(m.playerCount||'?')+' / 26',
       drills:    liveDrills
@@ -4474,11 +4462,12 @@ function loadLiveData(){
   ]).then(function(results){
     var txt=results[0], ddTxt=results[1], ltTxt=results[2], mrTxt=results[3];
 
-    /* ── Parse Match Record → next upcoming fixture ── */
+    /* ── Parse Match Record → next upcoming fixture + all match dates ── */
     if(mrTxt){
       var mrLines=mrTxt.trim().split(/\r?\n/);
       var today=new Date(); today.setHours(0,0,0,0);
       var nextMatch=null, nextDate=null;
+      var allMatchDates=[];
       var MON_MAP={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
       for(var mi=2;mi<mrLines.length;mi++){  /* skip instruction row + header */
         if(!mrLines[mi].trim()) continue;
@@ -4490,8 +4479,11 @@ function loadLiveData(){
         var mDay=parseInt(mdParts[1]), mMonStr=mdParts[2];
         var mMon=MON_MAP[mMonStr];
         if(isNaN(mDay)||mMon===undefined) continue;
-        /* Assume current or next year */
-        var mDate=new Date(today.getFullYear(), mMon, mDay);
+        /* Collect raw date (current year, no bumping) for matchProx computation */
+        var mDateRaw=new Date(today.getFullYear(), mMon, mDay);
+        allMatchDates.push(mDateRaw);
+        /* Assume current or next year for next-fixture display */
+        var mDate=new Date(mDateRaw);
         if(mDate<today) mDate=new Date(today.getFullYear()+1, mMon, mDay);
         var result=(mv[3]||'').trim();
         /* Future match = no result yet */
@@ -4508,6 +4500,8 @@ function loadLiveData(){
           }
         }
       }
+      /* Store all match dates globally for matchProx computation */
+      window._LIVE_ALL_MATCH_DATES=allMatchDates;
       if(nextMatch){
         /* Update header and all sessions that have TBC fixture */
         var hdrFix=document.querySelector('.hdr-match');
@@ -4701,7 +4695,36 @@ function loadLiveData(){
       _rebuildSessionDropdowns(allDates,sessionMeta,drillMeta);
       var badge=document.querySelector('.badge');
       if(badge) badge.textContent='Live · '+last8[7];
+      try { updateAcwrStrip(); } catch(e){ console.warn('updateAcwrStrip post-load:', e); }
     });
+}
+
+/* ── ACWR strip: populate Sprint/min and HMLD/min current values ── */
+function updateAcwrStrip(){
+  var players=Object.values(LB_DATA.sess||{}).filter(function(p){ return p.hmldMin!==undefined; });
+  if(!players.length) return;
+  var n=players.length;
+  var avgZ6Min=players.reduce(function(a,p){ return a+(p.z6Min||0); },0)/n;
+  var avgHmldMin=players.reduce(function(a,p){ return a+(p.hmldMin||0); },0)/n;
+  /* Reference values baked into SVG labels */
+  var maRef=parseFloat(((document.getElementById('ma-ref-lbl')||{}).textContent)||'3.25')||3.25;
+  var mdRef=parseFloat(((document.getElementById('md-ref-lbl')||{}).textContent)||'3.52')||3.52;
+  /* Sprint/min */
+  var maEl=document.getElementById('ma-val');
+  var maPct=document.getElementById('ma-pct');
+  if(maEl) maEl.textContent=avgZ6Min.toFixed(1);
+  var maPctVal=maRef>0?Math.round(avgZ6Min/maRef*100):0;
+  var maCol=maPctVal>=100?'#81C784':maPctVal>=85?'#EF9F27':'#E24B4A';
+  if(maEl) maEl.style.color=maCol;
+  if(maPct){ maPct.textContent=maPctVal+'%'; maPct.style.color=maCol; }
+  /* HMLD/min */
+  var mdEl=document.getElementById('md-val');
+  var mdPct=document.getElementById('md-pct');
+  if(mdEl) mdEl.textContent=avgHmldMin.toFixed(1);
+  var mdPctVal=mdRef>0?Math.round(avgHmldMin/mdRef*100):0;
+  var mdCol=mdPctVal>=100?'#81C784':mdPctVal>=85?'#EF9F27':'#E24B4A';
+  if(mdEl) mdEl.style.color=mdCol;
+  if(mdPct){ mdPct.textContent=mdPctVal+'%'; mdPct.style.color=mdCol; }
 }
 
 /* ── Immediate unconditional render ──────────────────────────── */
@@ -4709,6 +4732,7 @@ function loadLiveData(){
   try { renderDrillCards(); } catch(e){ console.warn('renderDrillCards init:', e); }
   try { renderDrillBars(); } catch(e){ console.warn('renderDrillBars init:', e); }
   try { renderPlayerProfile(); } catch(e){ console.warn('renderPlayerProfile init:', e); }
+  try { updateAcwrStrip(); } catch(e){ console.warn('updateAcwrStrip init:', e); }
 })();
 
 /* ═══════════════════════════════════════════════════════════════
