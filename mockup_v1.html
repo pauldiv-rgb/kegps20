@@ -2528,7 +2528,7 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
   <!-- [2] EXPOSURE BARS -->
   <div class="exp-wrap">
     <div class="sec-label" style="margin-bottom:14px">[2] Match exposure — sorted by Match % TD (lowest first)</div>
-    <div style="font-size:9px;color:var(--muted);margin-bottom:14px">Top bar = Match HMLD avg/session · Bottom bar = Training HMLD avg/session · % = Match TD as % of total TD</div>
+    <div style="font-size:9px;color:var(--muted);margin-bottom:14px">Bar 1 = Match HMLD · Bar 2 = Training HMLD · Bar 3 = Ext. est. HMLD (club/college, derived from player HMLD/min) · % = Match TD as % of total TD</div>
     <div id="exp-rows-live">
       <div style="font-size:9px;color:var(--muted);padding:10px 0">Loading live data…</div>
     </div>
@@ -4291,7 +4291,8 @@ var CFG_LIVE={
   SESSION_REVIEW_URL:'https://docs.google.com/spreadsheets/d/e/2PACX-1vTaiT2EXrwkobUINl0zCLTAa7G7vZy6J3AGgOEJubAAD8zaqEfv7XgPgF_lF7toYi0am6IKWFkAjEX4/pub?gid=2100000005&single=true&output=csv',
   DRILL_DATA_URL:'https://docs.google.com/spreadsheets/d/e/2PACX-1vTaiT2EXrwkobUINl0zCLTAa7G7vZy6J3AGgOEJubAAD8zaqEfv7XgPgF_lF7toYi0am6IKWFkAjEX4/pub?gid=215121705&single=true&output=csv',
   MATCH_RECORD_URL:'https://docs.google.com/spreadsheets/d/e/2PACX-1vTaiT2EXrwkobUINl0zCLTAa7G7vZy6J3AGgOEJubAAD8zaqEfv7XgPgF_lF7toYi0am6IKWFkAjEX4/pub?gid=2100000002&single=true&output=csv',
-  LOAD_TREND_URL:'https://docs.google.com/spreadsheets/d/e/2PACX-1vTaiT2EXrwkobUINl0zCLTAa7G7vZy6J3AGgOEJubAAD8zaqEfv7XgPgF_lF7toYi0am6IKWFkAjEX4/pub?gid=2100000009&single=true&output=csv'
+  LOAD_TREND_URL:'https://docs.google.com/spreadsheets/d/e/2PACX-1vTaiT2EXrwkobUINl0zCLTAa7G7vZy6J3AGgOEJubAAD8zaqEfv7XgPgF_lF7toYi0am6IKWFkAjEX4/pub?gid=2100000009&single=true&output=csv',
+  EXTERNAL_ACTIVITY_URL:'https://docs.google.com/spreadsheets/d/e/2PACX-1vTaiT2EXrwkobUINl0zCLTAa7G7vZy6J3AGgOEJubAAD8zaqEfv7XgPgF_lF7toYi0am6IKWFkAjEX4/pub?gid=1093848037&single=true&output=csv'
 };
 
 /* Live ACWR lookup — populated from LS_Load_Trend_Export on load */
@@ -4452,9 +4453,10 @@ function loadLiveData(){
     fetch(CFG_LIVE.SESSION_REVIEW_URL).then(function(r){return r.text();}),
     fetch(CFG_LIVE.DRILL_DATA_URL).then(function(r){return r.text();}).catch(function(){return '';}),
     fetch(CFG_LIVE.LOAD_TREND_URL).then(function(r){return r.text();}).catch(function(){return '';}),
-    fetch(CFG_LIVE.MATCH_RECORD_URL).then(function(r){return r.text();}).catch(function(){return '';})
+    fetch(CFG_LIVE.MATCH_RECORD_URL).then(function(r){return r.text();}).catch(function(){return '';}),
+    fetch(CFG_LIVE.EXTERNAL_ACTIVITY_URL).then(function(r){return r.text();}).catch(function(){return '';})
   ]).then(function(results){
-    var txt=results[0], ddTxt=results[1], ltTxt=results[2], mrTxt=results[3];
+    var txt=results[0], ddTxt=results[1], ltTxt=results[2], mrTxt=results[3], eaTxt=results[4];
 
     /* ── Parse Match Record → next upcoming fixture + all match dates ── */
     if(mrTxt){
@@ -4751,6 +4753,50 @@ function loadLiveData(){
           if(_sp) _sp.textContent=SESSION_DB[_ck].matchProx||'—';
         }
       }
+      /* ── Parse External Activity → per-player estimated HMLD ── */
+      window.LIVE_EA_HMLD={};
+      if(eaTxt&&window.LIVE_SESSION_DATA){
+        /* Derive per-player HMLD/min rates from live GPS data */
+        var _eaRates={};
+        var _sqTrSum=0,_sqTrN=0,_sqMxSum=0,_sqMxN=0;
+        Object.keys(window.LIVE_SESSION_DATA).forEach(function(k){
+          window.LIVE_SESSION_DATA[k].forEach(function(r){
+            if(!r.player||!r.dur) return;
+            var pk=_normPlayerName(r.player);
+            if(!_eaRates[pk]) _eaRates[pk]={trHMLD:0,trMin:0,mxHMLD:0,mxMin:0,name:r.player,pos:r.pos};
+            if(r.matchType==='Match'){_eaRates[pk].mxHMLD+=r.hmld||0;_eaRates[pk].mxMin+=r.dur;}
+            else{_eaRates[pk].trHMLD+=r.hmld||0;_eaRates[pk].trMin+=r.dur;}
+          });
+        });
+        Object.keys(_eaRates).forEach(function(pk){
+          var d=_eaRates[pk];
+          d.trRate=d.trMin>0?d.trHMLD/d.trMin:null;
+          d.mxRate=d.mxMin>0?d.mxHMLD/d.mxMin:null;
+          if(d.trRate){_sqTrSum+=d.trRate;_sqTrN++;}
+          if(d.mxRate){_sqMxSum+=d.mxRate;_sqMxN++;}
+        });
+        var _sqTrAvg=_sqTrN>0?_sqTrSum/_sqTrN:15;
+        var _sqMxAvg=_sqMxN>0?_sqMxSum/_sqMxN:20;
+        /* Parse EA CSV: row 0 = instructions, row 1 = header, rows 2+ = data */
+        var eaLines=eaTxt.trim().split(/\r?\n/);
+        for(var ei=2;ei<eaLines.length;ei++){
+          var ev=_parseCSVLine(eaLines[ei]);
+          if(!ev||!ev[1]) continue;
+          var ePl=(ev[1]||'').trim();
+          var eActType=(ev[3]||'').trim().toLowerCase();
+          var eDur=parseFloat(ev[4])||0;
+          if(!ePl||!eDur) continue;
+          var ePk=_normPlayerName(ePl);
+          var eIsMatch=/match|game|fixture/.test(eActType);
+          var eRate=eIsMatch
+            ?(_eaRates[ePk]&&_eaRates[ePk].mxRate?_eaRates[ePk].mxRate:_sqMxAvg)
+            :(_eaRates[ePk]&&_eaRates[ePk].trRate?_eaRates[ePk].trRate:_sqTrAvg);
+          var eEstHMLD=Math.round(eDur*eRate);
+          if(!window.LIVE_EA_HMLD[ePk]) window.LIVE_EA_HMLD[ePk]={name:ePl,pos:(_eaRates[ePk]&&_eaRates[ePk].pos)||'',estHMLD:0};
+          window.LIVE_EA_HMLD[ePk].estHMLD+=eEstHMLD;
+        }
+      }
+
       var badge=document.querySelector('.badge');
       if(badge) badge.textContent='Live · '+last8[7];
       try { updateAcwrStrip(); } catch(e){ console.warn('updateAcwrStrip post-load:', e); }
@@ -5085,7 +5131,7 @@ function updateMatchStimulusPage(){
     window.LIVE_SESSION_DATA[k].forEach(function(r){
       if(!r.player) return;
       var pk=_normPlayerName(r.player);
-      if(!playerMap[pk]) playerMap[pk]={name:r.player,pos:r.pos,matchTD:0,trainTD:0,matchHMLD:0,trainHMLD:0};
+      if(!playerMap[pk]) playerMap[pk]={name:r.player,pos:r.pos,matchTD:0,trainTD:0,matchHMLD:0,trainHMLD:0,extHMLD:0};
       if(r.matchType==='Match'){
         playerMap[pk].matchTD+=(r.td||0);
         playerMap[pk].matchHMLD+=(r.hmld||0);
@@ -5095,6 +5141,19 @@ function updateMatchStimulusPage(){
       }
     });
   });
+
+  /* Merge external activity estimated HMLD */
+  if(window.LIVE_EA_HMLD){
+    Object.keys(window.LIVE_EA_HMLD).forEach(function(pk){
+      var ea=window.LIVE_EA_HMLD[pk];
+      if(playerMap[pk]){
+        playerMap[pk].extHMLD=ea.estHMLD;
+      } else {
+        /* Player has external activity but no GPS session data yet */
+        playerMap[pk]={name:ea.name,pos:ea.pos||'',matchTD:0,trainTD:0,matchHMLD:0,trainHMLD:0,extHMLD:ea.estHMLD};
+      }
+    });
+  }
 
   var players=Object.values(playerMap);
   if(!players.length){
@@ -5111,9 +5170,10 @@ function updateMatchStimulusPage(){
   /* Sort ascending by match% (lowest exposure first) */
   players.sort(function(a,b){return a.matchPct-b.matchPct;});
 
-  /* Scale bars relative to group maxima */
+  /* Scale bars independently so each metric is readable */
   var maxMatchHMLD=Math.max.apply(null,players.map(function(p){return p.matchHMLD;}).concat([1]));
   var maxTrainHMLD=Math.max.apply(null,players.map(function(p){return p.trainHMLD;}).concat([1]));
+  var maxExtHMLD=Math.max.apply(null,players.map(function(p){return p.extHMLD;}).concat([1]));
 
   function _posShort(pos){
     var p=(pos||'').toLowerCase();
@@ -5131,6 +5191,7 @@ function updateMatchStimulusPage(){
     var mFill=_matchFill(p.matchPct);
     var mW=maxMatchHMLD>0?Math.round(p.matchHMLD/maxMatchHMLD*100):0;
     var tW=maxTrainHMLD>0?Math.round(p.trainHMLD/maxTrainHMLD*100):0;
+    var eW=maxExtHMLD>0?Math.round(p.extHMLD/maxExtHMLD*100):0;
     html+='<div class="exp-row">'
       +'<div class="exp-name '+cls+'">'+_escHtml(p.name)+'</div>'
       +'<div class="exp-pos">'+_posShort(p.pos)+'</div>'
@@ -5139,6 +5200,8 @@ function updateMatchStimulusPage(){
           +'<div class="exp-track"><div class="exp-fill" style="width:'+mW+'%;background:'+mFill+'"></div></div></div>'
         +'<div class="exp-br"><div class="exp-lbl">Training HMLD</div>'
           +'<div class="exp-track"><div class="exp-fill" style="width:'+tW+'%;background:rgba(79,195,247,.5)"></div></div></div>'
+        +'<div class="exp-br"><div class="exp-lbl">Ext. est. HMLD</div>'
+          +'<div class="exp-track"><div class="exp-fill" style="width:'+eW+'%;background:rgba(239,159,39,.45)"></div></div></div>'
       +'</div>'
       +'<div class="exp-pct '+cls+'">'+p.matchPct+'%</div>'
       +'</div>';
