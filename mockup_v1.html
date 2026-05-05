@@ -2933,7 +2933,8 @@ var SESSION_DB = {
     matchProx:  null,
     nextFixture:'Leinster Final · TBC',
     attendance: '25 / 26',
-    drills:     null
+    drills:     null,
+    absentPlayers: ['p3'] /* Philip Halinan — did not play */
   },
   d20260423: {
     label:      'Thu 23 Apr',
@@ -3502,6 +3503,25 @@ function gfChange(){
     }
     updateLabel('ms-personnel');
   }
+  /* Show/hide training drill options in scatter Drill panel based on session type */
+  var _drillOptKeys=['wu','ssg','poss','cg'];
+  _drillOptKeys.forEach(function(k){
+    var inp=document.querySelector('#ms-drill-panel input[value="'+k+'"]');
+    if(!inp) return;
+    var lbl=inp.closest('label');
+    if(sess.drills){
+      if(lbl) lbl.style.display='';
+    } else {
+      if(lbl) lbl.style.display='none';
+      inp.checked=false;
+    }
+  });
+  if(!sess.drills){
+    /* Ensure Full session is checked for match sessions */
+    var _sessInp=document.querySelector('#ms-drill-panel input[value="session"]');
+    if(_sessInp) _sessInp.checked=true;
+    updateLabel('ms-drill');
+  }
   /* Render verdict cards and ACWR flags for selected session */
   renderSessionVerdict();
   renderACWRFlags();
@@ -3802,6 +3822,9 @@ function updateScatterAxes(){
   /* Dim dots for players not in the live dataset (absent from this session) */
   var inDs={};
   players.forEach(function(e){inDs[e[0].replace('p','')]=true;});
+  /* Also remove any players explicitly listed as absent in SESSION_DB */
+  var _sessAbsent=(SESSION_DB[G.session]&&SESSION_DB[G.session].absentPlayers)||[];
+  _sessAbsent.forEach(function(pk){delete inDs[pk.replace('p','')];});
   document.querySelectorAll('.sc-all-dot').forEach(function(g){
     var m=g.className.match(/sc-p(\d+)/);
     if(!m) return;
@@ -4077,9 +4100,14 @@ function lbGetPlayers(){
       });
     }
   }
+  /* Remove any players explicitly absent per SESSION_DB override */
+  var _lbAbsent=(typeof G!=='undefined'&&SESSION_DB[G.session]&&SESSION_DB[G.session].absentPlayers)||[];
+  var _lbAbsentSet={};
+  _lbAbsent.forEach(function(pk){_lbAbsentSet[pk]=true;});
 
   return Object.entries(ds)
     .filter(function(e){
+      if(_lbAbsentSet[e[0]]) return false; /* explicitly absent */
       if(attendeeKeys && !attendeeKeys[e[0]]) return false; /* not in this session */
       return pos==='all'||e[1].pos===pos;
     })
