@@ -3798,6 +3798,19 @@ function updateScatterAxes(){
   window._SC_toX=toX; window._SC_toY=toY;
   /* Update session squad-avg crosshair with real values */
   _updateScatterSessCrosshair(toX,toY,players,xKey,yKey);
+
+  /* Dim dots for players not in the live dataset (absent from this session) */
+  var inDs={};
+  players.forEach(function(e){inDs[e[0].replace('p','')]=true;});
+  document.querySelectorAll('.sc-all-dot').forEach(function(g){
+    var m=g.className.match(/sc-p(\d+)/);
+    if(!m) return;
+    if(inDs[m[1]]){
+      g.style.opacity='';g.style.pointerEvents='';
+    } else {
+      g.style.opacity='0.08';g.style.pointerEvents='none';
+    }
+  });
 }
 
 /* Reposition session squad-avg crosshair */
@@ -4049,7 +4062,28 @@ function lbGetPlayers(){
   var drill=document.getElementById('lb-drill').value;
   var pos=document.getElementById('lb-pos').value;
   var ds=LB_DATA[drill]||LB_DATA.sess;
-  return Object.values(ds).filter(function(p){return pos==='all'||p.pos===pos;});
+
+  /* When viewing full-session data and live data is available,
+     restrict to players who actually attended the selected session */
+  var attendeeKeys=null;
+  if(drill==='sess' && window.LIVE_SESSION_DATA && typeof G!=='undefined'
+     && G.session && window.LIVE_SESSION_DATA[G.session] && window._PM_NAME_MAP){
+    var _liveRows=window.LIVE_SESSION_DATA[G.session];
+    if(_liveRows && _liveRows.length){
+      attendeeKeys={};
+      _liveRows.forEach(function(r){
+        var pk=window._PM_NAME_MAP[_normPlayerName(r.player)];
+        if(pk) attendeeKeys[pk]=true;
+      });
+    }
+  }
+
+  return Object.entries(ds)
+    .filter(function(e){
+      if(attendeeKeys && !attendeeKeys[e[0]]) return false; /* not in this session */
+      return pos==='all'||e[1].pos===pos;
+    })
+    .map(function(e){return e[1];});
 }
 
 function lbTop3(players,key){
