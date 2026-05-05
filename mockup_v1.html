@@ -2703,11 +2703,11 @@ function msAll(cb,panelId){
   if(cb.checked){
     panel.querySelectorAll('input:not(.ms-all-cb)').forEach(function(o){o.checked=false;});
   } else {
-    // if nothing selected, re-check All
     var any=Array.from(panel.querySelectorAll('input:not(.ms-all-cb)')).some(function(o){return o.checked;});
     if(!any) cb.checked=true;
   }
   updateLabel(panelId.replace('-panel',''));
+  _updateAllFilterOptions();
   applyFilters();
 }
 
@@ -2722,7 +2722,129 @@ function msOpt(cb,panelId){
     if(!any && allCb) allCb.checked=true;
   }
   updateLabel(panelId.replace('-panel',''));
+  _updateAllFilterOptions();
   applyFilters();
+}
+
+/* ── Faceted filter cascade — every filter reacts to every other ─ */
+var _CLS_TO_ACT={'sc-sess-dot':'training','sc-csess-dot':'challenge','sc-match-dot':'match','sc-match2-dot':'championship'};
+
+function _updateAllFilterOptions(){
+  var sel={
+    dates:    getVals('ms-dates-panel'),
+    personnel:getVals('ms-personnel-panel'),
+    activity: getVals('ms-activity-panel'),
+    drill:    getVals('ms-drill-panel'),
+    status:   getVals('ms-status-panel')
+  };
+  var isAll={
+    dates:    sel.dates[0]==='all',
+    personnel:sel.personnel[0]==='all',
+    activity: sel.activity[0]==='all',
+    drill:    sel.drill[0]==='all',
+    status:   sel.status[0]==='all'
+  };
+
+  function _actOk(dk){
+    if(isAll.activity) return true;
+    var av=_CLS_TO_ACT[DATE_ACT[dk]];
+    return !!av&&sel.activity.indexOf(av)>-1;
+  }
+  function _drillOk(dk){
+    if(isAll.drill) return true;
+    if(DATE_ACT[dk]!=='sc-sess-dot') return true;
+    if(sel.drill.indexOf('session')>-1) return true;
+    var s=SESSION_DB[dk]; if(!s||!s.drills) return false;
+    return ['wu','ssg','poss','cg'].some(function(k){return sel.drill.indexOf(k)>-1&&s.drills[k];});
+  }
+  function _personnelOk(dk){
+    if(isAll.personnel) return true;
+    if(!window.LIVE_SESSION_DATA||!window._PM_NAME_MAP) return true;
+    var rows=window.LIVE_SESSION_DATA[dk];
+    if(!rows||!rows.length) return true;
+    return rows.some(function(r){
+      var pk=window._PM_NAME_MAP[_normPlayerName(r.player)]; if(!pk) return false;
+      if(sel.personnel.indexOf(pk)>-1) return true;
+      var pm=PLAYER_META[pk]; if(!pm) return false;
+      return (sel.personnel.indexOf('mid')>-1&&pm.pos==='mid')||
+             (sel.personnel.indexOf('fwd')>-1&&pm.pos==='fwd')||
+             (sel.personnel.indexOf('def')>-1&&pm.pos==='def');
+    });
+  }
+
+  /* Dates matching activity + drill + personnel (date filter excluded — computing available dates) */
+  var inScope={};
+  Object.keys(SESSION_DB).forEach(function(dk){
+    if(_actOk(dk)&&_drillOk(dk)&&_personnelOk(dk)) inScope[dk]=true;
+  });
+  /* Active dates: also pass the dates filter */
+  var active={};
+  Object.keys(inScope).forEach(function(dk){
+    if(isAll.dates||sel.dates.indexOf(dk)>-1) active[dk]=true;
+  });
+
+  /* 1 — Dates: show dates that match activity + drill + personnel */
+  var dateKeys=Array.from(document.querySelectorAll('#ms-dates-panel input:not(.ms-all-cb)')).map(function(i){return i.value;});
+  _applyFacetAvail('ms-dates-panel', inScope, dateKeys);
+
+  /* 2 — Activity: show types present in active dates */
+  var avAct={};
+  Object.keys(active).forEach(function(dk){var av=_CLS_TO_ACT[DATE_ACT[dk]];if(av)avAct[av]=true;});
+  _applyFacetAvail('ms-activity-panel', avAct, ['training','challenge','match','championship']);
+
+  /* 3 — Drill: show drills from active training dates */
+  var avDrill={};
+  Object.keys(active).forEach(function(dk){
+    var s=SESSION_DB[dk]; if(s&&s.drills) Object.keys(s.drills).forEach(function(k){avDrill[k]=true;});
+  });
+  _applyFacetAvail('ms-drill-panel', avDrill, ['wu','ssg','poss','cg']);
+
+  /* 4 — Personnel: show players present in active dates (live data) */
+  var avPk={};
+  if(window.LIVE_SESSION_DATA&&window._PM_NAME_MAP){
+    Object.keys(active).forEach(function(dk){
+      var rows=window.LIVE_SESSION_DATA[dk]; if(!rows) return;
+      rows.forEach(function(r){
+        var pk=window._PM_NAME_MAP[_normPlayerName(r.player)]; if(pk) avPk[pk]=true;
+      });
+    });
+  }
+  var avPersonnel={};
+  if(Object.keys(avPk).length>0){
+    Object.keys(avPk).forEach(function(pk){
+      avPersonnel[pk]=true;
+      var pm=PLAYER_META[pk]; if(pm&&pm.pos) avPersonnel[pm.pos]=true;
+    });
+  } else {
+    ['mid','fwd','def'].forEach(function(p){avPersonnel[p]=true;});
+    for(var i=1;i<=17;i++) avPersonnel['p'+i]=true;
+  }
+  _applyFacetAvail('ms-personnel-panel', avPersonnel,
+    ['mid','fwd','def','p1','p2','p3','p4','p5','p6','p7','p8','p9','p10','p11','p12','p13','p14','p15','p16','p17']);
+
+  /* 5 — Status: show statuses of in-scope players */
+  var avStatus={};
+  Object.keys(avPk).forEach(function(pk){var pm=PLAYER_META[pk];if(pm&&pm.status)avStatus[pm.status]=true;});
+  if(Object.keys(avStatus).length===0) avStatus={full:true,mod:true,rtp:true};
+  _applyFacetAvail('ms-status-panel', avStatus, ['full','mod','rtp']);
+}
+
+/* ── Show/hide filter options based on available values ─────── */
+function _applyFacetAvail(panelId, availSet, allKeys){
+  var changed=false;
+  allKeys.forEach(function(k){
+    var inp=document.querySelector('#'+panelId+' input[value="'+k+'"]');
+    if(!inp) return;
+    var lbl=inp.closest('label');
+    var isHidden=lbl&&lbl.style.display==='none';
+    if(availSet[k]){
+      if(isHidden){lbl.style.display='';changed=true;}
+    } else {
+      if(!isHidden){if(lbl)lbl.style.display='none';changed=true;}
+      if(inp.checked){inp.checked=false;changed=true;}
+    }
+  });
+  if(changed) updateLabel(panelId.replace('-panel',''));
 }
 
 /* ── Update button label ─────────────────────────────────────── */
@@ -2874,6 +2996,7 @@ function applyFilters(){
 document.addEventListener('DOMContentLoaded',function(){
   document.querySelectorAll('.sc-dot').forEach(function(d){d.style.display='block';});
   Object.keys(MS_TITLES).forEach(updateLabel);
+  _updateAllFilterOptions(); /* initialise all filter panels based on default selections */
   lbRender();
   renderDrillCards();
   renderDrillBars();
@@ -3502,25 +3625,6 @@ function gfChange(){
       _opts.forEach(function(o){ o.checked = false; });
     }
     updateLabel('ms-personnel');
-  }
-  /* Show/hide training drill options in scatter Drill panel based on session type */
-  var _drillOptKeys=['wu','ssg','poss','cg'];
-  _drillOptKeys.forEach(function(k){
-    var inp=document.querySelector('#ms-drill-panel input[value="'+k+'"]');
-    if(!inp) return;
-    var lbl=inp.closest('label');
-    if(sess.drills){
-      if(lbl) lbl.style.display='';
-    } else {
-      if(lbl) lbl.style.display='none';
-      inp.checked=false;
-    }
-  });
-  if(!sess.drills){
-    /* Ensure Full session is checked for match sessions */
-    var _sessInp=document.querySelector('#ms-drill-panel input[value="session"]');
-    if(_sessInp) _sessInp.checked=true;
-    updateLabel('ms-drill');
   }
   /* Render verdict cards and ACWR flags for selected session */
   renderSessionVerdict();
@@ -4862,6 +4966,7 @@ function loadLiveData(){
       var badge=document.querySelector('.badge');
       if(badge) badge.textContent='Live · '+last8[7];
       try { updateAcwrStrip(); } catch(e){ console.warn('updateAcwrStrip post-load:', e); }
+      try { _updateAllFilterOptions(); } catch(e){ console.warn('_updateAllFilterOptions post-load:', e); }
       try { updateScatterAxes(); } catch(e){ console.warn('updateScatterAxes post-load:', e); }
       try { updateScatterMatchDots(); } catch(e){ console.warn('updateScatterMatchDots post-load:', e); }
       try { updateDecAccChart(); } catch(e){ console.warn('updateDecAccChart post-load:', e); }
