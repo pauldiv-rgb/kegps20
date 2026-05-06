@@ -3032,30 +3032,57 @@ function _drillLabel(k){
   return k.replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();});
 }
 
-/* ── Build drill filter panel from all SESSION_DB drills ─────── */
+/* ── Build drill filter panel — live drill names from current session ─ */
 function _buildDrillPanel(){
   var panel=document.getElementById('ms-drill-panel');
   if(!panel) return;
-  /* Collect all unique drill keys from SESSION_DB */
-  var drillSet={};
-  Object.keys(SESSION_DB).forEach(function(dk){
-    var s=SESSION_DB[dk]; if(s&&s.drills) Object.keys(s.drills).forEach(function(k){drillSet[k]=true;});
-  });
-  /* Fixed category options — Full session + aggregate training + match halves.
-     Raw drill slugs from SESSION_DB are not exposed here (too granular for filter). */
-  var PRIORITY=['wu','ssg','poss','cg'];
-  var priority=PRIORITY.filter(function(k){return drillSet[k];});
-  var html='<label class="ms-opt ms-note-row"><span style="font-size:9px;color:var(--muted);padding:2px 0">Applies to scatter chart</span></label>'
+  var sessKey=G&&G.session;
+  var html='<label class="ms-opt ms-note-row"><span style="font-size:9px;color:var(--muted);padding:2px 0">Drills from selected session</span></label>'
     +'<label class="ms-opt"><input type="checkbox" value="session" checked onchange="msOpt(this,\'ms-drill-panel\')"><span>Full session</span></label>';
-  if(priority.length){
-    html+='<div class="ms-sep">Training drills</div>';
-    priority.forEach(function(k){
-      html+='<label class="ms-opt"><input type="checkbox" value="'+k+'" onchange="msOpt(this,\'ms-drill-panel\')"><span>'+_drillLabel(k)+'</span></label>';
+
+  /* ── Live data path: use actual drill names from LIVE_DRILL_PLAYER_DATA ── */
+  if(sessKey&&window.LIVE_DRILL_PLAYER_DATA&&window.LIVE_DRILL_PLAYER_DATA[sessKey]){
+    var dpd=window.LIVE_DRILL_PLAYER_DATA[sessKey];
+    var slugs=Object.keys(dpd);
+    /* Identify match halves by slug pattern */
+    function _isHalf(s){return /(_1st_half|_2nd_half|_3rd_half|_4th_half|match.*half|half.*match)/i.test(s);}
+    var drills=slugs.filter(function(s){return !_isHalf(s);});
+    var halves=slugs.filter(function(s){return _isHalf(s);}).sort();
+    /* Get display name from first player's entry */
+    function _getName(slug){
+      var pls=Object.keys(dpd[slug]);
+      return pls.length?(dpd[slug][pls[0]].name||slug):slug;
+    }
+    if(drills.length){
+      html+='<div class="ms-sep">Session drills</div>';
+      drills.forEach(function(slug){
+        html+='<label class="ms-opt"><input type="checkbox" value="'+slug+'" onchange="msOpt(this,\'ms-drill-panel\')"><span>'+_getName(slug)+'</span></label>';
+      });
+    }
+    if(halves.length){
+      html+='<div class="ms-sep">Match halves</div>';
+      halves.forEach(function(slug){
+        html+='<label class="ms-opt"><input type="checkbox" value="'+slug+'" onchange="msOpt(this,\'ms-drill-panel\')"><span>'+_getName(slug)+'</span></label>';
+      });
+    }
+  } else {
+    /* ── Fallback: SESSION_DB aggregate categories ── */
+    var drillSet={};
+    Object.keys(SESSION_DB).forEach(function(dk){
+      var s=SESSION_DB[dk];if(s&&s.drills)Object.keys(s.drills).forEach(function(k){drillSet[k]=true;});
     });
+    var PRIORITY=['wu','ssg','poss','cg'];
+    var priority=PRIORITY.filter(function(k){return drillSet[k];});
+    if(priority.length){
+      html+='<div class="ms-sep">Training drills</div>';
+      priority.forEach(function(k){
+        html+='<label class="ms-opt"><input type="checkbox" value="'+k+'" onchange="msOpt(this,\'ms-drill-panel\')"><span>'+_drillLabel(k)+'</span></label>';
+      });
+    }
+    html+='<div class="ms-sep">Match halves</div>'
+      +'<label class="ms-opt"><input type="checkbox" value="h1" onchange="msOpt(this,\'ms-drill-panel\')"><span>1st Half</span></label>'
+      +'<label class="ms-opt"><input type="checkbox" value="h2" onchange="msOpt(this,\'ms-drill-panel\')"><span>2nd Half</span></label>';
   }
-  html+='<div class="ms-sep">Match halves</div>'
-    +'<label class="ms-opt"><input type="checkbox" value="h1" onchange="msOpt(this,\'ms-drill-panel\')"><span>1st Half</span></label>'
-    +'<label class="ms-opt"><input type="checkbox" value="h2" onchange="msOpt(this,\'ms-drill-panel\')"><span>2nd Half</span></label>';
   panel.innerHTML=html;
 }
 
@@ -3712,6 +3739,8 @@ function gfChange(){
   G.session = document.getElementById('gf-session').value;
   G.pos     = document.getElementById('gf-pos').value;
   G.player  = document.getElementById('gf-player').value;
+  /* Rebuild drill panel with live names for the selected session */
+  _buildDrillPanel();
   var sess = SESSION_DB[G.session];
   /* Update session bar static info */
   /* Update session bar */
@@ -5755,6 +5784,7 @@ function loadLiveData(){
       if(badge) badge.textContent='Live · '+last8[7];
       try { updateAcwrStrip(); } catch(e){ console.warn('updateAcwrStrip post-load:', e); }
       try { _updateAllFilterOptions(); } catch(e){ console.warn('_updateAllFilterOptions post-load:', e); }
+      try { _buildDrillPanel(); } catch(e){ console.warn('_buildDrillPanel post-load:', e); }
       try { updateScatterAxes(); } catch(e){ console.warn('updateScatterAxes post-load:', e); }
       try { updateScatterMatchDots(); } catch(e){ console.warn('updateScatterMatchDots post-load:', e); }
       try { updateDecAccChart(); } catch(e){ console.warn('updateDecAccChart post-load:', e); }
