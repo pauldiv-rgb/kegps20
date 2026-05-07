@@ -715,6 +715,7 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
 .lb-col{
   background:var(--bg);border:1px solid var(--border);
   border-radius:8px;padding:10px 12px;
+  min-width:0;overflow:hidden;
 }
 .lb-col-hd{
   display:flex;align-items:center;justify-content:space-between;
@@ -747,7 +748,7 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
   font-size:14px;flex-shrink:0;width:20px;text-align:center;line-height:1;
 }
 .lb-name-block{flex:1;min-width:0}
-.lb-name{font-size:11px;font-weight:700;color:var(--text);white-space:nowrap}
+.lb-name{font-size:11px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lb-pos-dot{
   display:inline-block;width:7px;height:7px;border-radius:50%;
   margin-left:4px;vertical-align:middle;
@@ -941,7 +942,7 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
     <div class="si-sep"></div>
     <div><div class="si-lbl">Next Fixture</div><div class="si-val" id="si-fixture">v Meath · 26 Apr</div></div>
     <div class="si-sep"></div>
-    <div><div class="si-lbl">Attendance</div><div class="si-val" id="si-att">22 / 26</div></div>
+    <div><div class="si-lbl">GPS Present / Panel</div><div class="si-val" id="si-att">22 / 26</div></div>
     <div class="si-sep"></div>
     <div>
       <div class="si-lbl">Position</div>
@@ -1137,7 +1138,7 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
           <div style="font-size:8px;color:#e08844;margin-top:4px;font-weight:600">CG</div>
         </div>
       </div>
-      <div style="font-size:8px;color:var(--muted);margin-top:8px;text-align:right">HMLD/min · Thu 24 Apr 2026</div>
+      <div style="font-size:8px;color:var(--muted);margin-top:8px;text-align:right">HMLD/min · awaiting live data</div>
     </div>
   </div>
 
@@ -1796,8 +1797,8 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
           <!-- Dots -->
           <circle id="ac-dot-0" cx="45.0" cy="57.0" r="4" fill="#81C784" stroke="var(--s1)" stroke-width="1.2"/><circle id="ac-dot-1" cx="112.1" cy="54.0" r="4" fill="#81C784" stroke="var(--s1)" stroke-width="1.2"/><circle id="ac-dot-2" cx="179.3" cy="51.5" r="4" fill="#81C784" stroke="var(--s1)" stroke-width="1.2"/><circle id="ac-dot-3" cx="246.4" cy="49.5" r="4" fill="#81C784" stroke="var(--s1)" stroke-width="1.2"/><circle id="ac-dot-4" cx="313.6" cy="47.5" r="4" fill="#81C784" stroke="var(--s1)" stroke-width="1.2"/><circle id="ac-dot-5" cx="380.7" cy="46.0" r="4" fill="#81C784" stroke="var(--s1)" stroke-width="1.2"/><circle id="ac-dot-6" cx="447.9" cy="45.0" r="4" fill="#81C784" stroke="var(--s1)" stroke-width="1.2"/><circle id="ac-dot-7" cx="515.0" cy="44.0" r="4" fill="#81C784" stroke="var(--s1)" stroke-width="1.2"/>
           <!-- Session date labels -->
-          <text x="45.0" y="124" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">20 Mar</text><text x="112.1" y="124" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">28 Mar</text><text x="179.3" y="124" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">1 Apr</text><text x="246.4" y="124" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">7 Apr</text><text x="313.6" y="124" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">14 Apr</text><text x="380.7" y="124" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">17 Apr</text><text x="447.9" y="124" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">21 Apr</text><text x="515.0" y="124" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">24 Apr</text>
-        
+          <text id="ac-dt-0" x="45.0" y="124" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">20 Mar</text><text id="ac-dt-1" x="112.1" y="124" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">28 Mar</text><text id="ac-dt-2" x="179.3" y="124" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">1 Apr</text><text id="ac-dt-3" x="246.4" y="124" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">7 Apr</text><text id="ac-dt-4" x="313.6" y="124" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">14 Apr</text><text id="ac-dt-5" x="380.7" y="124" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">17 Apr</text><text id="ac-dt-6" x="447.9" y="124" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">21 Apr</text><text id="ac-dt-7" x="515.0" y="124" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">24 Apr</text>
+
           <!-- Comparison player 2 (teal) -->
           <polyline id="ac-line2" points="45.0,58 112.1,58 179.3,58 246.4,58 313.6,58 380.7,58 447.9,58 515.0,58" fill="none" stroke="#26C6DA" stroke-width="2" stroke-dasharray="6,3" stroke-linejoin="round" stroke-linecap="round" opacity="0"/>
           <circle id="ac-dot2-0" cx="45.0" cy="58" r="3.5" fill="#26C6DA" stroke="var(--s1)" stroke-width="1" opacity="0"/><circle id="ac-dot2-1" cx="112.1" cy="58" r="3.5" fill="#26C6DA" stroke="var(--s1)" stroke-width="1" opacity="0"/><circle id="ac-dot2-2" cx="179.3" cy="58" r="3.5" fill="#26C6DA" stroke="var(--s1)" stroke-width="1" opacity="0"/><circle id="ac-dot2-3" cx="246.4" cy="58" r="3.5" fill="#26C6DA" stroke="var(--s1)" stroke-width="1" opacity="0"/><circle id="ac-dot2-4" cx="313.6" cy="58" r="3.5" fill="#26C6DA" stroke="var(--s1)" stroke-width="1" opacity="0"/><circle id="ac-dot2-5" cx="380.7" cy="58" r="3.5" fill="#26C6DA" stroke="var(--s1)" stroke-width="1" opacity="0"/><circle id="ac-dot2-6" cx="447.9" cy="58" r="3.5" fill="#26C6DA" stroke="var(--s1)" stroke-width="1" opacity="0"/><circle id="ac-dot2-7" cx="515.0" cy="58" r="3.5" fill="#26C6DA" stroke="var(--s1)" stroke-width="1" opacity="0"/>
@@ -1861,7 +1862,7 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
           <circle id="ms2-sdot-0" cx="45.0" cy="86.0" r="4" fill="#E24B4A" stroke="var(--s1)" stroke-width="1.2"/><circle id="ms2-sdot-1" cx="112.1" cy="83.6" r="4" fill="#E24B4A" stroke="var(--s1)" stroke-width="1.2"/><circle id="ms2-sdot-2" cx="179.3" cy="81.0" r="4" fill="#E24B4A" stroke="var(--s1)" stroke-width="1.2"/><circle id="ms2-sdot-3" cx="246.4" cy="79.6" r="4" fill="#E24B4A" stroke="var(--s1)" stroke-width="1.2"/><circle id="ms2-sdot-4" cx="313.6" cy="78.4" r="4" fill="#E24B4A" stroke="var(--s1)" stroke-width="1.2"/><circle id="ms2-sdot-5" cx="380.7" cy="77.0" r="4" fill="#E24B4A" stroke="var(--s1)" stroke-width="1.2"/><circle id="ms2-sdot-6" cx="447.9" cy="79.6" r="4" fill="#E24B4A" stroke="var(--s1)" stroke-width="1.2"/><circle id="ms2-sdot-7" cx="515.0" cy="76.4" r="4" fill="#E24B4A" stroke="var(--s1)" stroke-width="1.2"/>
           <!-- Tick marks & date labels -->
           <line x1="45.0" y1="108" x2="45.0" y2="112" stroke="rgba(160,185,205,0.25)" stroke-width="0.8"/><line x1="112.1" y1="108" x2="112.1" y2="112" stroke="rgba(160,185,205,0.25)" stroke-width="0.8"/><line x1="179.3" y1="108" x2="179.3" y2="112" stroke="rgba(160,185,205,0.25)" stroke-width="0.8"/><line x1="246.4" y1="108" x2="246.4" y2="112" stroke="rgba(160,185,205,0.25)" stroke-width="0.8"/><line x1="313.6" y1="108" x2="313.6" y2="112" stroke="rgba(160,185,205,0.25)" stroke-width="0.8"/><line x1="380.7" y1="108" x2="380.7" y2="112" stroke="rgba(160,185,205,0.25)" stroke-width="0.8"/><line x1="447.9" y1="108" x2="447.9" y2="112" stroke="rgba(160,185,205,0.25)" stroke-width="0.8"/><line x1="515.0" y1="108" x2="515.0" y2="112" stroke="rgba(160,185,205,0.25)" stroke-width="0.8"/>
-          <text x="45.0" y="124" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">20 Mar</text><text x="112.1" y="124" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">28 Mar</text><text x="179.3" y="124" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">1 Apr</text><text x="246.4" y="124" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">7 Apr</text><text x="313.6" y="124" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">14 Apr</text><text x="380.7" y="124" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">17 Apr</text><text x="447.9" y="124" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">21 Apr</text><text x="515.0" y="124" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">24 Apr</text>
+          <text id="ms2-dt-0" x="45.0" y="124" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">20 Mar</text><text id="ms2-dt-1" x="112.1" y="124" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">28 Mar</text><text id="ms2-dt-2" x="179.3" y="124" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">1 Apr</text><text id="ms2-dt-3" x="246.4" y="124" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">7 Apr</text><text id="ms2-dt-4" x="313.6" y="124" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">14 Apr</text><text id="ms2-dt-5" x="380.7" y="124" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">17 Apr</text><text id="ms2-dt-6" x="447.9" y="124" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">21 Apr</text><text id="ms2-dt-7" x="515.0" y="124" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">24 Apr</text>
         
           <!-- Comparison mono lines only (scale-independent) -->
           <!-- P2 (teal) mono -->
@@ -2092,7 +2093,7 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
       <polyline id="da-line3" points="45.0,43 112.1,43 179.3,43 246.4,43 313.6,43 380.7,43 447.9,43 515.0,43" fill="none" stroke="#FFA726" stroke-width="2" stroke-dasharray="3,3" stroke-linejoin="round" stroke-linecap="round" opacity="0"/>
       <circle id="da-dot3-0" cx="45.0" cy="43" r="3.5" fill="#FFA726" stroke="var(--s1)" stroke-width="1" opacity="0"/><circle id="da-dot3-1" cx="112.1" cy="43" r="3.5" fill="#FFA726" stroke="var(--s1)" stroke-width="1" opacity="0"/><circle id="da-dot3-2" cx="179.3" cy="43" r="3.5" fill="#FFA726" stroke="var(--s1)" stroke-width="1" opacity="0"/><circle id="da-dot3-3" cx="246.4" cy="43" r="3.5" fill="#FFA726" stroke="var(--s1)" stroke-width="1" opacity="0"/><circle id="da-dot3-4" cx="313.6" cy="43" r="3.5" fill="#FFA726" stroke="var(--s1)" stroke-width="1" opacity="0"/><circle id="da-dot3-5" cx="380.7" cy="43" r="3.5" fill="#FFA726" stroke="var(--s1)" stroke-width="1" opacity="0"/><circle id="da-dot3-6" cx="447.9" cy="43" r="3.5" fill="#FFA726" stroke="var(--s1)" stroke-width="1" opacity="0"/><circle id="da-dot3-7" cx="515.0" cy="43" r="3.5" fill="#FFA726" stroke="var(--s1)" stroke-width="1" opacity="0"/>
       <line x1="45.0" y1="78" x2="45.0" y2="82" stroke="rgba(160,185,205,0.25)" stroke-width="0.8"/><line x1="112.1" y1="78" x2="112.1" y2="82" stroke="rgba(160,185,205,0.25)" stroke-width="0.8"/><line x1="179.3" y1="78" x2="179.3" y2="82" stroke="rgba(160,185,205,0.25)" stroke-width="0.8"/><line x1="246.4" y1="78" x2="246.4" y2="82" stroke="rgba(160,185,205,0.25)" stroke-width="0.8"/><line x1="313.6" y1="78" x2="313.6" y2="82" stroke="rgba(160,185,205,0.25)" stroke-width="0.8"/><line x1="380.7" y1="78" x2="380.7" y2="82" stroke="rgba(160,185,205,0.25)" stroke-width="0.8"/><line x1="447.9" y1="78" x2="447.9" y2="82" stroke="rgba(160,185,205,0.25)" stroke-width="0.8"/><line x1="515.0" y1="78" x2="515.0" y2="82" stroke="rgba(160,185,205,0.25)" stroke-width="0.8"/>
-      <text x="45.0" y="93" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">20 Mar</text><text x="112.1" y="93" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">28 Mar</text><text x="179.3" y="93" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">1 Apr</text><text x="246.4" y="93" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">7 Apr</text><text x="313.6" y="93" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">14 Apr</text><text x="380.7" y="93" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">17 Apr</text><text x="447.9" y="93" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">21 Apr</text><text x="515.0" y="93" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">24 Apr</text>
+      <text id="da-dt-0" x="45.0" y="93" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">20 Mar</text><text id="da-dt-1" x="112.1" y="93" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">28 Mar</text><text id="da-dt-2" x="179.3" y="93" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">1 Apr</text><text id="da-dt-3" x="246.4" y="93" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">7 Apr</text><text id="da-dt-4" x="313.6" y="93" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">14 Apr</text><text id="da-dt-5" x="380.7" y="93" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">17 Apr</text><text id="da-dt-6" x="447.9" y="93" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">21 Apr</text><text id="da-dt-7" x="515.0" y="93" text-anchor="middle" fill="rgba(160,185,205,0.55)" font-size="8.5" font-family="Inter,sans-serif">24 Apr</text>
     </svg>
     <div style="display:flex;gap:16px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
       <div>
@@ -3045,7 +3046,7 @@ document.addEventListener('DOMContentLoaded',function(){
     var _att=document.querySelector('.att-note');
     if(_att&&_sess0.attendance){
       var _p0=_sess0.attendance.split('/');var _pr=parseInt(_p0[0])||0;var _to=parseInt(_p0[1])||0;var _ab=_to-_pr;
-      if(_ab<=0){_att.style.display='none';}else{_att.style.display='';_att.textContent='⚠ '+_ab+' absent — averages based on '+_pr+' players present';}
+      if(_ab<=0){_att.style.display='none';}else{_att.style.display='';_att.textContent='⚠ '+_ab+' absent from '+_to+'-player panel — session averages based on '+_pr+' GPS readings';}
     }
   }
   var badge=document.querySelector('.badge');
@@ -3303,7 +3304,7 @@ document.addEventListener('DOMContentLoaded',function(){
     var _att=document.querySelector('.att-note');
     if(_att&&_sess0.attendance){
       var _p0=_sess0.attendance.split('/');var _pr=parseInt(_p0[0])||0;var _to=parseInt(_p0[1])||0;var _ab=_to-_pr;
-      if(_ab<=0){_att.style.display='none';}else{_att.style.display='';_att.textContent='⚠ '+_ab+' absent — averages based on '+_pr+' players present';}
+      if(_ab<=0){_att.style.display='none';}else{_att.style.display='';_att.textContent='⚠ '+_ab+' absent from '+_to+'-player panel — session averages based on '+_pr+' GPS readings';}
     }
   }
   var badge=document.querySelector('.badge');
@@ -3888,7 +3889,7 @@ function gfChange(){
     var _total=parseInt(_ap[1])||0;
     var _absent=_total-_present;
     if(_absent<=0){attNote.style.display='none';}
-    else{attNote.style.display='';attNote.textContent='⚠ '+_absent+' absent — averages based on '+_present+' players present';}
+    else{attNote.style.display='';attNote.textContent='⚠ '+_absent+' absent from '+_total+'-player panel — session averages based on '+_present+' GPS readings';}
   }
   /* Rebuild drill dropdown from session's actual drills */
   var drillEl = document.getElementById('lb-drill');
@@ -4129,9 +4130,16 @@ function renderDrillBars(){
   var el = document.getElementById('drill-bars-container');
   var wrapEl = document.getElementById('drill-bars-wrap');
   if(!el) return;
+  if(!sess){
+    wrapEl.style.display='';
+    el.innerHTML='<div style="padding:14px 0;font-size:9px;color:var(--muted)">Session not yet loaded — awaiting live data.</div>';
+    return;
+  }
   var drillData = sess.drills;
   if(!drillData){
-    wrapEl.style.display='none'; return;
+    wrapEl.style.display='';
+    el.innerHTML='<div style="padding:14px 0;font-size:9px;color:var(--muted)">No drill export data for this session — populate LS_Drill_Data in the GPS workbook to see per-drill breakdown.</div>';
+    return;
   }
   wrapEl.style.display='';
   var metric = document.getElementById('db-metric').value;
@@ -4236,7 +4244,8 @@ function renderDrillBars(){
   if(!filterAll && avgVals.length < vals.length){
     filterNote += ' · avg: filtered drills';
   }
-  html += '<div style="font-size:8.5px;color:var(--muted);margin-top:4px;text-align:right">'+lbl+' ('+unit+')'+filterNote+'</div>';
+  var sessDateNote = sess.label ? ' · '+sess.label : '';
+  html += '<div style="font-size:8.5px;color:var(--muted);margin-top:4px;text-align:right">'+lbl+' ('+unit+')'+filterNote+sessDateNote+'</div>';
   el.innerHTML = html;
 }
 
@@ -4301,7 +4310,7 @@ function _latestMatchSessKey(){
   var keys=Object.keys(window.LIVE_SESSION_DATA).sort();
   for(var i=keys.length-1;i>=0;i--){
     var rs=window.LIVE_SESSION_DATA[keys[i]];
-    if(rs&&rs.some(function(r){return r.matchType==='Match';})) return keys[i];
+    if(rs&&rs.some(function(r){return _isMatchType(r.matchType);})) return keys[i];
   }
   return null;
 }
@@ -4857,6 +4866,19 @@ function lbGetPlayers(){
     }
   }
 
+  /* F04: Compute maxSpdP from SPARK_DATA2 28-day peak */
+  if(window.SPARK_DATA2){
+    Object.keys(ds).forEach(function(pKey){
+      var pm=PLAYER_META[pKey]; if(!pm) return;
+      var slug=_slug(pm.fullName||'');
+      var spk=window.SPARK_DATA2[slug];
+      if(spk&&spk.peak28>0&&ds[pKey].maxSpd>0){
+        var spdKmh=ds[pKey].maxSpd*3.6; /* convert m/s → km/h */
+        ds[pKey].maxSpdP=Math.min(110,Math.round(spdKmh/spk.peak28*100));
+      }
+    });
+  }
+
   /* Remove absent players */
   var _lbAbsent=(SESSION_DB[lbSessKey]&&SESSION_DB[lbSessKey].absentPlayers)||[];
   if(lbSessKey&&window.ATTEND_DATA&&window.ATTEND_DATA[lbSessKey]){
@@ -4953,8 +4975,14 @@ function lbRender(){
   /* Intensity */
   var intMeta=LB_INT_META[LB_INT_METRIC];
   var top15Int=lbTop15(players,intMeta.key);
-  document.getElementById('lb-int-list').innerHTML=
-    top15Int.map(function(p,i){return lbIntRowHtml(p,i,intMeta);}).join('');
+  var _intAllZero=top15Int.length>0&&top15Int.every(function(p){return !p[intMeta.key]||p[intMeta.key]===0;});
+  if(_intAllZero){
+    document.getElementById('lb-int-list').innerHTML=
+      '<div style="padding:10px 4px;font-size:9px;color:var(--muted);font-style:italic">'+intMeta.lbl+' not in squad CSV — add column to GPS workbook Sheet1 to populate this leaderboard.</div>';
+  } else {
+    document.getElementById('lb-int-list').innerHTML=
+      top15Int.map(function(p,i){return lbIntRowHtml(p,i,intMeta);}).join('');
+  }
   /* Volume */
   var volKey=document.getElementById('lb-vol-sel').value;
   var volMeta=LB_VOL_META[volKey];
@@ -5770,6 +5798,23 @@ function loadLiveData(){
           strain:l8.map(function(s){return s.hmld;})};
       });
       SPARK_DATA2=newSpark;
+      /* ── Update SVG x-axis date labels from last8 session dates ── */
+      (function(){
+        var MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        var prefixes=['ac-dt','ms2-dt','da-dt'];
+        for(var i=0;i<8;i++){
+          var ds=last8[i];
+          var lbl='';
+          if(ds){
+            var d=_parseDate(ds);
+            if(d&&!isNaN(d.getTime())) lbl=d.getDate()+' '+MON[d.getMonth()];
+          }
+          prefixes.forEach(function(pfx){
+            var el=document.getElementById(pfx+'-'+i);
+            if(el&&lbl) el.textContent=lbl;
+          });
+        }
+      })();
       // Rebuild player selectors (sel-p37/p1/p15)
       var pKeys=Object.keys(pMap).sort(function(a,b){return pMap[a].label.localeCompare(pMap[b].label);});
       var baseOpts='<option value="squad">Squad avg</option>'+pKeys.map(function(k){return '<option value="'+k+'">'+pMap[k].label+'</option>';}).join('');
@@ -5828,7 +5873,7 @@ function loadLiveData(){
             if(!r.player||!r.dur) return;
             var pk=_normPlayerName(r.player);
             if(!_eaRates[pk]) _eaRates[pk]={trHMLD:0,trMin:0,mxHMLD:0,mxMin:0,name:r.player,pos:r.pos};
-            if(r.matchType==='Match'){_eaRates[pk].mxHMLD+=r.hmld||0;_eaRates[pk].mxMin+=r.dur;}
+            if(_isMatchType(r.matchType)){_eaRates[pk].mxHMLD+=r.hmld||0;_eaRates[pk].mxMin+=r.dur;}
             else{_eaRates[pk].trHMLD+=r.hmld||0;_eaRates[pk].trMin+=r.dur;}
           });
         });
@@ -5901,6 +5946,21 @@ function _flagAction(risk,acwr,arrow){
   if(risk==='caution'&&arrow==='↓') return 'Peaked above 1.50, now settling. Avoid load spike MD−2. Monitor response before clearing.';
   if(risk==='caution') return 'ACWR ≥1.30 — elevated for consecutive weeks. Watch cumulative strain into match week.';
   return 'Under-loaded relative to chronic base. Confirm availability. Do not push to full squad load without chronic rebuild period.';
+}
+/* ── Staleness check: ACWR week > 14 days old ─────────────── */
+function _isStaleAcwr(week){
+  if(!week) return false;
+  var parts=week.split('-');
+  if(parts.length<3) return false;
+  var weekDate=new Date(parseInt(parts[0]),parseInt(parts[1])-1,parseInt(parts[2]));
+  var cutoff=new Date(); cutoff.setDate(cutoff.getDate()-14);
+  return weekDate<cutoff;
+}
+/* ── Match-type check: covers Match, Championship, League, etc. ── */
+function _isMatchType(mt){
+  if(!mt) return false;
+  var lc=mt.toLowerCase();
+  return lc.indexOf('match')>-1||lc.indexOf('championship')>-1||lc.indexOf('league')>-1||lc.indexOf('final')>-1;
 }
 /* ── Acute / chronic summary cards ──────────────────────────── */
 function updateAcwrSummaryCards(){
@@ -6010,6 +6070,15 @@ function updateWeeklyTargetPage(){
   el=document.getElementById('p1-hsr-val'); if(el) el.textContent=avgHsr.toLocaleString()+' m';
   el=document.getElementById('p1-hsr-ind'); if(el){el.textContent=avgHsr>=750?'↑ Above threshold':'↓ Below 750m target';el.className='card-ind '+(avgHsr>=750?'c-green':'c-amber');}
 
+  /* Benchmark bar chart — benchmarks computed from ALL players, filtered view shows subset */
+  var benchRows=document.getElementById('bench-rows');
+  if(!benchRows) return;
+
+  var allGroups={MID:[],FWD:[],DEF:[],GK:[]};
+  allPlayers.forEach(function(p){allGroups[p.pos].push(p);});
+  function _grpAvg(arr){return arr.length?Math.round(arr.reduce(function(a,p){return a+_mv(p);},0)/arr.length):0;}
+  var benchmarks={MID:_grpAvg(allGroups.MID),FWD:_grpAvg(allGroups.FWD),DEF:_grpAvg(allGroups.DEF),GK:_grpAvg(allGroups.GK)};
+
   /* Synthesis sentence — X of Y players on target */
   var _onTarget=0;
   visPlayers.forEach(function(p){var bm=benchmarks[p.pos];if(bm>0&&_mv(p)/bm>=0.9)_onTarget++;});
@@ -6020,15 +6089,6 @@ function updateWeeklyTargetPage(){
     _synthEl.innerHTML='<span class="'+_synthCls+'" style="font-weight:700">'+_onTarget+' of '+visPlayers.length+' players</span>'
       +' at or above 90% benchmark ('+_synthPct+'%) · '+windowDays+'d window';
   }
-
-  /* Benchmark bar chart — benchmarks computed from ALL players, filtered view shows subset */
-  var benchRows=document.getElementById('bench-rows');
-  if(!benchRows) return;
-
-  var allGroups={MID:[],FWD:[],DEF:[],GK:[]};
-  allPlayers.forEach(function(p){allGroups[p.pos].push(p);});
-  function _grpAvg(arr){return arr.length?Math.round(arr.reduce(function(a,p){return a+_mv(p);},0)/arr.length):0;}
-  var benchmarks={MID:_grpAvg(allGroups.MID),FWD:_grpAvg(allGroups.FWD),DEF:_grpAvg(allGroups.DEF),GK:_grpAvg(allGroups.GK)};
 
   function _barFill(pct){
     if(pct>=110) return 'rgba(159,225,203,0.7)';
@@ -6138,9 +6198,9 @@ function updateTrainingQualityPage(){
 
   /* Update quality signal cards */
   var el;
-  var tdCol=avgTdMin>=70?'c-green':avgTdMin>=60?'c-amber':'c-red';
+  var tdCol=avgTdMin>=80?'c-red':avgTdMin>=70?'c-green':avgTdMin>=60?'c-amber':'c-red';
   el=document.getElementById('p15-tdmin-val'); if(el){el.textContent=avgTdMin.toFixed(1)+' m/min';el.className='card-val '+tdCol;}
-  el=document.getElementById('p15-tdmin-ind'); if(el){el.textContent=avgTdMin>=70?'↑ On target':avgTdMin>=60?'⚠ Below 70 m/min target':'↓ Well below match demand';el.className='card-ind '+tdCol;}
+  el=document.getElementById('p15-tdmin-ind'); if(el){el.textContent=avgTdMin>=80?'⚡ Exceeds match ceiling (80)':avgTdMin>=70?'↑ On target':avgTdMin>=60?'⚠ Below 70 m/min target':'↓ Well below match demand';el.className='card-ind '+tdCol;}
   var hsrCol=avgHsr7d>=750?'c-green':avgHsr7d>=500?'c-amber':'c-red';
   el=document.getElementById('p15-hsr-val'); if(el){el.textContent=avgHsr7d.toLocaleString()+' m';el.className='card-val '+hsrCol;}
   el=document.getElementById('p15-hsr-ind'); if(el){el.textContent=avgHsr7d>=750?'↑ Above threshold':avgHsr7d>=500?'⚠ Below 750m target':'↓ Low HSR week';el.className='card-ind '+hsrCol;}
@@ -6174,7 +6234,8 @@ function updateTrainingQualityPage(){
       var acwrRec=LIVE_ACWR[pkey];
       var acwr=acwrRec?acwrRec.acwr:0;
       var tdm=r.tdMin||0;
-      var cat=tdm>=70&&acwr>=1.30?'risk':tdm>=70?'good':'low';
+      /* ≥80 m/min = above match demand ceiling → elevated risk regardless of ACWR */
+      var cat=tdm>=80?'risk':tdm>=70&&acwr>=1.30?'risk':tdm>=70?'good':'low';
       qPlayers.push({name:r.player,cat:cat});
     });
     qPlayers.sort(function(a,b){return ({risk:0,good:1,low:2})[a.cat]-({risk:0,good:1,low:2})[b.cat];});
@@ -6300,7 +6361,7 @@ function updateMatchStimulusPage(){
       if(!r.player) return;
       var pk=_normPlayerName(r.player);
       if(!playerMap[pk]) playerMap[pk]={name:r.player,pos:r.pos,matchTD:0,trainTD:0,matchHMLD:0,trainHMLD:0,extHMLD:0};
-      if(r.matchType==='Match'){
+      if(_isMatchType(r.matchType)){
         playerMap[pk].matchTD+=(r.td||0);
         playerMap[pk].matchHMLD+=(r.hmld||0);
       } else {
@@ -6408,8 +6469,10 @@ function updateDecisionFlagsPage(){
     var risk=rec.acwr>=1.5?'high':rec.acwr>=1.3?'caution':rec.acwr<=0.70?'low':null;
     if(!risk) return;
     var arrow=rec.acwr>1.10?'↑':rec.acwr<0.90?'↓':'→';
-    flags.push({risk:risk,name:rec.name,acwr:rec.acwr,arrow:arrow,
-      action:_flagAction(risk,rec.acwr,arrow)});
+    var stale=_isStaleAcwr(rec.week);
+    var staleNote=stale?' [STALE DATA — wk '+rec.week+']':'';
+    flags.push({risk:risk,name:rec.name,acwr:rec.acwr,arrow:arrow,stale:stale,week:rec.week||'',
+      action:_flagAction(risk,rec.acwr,arrow)+staleNote});
   });
 
   /* 0% match exposure flags from LIVE_SESSION_DATA */
@@ -6420,7 +6483,7 @@ function updateDecisionFlagsPage(){
         if(!r.player) return;
         var pk=_normPlayerName(r.player);
         pNameMap[pk]=r.player;
-        if(r.matchType==='Match') pMatchTD[pk]=(pMatchTD[pk]||0)+(r.td||0);
+        if(_isMatchType(r.matchType)) pMatchTD[pk]=(pMatchTD[pk]||0)+(r.td||0);
         else pTrainTD[pk]=(pTrainTD[pk]||0)+(r.td||0);
       });
     });
@@ -6443,38 +6506,42 @@ function updateDecisionFlagsPage(){
   var _sortOrd={high:0,caution:1,exposure:2,low:3};
   flags.sort(function(a,b){return (_sortOrd[a.risk]||9)-(_sortOrd[b.risk]||9);});
 
-  function _dfCfg(risk){
-    if(risk==='high')     return {border:'var(--red)',  cls:'c-red',  lbl:'Reduce load now'};
-    if(risk==='caution')  return {border:'var(--amber)',cls:'c-amber',lbl:'Monitor closely'};
-    if(risk==='exposure') return {border:'var(--blue)', cls:'c-blue', lbl:'Match exposure needed'};
-    return                       {border:'var(--dim)',  cls:'c-dim',  lbl:'Monitor · low load'};
+  /* F21: colour-coded urgency tiers */
+  function _dfCfg(risk, acwr){
+    if(risk==='high'&&acwr>=1.70) return {border:'#c0392b',cls:'c-red',  lbl:'⚡ CRITICAL — restrict immediately',bg:'rgba(192,57,43,.07)'};
+    if(risk==='high')              return {border:'var(--red)',  cls:'c-red',  lbl:'Reduce load now',bg:'rgba(226,75,74,.04)'};
+    if(risk==='caution')           return {border:'var(--amber)',cls:'c-amber',lbl:'Monitor closely',bg:'rgba(239,159,39,.04)'};
+    if(risk==='exposure')          return {border:'var(--blue)', cls:'c-blue', lbl:'Match exposure needed',bg:'rgba(79,195,247,.04)'};
+    return                                {border:'var(--dim)',  cls:'c-dim',  lbl:'Monitor · low load',bg:'transparent'};
   }
 
   var html='';
   flags.forEach(function(f){
-    var cfg=_dfCfg(f.risk);
+    var cfg=_dfCfg(f.risk,f.acwr);
     var acwrTxt=f.acwr>0?' — ACWR '+f.acwr.toFixed(2)+' '+f.arrow:'';
-    html+='<div class="df" style="border-left-color:'+cfg.border+'">'
+    var staleBadge=f.stale?'<span style="font-size:7px;font-weight:700;color:#FF9800;background:rgba(255,152,0,.15);border:1px solid rgba(255,152,0,.4);border-radius:3px;padding:1px 4px;margin-left:4px">STALE · '+_escHtml(f.week)+'</span>':'';
+    html+='<div class="df" style="border-left-color:'+cfg.border+';background:'+cfg.bg+(f.stale?';opacity:.85':'')+'">'
       +'<div>'
       +'<div class="df-cls '+cfg.cls+'">'+cfg.lbl+'</div>'
-      +'<div class="df-txt"><span class="df-player">'+_escHtml(f.name)+'</span>'
+      +'<div class="df-txt"><span class="df-player">'+_escHtml(f.name)+'</span>'+staleBadge
       +_escHtml(acwrTxt)+'. '+_escHtml(f.action)+'</div>'
       +'</div></div>';
   });
   container.innerHTML=html;
 
-  /* Update RTP page ACWR proxy list (low-ACWR players as restricted proxy) */
+  /* Update RTP page ACWR proxy list — only ACWR <0.60 (severely under-loaded) */
   var _rtpProxy=document.getElementById('p14-acwr-proxy');
   if(_rtpProxy){
-    var _lowFlags=flags.filter(function(f){return f.risk==='low';});
+    var _lowFlags=flags.filter(function(f){return f.risk==='low'&&f.acwr>0&&f.acwr<0.60;});
     if(!_lowFlags.length){
-      _rtpProxy.innerHTML='<span style="color:var(--muted)">No players below ACWR 0.70 at this time.</span>';
+      _rtpProxy.innerHTML='<span style="color:var(--muted)">No players below ACWR 0.60 — proxy training not indicated at this time.</span>';
     } else {
       _rtpProxy.innerHTML=_lowFlags.map(function(f){
+        var urgency=f.acwr<0.40?'⚠ Very low':'Low';
         return '<div style="display:flex;gap:10px;align-items:center;padding:5px 0;border-bottom:1px solid var(--border)">'
           +'<span style="font-size:10px;font-weight:700;color:var(--text);min-width:140px">'+_escHtml(f.name)+'</span>'
           +'<span class="c-blue" style="font-size:10px">ACWR '+f.acwr.toFixed(2)+' '+f.arrow+'</span>'
-          +'<span style="font-size:9px;color:var(--muted);margin-left:6px">'+_escHtml(_flagAction('low',f.acwr,f.arrow))+'</span>'
+          +'<span style="font-size:9px;color:var(--muted);margin-left:6px">'+urgency+' — '+_escHtml(_flagAction('low',f.acwr,f.arrow))+'</span>'
           +'</div>';
       }).join('');
     }
@@ -6705,8 +6772,9 @@ function renderFlagCards(){
         }
       }
     }
+    var stale=_isStaleAcwr(rec.week);
     flagged.push({key:key,name:rec.name,pos:_flagPosLabel(rec.pos),
-      acwr:rec.acwr,acute:rec.acute,risk:risk,arrow:arrow,peakSpd:peakSpd});
+      acwr:rec.acwr,acute:rec.acute,risk:risk,arrow:arrow,peakSpd:peakSpd,stale:stale,week:rec.week||''});
   });
 
   var rOrd={high:0,caution:1,low:2};
@@ -6726,8 +6794,10 @@ function renderFlagCards(){
     var pillCls=p.risk==='high'?'p-red':p.risk==='caution'?'p-amber':'p-blue';
     var pillLbl=p.risk==='high'?'High Risk':p.risk==='caution'?'Caution':'Under-Loaded';
     var vCls=p.risk==='high'?'c-red':p.risk==='caution'?'c-amber':'c-blue';
-    return '<div class="flag" style="border-left-color:'+col+'">'
-      +'<div class="flag-hdr"><div><div class="flag-name">'+_escHtml(p.name)+'</div>'
+    var staleBadge=p.stale?'<span style="font-size:7px;font-weight:700;color:#FF9800;background:rgba(255,152,0,.15);border:1px solid rgba(255,152,0,.4);border-radius:3px;padding:1px 4px;margin-left:6px;letter-spacing:.04em">STALE · wk '+_escHtml(p.week)+'</span>':'';
+    var staleNote=p.stale?'<div style="font-size:8px;color:#FF9800;margin-top:4px;padding:4px 6px;background:rgba(255,152,0,.08);border-radius:4px">⚠ ACWR from '+_escHtml(p.week)+' — player has not attended since. Verify current status before acting.</div>':'';
+    return '<div class="flag" style="border-left-color:'+col+(p.stale?';opacity:.85':'') +'">'
+      +'<div class="flag-hdr"><div><div class="flag-name">'+_escHtml(p.name)+staleBadge+'</div>'
       +'<div class="flag-pos">'+_escHtml(p.pos)+'</div></div>'
       +'<span class="pill '+pillCls+'">'+pillLbl+'</span></div>'
       +'<div class="flag-mets">'
@@ -6736,6 +6806,7 @@ function renderFlagCards(){
       +'<div class="fm"><div class="fm-lbl">Peak Spd</div><div class="fm-val">'+(p.peakSpd?p.peakSpd+' km/h':'—')+'</div></div>'
       +'<div class="fm"><div class="fm-lbl">Trend</div><div class="fm-val '+vCls+'">'+p.arrow+' '+_flagTrendLbl(p.acwr,p.arrow)+'</div></div>'
       +'</div>'
+      +staleNote
       +'<div class="flag-action">'+_flagAction(p.risk,p.acwr,p.arrow)+'</div>'
       +'</div>';
   }
