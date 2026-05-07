@@ -3488,7 +3488,9 @@ var METRIC_CFG = {
 };
 
 function getD(player, metric, density){
-  var b=SPARK_DATA2[player]; var c=METRIC_CFG[metric]; var div=density?85:1;
+  var b=SPARK_DATA2[player];
+  if(!b) return {acwr:[0,0,0,0,0,0,0,0],mono:[0,0,0,0,0,0,0,0],strain:[0,0,0,0,0,0,0,0],weekly:[0,0,0,0,0,0,0,0],session:[0,0,0,0,0,0,0,0],label:player};
+  var c=METRIC_CFG[metric]; var div=density?85:1;
   return {
     acwr:b.acwr, mono:b.mono,
     strain:b.strain.map(function(v){return +(v*c.ss/div).toFixed(0);}),
