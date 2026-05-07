@@ -2615,6 +2615,9 @@ function _getActClass(dk){
   if(tl.indexOf('championship')>-1) return 'sc-match2-dot';
   if(tl.indexOf('challenge')>-1)    return 'sc-csess-dot';
   if(tl.indexOf('match')>-1||tl.indexOf('league')>-1) return 'sc-match-dot';
+  /* Fallback: cross-reference championship date keys from match record */
+  if(window._LIVE_CHAMPIONSHIP_DATE_KEYS&&window._LIVE_CHAMPIONSHIP_DATE_KEYS.has(dk))
+    return 'sc-match2-dot';
   /* Fallback: if GPS rows for this session have matchType=Match, classify as match
      even when LS_Session_Review hasn't been updated yet */
   if(window.LIVE_SESSION_DATA&&window.LIVE_SESSION_DATA[dk]){
@@ -3357,6 +3360,16 @@ var SESSION_DB = {
     nextFixture:'v Meath \u00b7 29 Apr (Leinster SF)',
     attendance: '22 / 26',
     drills: null /* baked drill metrics removed */
+  },
+  d20260506: {
+    label:      'Wed 6 May',
+    typeLabel:  'Championship',
+    duration:   70,
+    drillCount: null,
+    matchProx:  null,
+    nextFixture:'v Tyrone · 13 May (All Ireland SF)',
+    attendance: '? / 26',
+    drills:     null
   },
   d20260429: {
     label:      'Wed 29 Apr',
@@ -5584,6 +5597,13 @@ function loadLiveData(){
         /* Collect raw date (current year, no bumping) for matchProx computation */
         var mDateRaw=new Date(today.getFullYear(), mMon, mDay);
         allMatchDates.push(mDateRaw);
+        /* Tag championship dates — used to classify GPS sessions correctly */
+        if(!window._LIVE_CHAMPIONSHIP_DATE_KEYS) window._LIVE_CHAMPIONSHIP_DATE_KEYS=new Set();
+        var _compLow=(mv[2]||'').trim().toLowerCase();
+        if(_compLow.indexOf('championship')>=0||_compLow.indexOf('all ireland')>=0||_compLow.indexOf('all-ireland')>=0||_compLow.indexOf('provincial')>=0){
+          var _mck='d'+mDateRaw.getFullYear()+String(mDateRaw.getMonth()+1).padStart(2,'0')+String(mDateRaw.getDate()).padStart(2,'0');
+          window._LIVE_CHAMPIONSHIP_DATE_KEYS.add(_mck);
+        }
         /* Assume current or next year for next-fixture display */
         var mDate=new Date(mDateRaw);
         if(mDate<today) mDate=new Date(today.getFullYear()+1, mMon, mDay);
@@ -5883,7 +5903,12 @@ function loadLiveData(){
         m.duration=Math.round(m.totalDur/m.count);
         m.isMatch=m.type.toLowerCase().indexOf('match')>=0;
         var stLow=(m.sessionType||'').toLowerCase();
-        m.typeLabel=m.isMatch?(stLow.indexOf('championship')>=0?'Championship':'Challenge Match'):'Field Training';
+        /* Cross-reference match record championship dates — fixes sessions where STATSports
+           Session Category doesn't contain 'championship' (e.g. 'LEINSTER FINAL', 'MATCH') */
+        var _sd2=_parseDate(ds);
+        var _sk2=(_sd2&&!isNaN(_sd2.getTime()))?'d'+_sd2.getFullYear()+String(_sd2.getMonth()+1).padStart(2,'0')+String(_sd2.getDate()).padStart(2,'0'):'';
+        var _isChampDate=window._LIVE_CHAMPIONSHIP_DATE_KEYS&&_sk2&&window._LIVE_CHAMPIONSHIP_DATE_KEYS.has(_sk2);
+        m.typeLabel=m.isMatch?(stLow.indexOf('championship')>=0||stLow.indexOf('all ireland')>=0||_isChampDate?'Championship':'Challenge Match'):'Field Training';
         m.playerCount=m.count;
       });
       _rebuildSessionDropdowns(allDates,sessionMeta,drillMeta);
