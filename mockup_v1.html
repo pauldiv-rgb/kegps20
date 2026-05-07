@@ -4379,7 +4379,7 @@ function _renderScatterDots(){
   var selAct=getVals('ms-activity-panel'),  isAllAct=selAct[0]==='all';
   var selPers=getVals('ms-personnel-panel'),isAllPers=selPers[0]==='all';
   var selSt=getVals('ms-status-panel'),     isAllSt=selSt[0]==='all';
-  var selDrill=getVals('ms-drill-panel'),   isAllDrill=selDrill[0]==='all';
+  var selDrill=getVals('ms-drill-panel'),   isAllDrill=selDrill[0]==='all'||selDrill.indexOf('session')>-1;
 
   /* Individual player highlight */
   var highlightPid=null;
