@@ -3051,9 +3051,17 @@ document.addEventListener('DOMContentLoaded',function(){
   }
   var badge=document.querySelector('.badge');
   if(badge) badge.textContent='Baked · 1-May-2026';
-  loadLiveData()
-    .then(function(){ applyFilters(); refreshAll(); renderSessionVerdict(); renderACWRFlags(); renderFullTable(); })
-    .catch(function(e){ console.error('Live data load failed:',e); applyFilters(); refreshAll(); renderSessionVerdict(); renderACWRFlags(); renderFullTable(); });
+  function _runLive(){ return loadLiveData()
+    .then(function(){ applyFilters(); refreshAll(); renderSessionVerdict(); renderACWRFlags(); renderFullTable(); }); }
+  _runLive().catch(function(e){
+    console.warn('Live data load failed (will retry in 8s):',e);
+    applyFilters(); refreshAll(); renderSessionVerdict(); renderACWRFlags(); renderFullTable();
+    setTimeout(function(){
+      if(!Object.keys(window.LIVE_SESSION_DATA||{}).length){
+        _runLive().catch(function(e2){ console.error('Live data load failed (final):',e2); });
+      }
+    }, 8000);
+  });
 });
 
 /* ══════════════════════════════════════════════════════════════
@@ -3309,9 +3317,17 @@ document.addEventListener('DOMContentLoaded',function(){
   }
   var badge=document.querySelector('.badge');
   if(badge) badge.textContent='Baked · 1-May-2026';
-  loadLiveData()
-    .then(function(){ applyFilters(); refreshAll(); renderSessionVerdict(); renderACWRFlags(); renderFullTable(); })
-    .catch(function(e){ console.error('Live data load failed:',e); applyFilters(); refreshAll(); renderSessionVerdict(); renderACWRFlags(); renderFullTable(); });
+  function _runLive(){ return loadLiveData()
+    .then(function(){ applyFilters(); refreshAll(); renderSessionVerdict(); renderACWRFlags(); renderFullTable(); }); }
+  _runLive().catch(function(e){
+    console.warn('Live data load failed (will retry in 8s):',e);
+    applyFilters(); refreshAll(); renderSessionVerdict(); renderACWRFlags(); renderFullTable();
+    setTimeout(function(){
+      if(!Object.keys(window.LIVE_SESSION_DATA||{}).length){
+        _runLive().catch(function(e2){ console.error('Live data load failed (final):',e2); });
+      }
+    }, 8000);
+  });
 });
 
 /* ══════════════════════════════════════════════════════════════
@@ -5519,7 +5535,7 @@ function _fetchCSV(url, optional){
   }); }
   return _get().catch(function(){
     /* Retry once after 1.2s */
-    return new Promise(function(res){ setTimeout(res,1200); }).then(_get);
+    return new Promise(function(res){ setTimeout(res,4000); }).then(_get);
   }).catch(function(e){
     if(optional) return '';
     throw e;
