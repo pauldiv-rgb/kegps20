@@ -5507,14 +5507,32 @@ function _parseAttendCSV(txt){
   }
 }
 
+/* Fetch with one automatic retry on non-200/400 responses (Google Sheets cold-start) */
+function _fetchCSV(url, optional){
+  function _get(){ return fetch(url).then(function(r){
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    return r.text().then(function(t){
+      /* Reject HTML error pages served with 200 (shouldn't happen but guard anyway) */
+      if(t.trim().charAt(0)==='<') throw new Error('HTML response');
+      return t;
+    });
+  }); }
+  return _get().catch(function(){
+    /* Retry once after 1.2s */
+    return new Promise(function(res){ setTimeout(res,1200); }).then(_get);
+  }).catch(function(e){
+    if(optional) return '';
+    throw e;
+  });
+}
 function loadLiveData(){
   return Promise.all([
-    fetch(CFG_LIVE.SESSION_REVIEW_URL).then(function(r){return r.text();}),
-    fetch(CFG_LIVE.DRILL_DATA_URL).then(function(r){return r.text();}).catch(function(){return '';}),
-    fetch(CFG_LIVE.LOAD_TREND_URL).then(function(r){return r.text();}).catch(function(){return '';}),
-    fetch(CFG_LIVE.MATCH_RECORD_URL).then(function(r){return r.text();}).catch(function(){return '';}),
-    fetch(CFG_LIVE.EXTERNAL_ACTIVITY_URL).then(function(r){return r.text();}).catch(function(){return '';}),
-    fetch(CFG_LIVE.SESSION_ATTEND_URL).then(function(r){return r.text();}).catch(function(){return '';})
+    _fetchCSV(CFG_LIVE.SESSION_REVIEW_URL, false),
+    _fetchCSV(CFG_LIVE.DRILL_DATA_URL, true),
+    _fetchCSV(CFG_LIVE.LOAD_TREND_URL, true),
+    _fetchCSV(CFG_LIVE.MATCH_RECORD_URL, true),
+    _fetchCSV(CFG_LIVE.EXTERNAL_ACTIVITY_URL, true),
+    _fetchCSV(CFG_LIVE.SESSION_ATTEND_URL, true)
   ]).then(function(results){
     var txt=results[0], ddTxt=results[1], ltTxt=results[2], mrTxt=results[3], eaTxt=results[4], atTxt=results[5];
 
@@ -5707,6 +5725,7 @@ function loadLiveData(){
           hsrMin:dur>0?parseFloat((hsr/dur).toFixed(1)):0,
           tdMin:parseFloat(v[9])||0});
       }
+      all=all.filter(function(s){return s.date&&!isNaN(s.date.getTime())&&s.player;});
       all.sort(function(a,b){return a.date-b.date;});
       var dSet={},allDates=[];
       all.forEach(function(s){if(!dSet[s.dateStr]){dSet[s.dateStr]=true;allDates.push(s.dateStr);}});
@@ -5758,6 +5777,7 @@ function loadLiveData(){
         else pMap[k].label=s.player;
         pMap[k].sessions.push(s);
       });
+      if(!all.length){console.warn('LS_Squad_Load: no valid data rows parsed');return;}
       var lastDate=all[all.length-1].date;
       var cut28=new Date(lastDate); cut28.setDate(cut28.getDate()-27);
       var newSpark={};
