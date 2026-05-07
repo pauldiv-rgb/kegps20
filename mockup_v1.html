@@ -2370,7 +2370,7 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
     <div class="card">
       <div class="card-lbl">Squad Avg TD/min</div>
       <div class="card-val c-green" id="p15-tdmin-val">—</div>
-      <div class="card-sub">Match demand: 70–80 m/min</div>
+      <div class="card-sub">Match demand: 70–83 m/min</div>
       <div class="card-ind c-green" id="p15-tdmin-ind">loading…</div>
     </div>
     <div class="card">
@@ -6236,9 +6236,9 @@ function updateTrainingQualityPage(){
 
   /* Update quality signal cards */
   var el;
-  var tdCol=avgTdMin>=80?'c-red':avgTdMin>=70?'c-green':avgTdMin>=60?'c-amber':'c-red';
+  var tdCol=avgTdMin>83?'c-red':avgTdMin>=70?'c-green':avgTdMin>=60?'c-amber':'c-red';
   el=document.getElementById('p15-tdmin-val'); if(el){el.textContent=avgTdMin.toFixed(1)+' m/min';el.className='card-val '+tdCol;}
-  el=document.getElementById('p15-tdmin-ind'); if(el){el.textContent=avgTdMin>=80?'⚡ Exceeds match ceiling (80)':avgTdMin>=70?'↑ On target':avgTdMin>=60?'⚠ Below 70 m/min target':'↓ Well below match demand';el.className='card-ind '+tdCol;}
+  el=document.getElementById('p15-tdmin-ind'); if(el){el.textContent=avgTdMin>83?'⚡ Exceeds match ceiling (83)':avgTdMin>=70?'↑ On target':avgTdMin>=60?'⚠ Below 70 m/min target':'↓ Well below match demand';el.className='card-ind '+tdCol;}
   var hsrCol=avgHsr7d>=750?'c-green':avgHsr7d>=500?'c-amber':'c-red';
   el=document.getElementById('p15-hsr-val'); if(el){el.textContent=avgHsr7d.toLocaleString()+' m';el.className='card-val '+hsrCol;}
   el=document.getElementById('p15-hsr-ind'); if(el){el.textContent=avgHsr7d>=750?'↑ Above threshold':avgHsr7d>=500?'⚠ Below 750m target':'↓ Low HSR week';el.className='card-ind '+hsrCol;}
@@ -6336,14 +6336,16 @@ function updateTrainingQualityPage(){
     var usedPos=[];
     trainRows.forEach(function(r){
       if(!r.player) return;
+      var _tdm=parseFloat(r.tdMin)||0;
+      if(_tdm<=0) return; /* F07: skip rows with no valid tdMin — would cluster at left edge */
       var pkey=_normPlayerName(r.player);
-      var acwr=(LIVE_ACWR[pkey]||{}).acwr||0;
-      var cx=_scX(r.tdMin||0), cy=_scY(r.hmld||0);
+      var acwr=((typeof LIVE_ACWR!=='undefined'?LIVE_ACWR:{})[pkey]||{}).acwr||0;
+      var cx=_scX(_tdm), cy=_scY(parseFloat(r.hmld)||0);
       var tries=0;
       while(usedPos.some(function(p){return Math.abs(p.x-cx)<14&&Math.abs(p.y-cy)<14;})&&tries<6){cx+=12;tries++;}
       usedPos.push({x:cx,y:cy});
-      var st=_scFill(acwr,r.tdMin||0);
-      var initials=(function(name){var pts=(name||'').trim().split(/\s+/);return pts.length>=2?(pts[0][0]+pts[pts.length-1][0]).toUpperCase():(name||'').substring(0,2).toUpperCase();})(r.player);
+      var st=_scFill(acwr,_tdm);
+      var initials=(function(name){var pts=(name||'').trim().split(/\s+/);return (pts.length>=2&&pts[0].length&&pts[pts.length-1].length)?(pts[0][0]+pts[pts.length-1][0]).toUpperCase():(name||'').substring(0,2).toUpperCase();})(r.player);
       var g=document.createElementNS(ns,'g');g.setAttribute('class','p15-dot');
       var c=document.createElementNS(ns,'circle');
       c.setAttribute('cx',cx.toFixed(0));c.setAttribute('cy',cy.toFixed(0));
@@ -6535,6 +6537,30 @@ function updateDecisionFlagsPage(){
     }
   }
 
+  /* F20: Absent player detection — last GPS session >21 days ago → HIGH RISK spike-on-return */
+  if(window.LIVE_SESSION_DATA){
+    var _dfToday=new Date(),_dfCut=new Date(_dfToday);_dfCut.setDate(_dfToday.getDate()-21);
+    var _dfLS={};
+    Object.keys(window.LIVE_SESSION_DATA).sort().forEach(function(k){
+      var y=parseInt(k.substr(1,4)),mo=parseInt(k.substr(5,2))-1,dy=parseInt(k.substr(7,2));
+      var dt=new Date(y,mo,dy);
+      window.LIVE_SESSION_DATA[k].forEach(function(r){
+        if(!r.player) return;
+        var pk=_normPlayerName(r.player);
+        if(!_dfLS[pk]||dt>_dfLS[pk].d) _dfLS[pk]={d:dt,name:r.player};
+      });
+    });
+    Object.keys(_dfLS).forEach(function(pk){
+      var ls=_dfLS[pk];
+      if(ls.d>=_dfCut) return;
+      if(flags.some(function(f){return _normPlayerName(f.name||'')===pk;})) return;
+      var da=Math.round((_dfToday-ls.d)/(1000*60*60*24));
+      var lastDateStr=ls.d.toLocaleDateString('en-IE',{day:'numeric',month:'short'});
+      flags.push({risk:'high',name:ls.name,acwr:0,arrow:'',stale:true,week:'',
+        action:'Absent '+da+' days (last GPS: '+lastDateStr+'). Spike risk on return — chronic HMLD established, acute near zero. Graduated reload protocol essential. Confirm availability and design return session at ≤60% normal load before full participation.'});
+    });
+  }
+
   if(!flags.length){
     container.innerHTML='<div style="font-size:9px;color:var(--muted);padding:10px 0">No ACWR flags — all players within optimal zone.</div>';
     return;
@@ -6545,7 +6571,8 @@ function updateDecisionFlagsPage(){
   flags.sort(function(a,b){return (_sortOrd[a.risk]||9)-(_sortOrd[b.risk]||9);});
 
   /* F21: colour-coded urgency tiers */
-  function _dfCfg(risk, acwr){
+  function _dfCfg(risk, acwr, stale){
+    if(risk==='high'&&acwr===0&&stale) return {border:'#FF9800',cls:'c-amber',lbl:'⚠ Absent — spike risk on return',bg:'rgba(255,152,0,.05)'};
     if(risk==='high'&&acwr>=1.70) return {border:'#c0392b',cls:'c-red',  lbl:'⚡ CRITICAL — restrict immediately',bg:'rgba(192,57,43,.07)'};
     if(risk==='high')              return {border:'var(--red)',  cls:'c-red',  lbl:'Reduce load now',bg:'rgba(226,75,74,.04)'};
     if(risk==='caution')           return {border:'var(--amber)',cls:'c-amber',lbl:'Monitor closely',bg:'rgba(239,159,39,.04)'};
@@ -6555,9 +6582,10 @@ function updateDecisionFlagsPage(){
 
   var html='';
   flags.forEach(function(f){
-    var cfg=_dfCfg(f.risk,f.acwr);
+    var cfg=_dfCfg(f.risk,f.acwr,f.stale);
     var acwrTxt=f.acwr>0?' — ACWR '+f.acwr.toFixed(2)+' '+f.arrow:'';
-    var staleBadge=f.stale?'<span style="font-size:7px;font-weight:700;color:#FF9800;background:rgba(255,152,0,.15);border:1px solid rgba(255,152,0,.4);border-radius:3px;padding:1px 4px;margin-left:4px">STALE · '+_escHtml(f.week)+'</span>':'';
+    var _staleLbl=f.week?'STALE · '+f.week:'ABSENT';
+    var staleBadge=f.stale?'<span style="font-size:7px;font-weight:700;color:#FF9800;background:rgba(255,152,0,.15);border:1px solid rgba(255,152,0,.4);border-radius:3px;padding:1px 4px;margin-left:4px">'+_escHtml(_staleLbl)+'</span>':'';
     html+='<div class="df" style="border-left-color:'+cfg.border+';background:'+cfg.bg+(f.stale?';opacity:.85':'')+'">'
       +'<div>'
       +'<div class="df-cls '+cfg.cls+'">'+cfg.lbl+'</div>'
@@ -6815,7 +6843,32 @@ function renderFlagCards(){
       acwr:rec.acwr,acute:rec.acute,risk:risk,arrow:arrow,peakSpd:peakSpd,stale:stale,week:rec.week||''});
   });
 
-  var rOrd={high:0,caution:1,low:2};
+  /* F01: Absent player detection — last GPS session >21 days ago */
+  if(window.LIVE_SESSION_DATA){
+    var _rfToday=new Date(),_rfCut=new Date(_rfToday);_rfCut.setDate(_rfToday.getDate()-21);
+    var _rfLS={};
+    Object.keys(window.LIVE_SESSION_DATA).sort().forEach(function(k){
+      var y=parseInt(k.substr(1,4)),mo=parseInt(k.substr(5,2))-1,dy=parseInt(k.substr(7,2));
+      var dt=new Date(y,mo,dy);
+      window.LIVE_SESSION_DATA[k].forEach(function(r){
+        if(!r.player) return;
+        var pk=_normPlayerName(r.player);
+        if(!_rfLS[pk]||dt>_rfLS[pk].d) _rfLS[pk]={d:dt,name:r.player};
+      });
+    });
+    Object.keys(_rfLS).forEach(function(pk){
+      var ls=_rfLS[pk];
+      if(ls.d>=_rfCut) return;
+      if(flagged.some(function(f){return _normPlayerName(f.name||'')===pk||f.key===pk;})) return;
+      var da=Math.round((_rfToday-ls.d)/(1000*60*60*24));
+      var rec=(typeof LIVE_ACWR!=='undefined'&&LIVE_ACWR[pk])||{};
+      flagged.push({key:pk,name:ls.name,pos:_flagPosLabel(rec.pos||''),
+        acwr:0,acute:0,risk:'absent',arrow:'',peakSpd:null,stale:true,week:'',daysAgo:da,
+        lastDate:ls.d.toLocaleDateString('en-IE',{day:'numeric',month:'short'})});
+    });
+  }
+
+  var rOrd={high:0,caution:1,absent:2,low:3};
   flagged.sort(function(a,b){var d=rOrd[a.risk]-rOrd[b.risk];return d!==0?d:b.acwr-a.acwr;});
 
   if(!flagged.length){
@@ -6828,6 +6881,23 @@ function renderFlagCards(){
   var underLoaded=flagged.filter(function(p){return p.risk==='low';});
 
   function _flagCard(p){
+    /* F01: absent players get distinct orange styling */
+    if(p.risk==='absent'){
+      return '<div class="flag" style="border-left-color:#FF9800;background:rgba(255,152,0,.04)">'
+        +'<div class="flag-hdr"><div><div class="flag-name">'+_escHtml(p.name)
+        +'<span style="font-size:7px;font-weight:700;color:#FF9800;background:rgba(255,152,0,.15);border:1px solid rgba(255,152,0,.4);border-radius:3px;padding:1px 4px;margin-left:6px">ABSENT · '+(p.daysAgo||'?')+'d</span>'
+        +'</div><div class="flag-pos">'+_escHtml(p.pos)+'</div></div>'
+        +'<span class="pill p-amber">Absent</span></div>'
+        +'<div class="flag-mets">'
+        +'<div class="fm"><div class="fm-lbl">Last GPS</div><div class="fm-val c-amber">'+(p.lastDate||'Unknown')+'</div></div>'
+        +'<div class="fm"><div class="fm-lbl">Days absent</div><div class="fm-val c-amber">'+(p.daysAgo||'?')+'</div></div>'
+        +'<div class="fm"><div class="fm-lbl">ACWR risk</div><div class="fm-val c-amber">Spike on return</div></div>'
+        +'<div class="fm"><div class="fm-lbl">HMLD ACWR</div><div class="fm-val c-dim">No recent data</div></div>'
+        +'</div>'
+        +'<div style="font-size:8px;color:#FF9800;margin-top:4px;padding:4px 6px;background:rgba(255,152,0,.08);border-radius:4px">⚠ No GPS since '+(p.lastDate||'unknown')+' ('+p.daysAgo+'d). Chronic HMLD established — acute will be near zero on return. Graduated reload essential. Verify status.</div>'
+        +'<div class="flag-action">Confirm availability. Design graduated return session: ≤60% typical training load, monitor response, increment over 3–5 sessions before full participation.</div>'
+        +'</div>';
+    }
     var col=p.risk==='high'?'var(--red)':p.risk==='caution'?'var(--amber)':'var(--blue)';
     var pillCls=p.risk==='high'?'p-red':p.risk==='caution'?'p-amber':'p-blue';
     var pillLbl=p.risk==='high'?'High Risk':p.risk==='caution'?'Caution':'Under-Loaded';
