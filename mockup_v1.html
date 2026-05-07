@@ -2615,6 +2615,13 @@ function _getActClass(dk){
   if(tl.indexOf('championship')>-1) return 'sc-match2-dot';
   if(tl.indexOf('challenge')>-1)    return 'sc-csess-dot';
   if(tl.indexOf('match')>-1||tl.indexOf('league')>-1) return 'sc-match-dot';
+  /* Fallback: if GPS rows for this session have matchType=Match, classify as match
+     even when LS_Session_Review hasn't been updated yet */
+  if(window.LIVE_SESSION_DATA&&window.LIVE_SESSION_DATA[dk]){
+    var _rows=window.LIVE_SESSION_DATA[dk];
+    if(_rows.length&&_rows.some(function(r){return (r.matchType||'').toLowerCase().indexOf('match')>-1;}))
+      return 'sc-match-dot';
+  }
   return 'sc-sess-dot'; /* default: training */
 }
 
