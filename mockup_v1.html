@@ -5299,11 +5299,14 @@ function _renderCmpIntensity(sessKey, drillSlug){
   var sessBestMaxSpd=allMaxSpd.length?Math.max.apply(null,allMaxSpd):0;
   var sessAvgMaxSpd=allMaxSpd.length?allMaxSpd.reduce(function(a,v){return a+v;},0)/allMaxSpd.length:0;
   var sessAvgHmldMin=allHmldMin.length?allHmldMin.reduce(function(a,v){return a+v;},0)/allHmldMin.length:0;
-  /* 28-session best HMLD/min across all sessions */
+  /* 28-session best HMLD/min — match halves only (H1/H2 from LIVE_HALF_DATA)
+     Using match halves ensures the benchmark reflects match demand, not short SSG spikes */
   var best28HmldMin=0;
-  Object.keys(window.LIVE_DRILL_PLAYER_DATA).forEach(function(sk){
-    Object.keys(window.LIVE_DRILL_PLAYER_DATA[sk]).forEach(function(sl){
-      Object.values(window.LIVE_DRILL_PLAYER_DATA[sk][sl]).forEach(function(p){
+  Object.keys(window.LIVE_HALF_DATA||{}).forEach(function(sk){
+    ['h1','h2'].forEach(function(hk){
+      var half=window.LIVE_HALF_DATA[sk]&&window.LIVE_HALF_DATA[sk][hk];
+      if(!half) return;
+      Object.values(half).forEach(function(p){
         if((p.hmldMin||0)>best28HmldMin) best28HmldMin=p.hmldMin;
       });
     });
@@ -5344,7 +5347,7 @@ function _renderCmpIntensity(sessKey, drillSlug){
       html+='<div class="mc-row">'
         +'<div class="mc-l"><div class="mc-v mc-vl" style="color:'+_col(hmldPct)+'">'+avgHmld.toFixed(1)+' m/min<span class="mc-d" style="color:'+_col(hmldPct)+'">'+hmldPct+'% of best</span></div>'
         +'<div class="mc-trk"><div class="mc-fl" style="width:'+Math.min(99,hmldPct)+'%;background:'+_bg(hmldPct)+'"></div></div></div>'
-        +'<div class="mc-lbl">HMLD/min<span style="display:block;font-size:8px;color:var(--muted)">28-session best: '+best28HmldMin.toFixed(1)+'</span></div>'
+        +'<div class="mc-lbl">HMLD/min<span style="display:block;font-size:8px;color:var(--muted)">match half best: '+best28HmldMin.toFixed(1)+' m/min</span></div>'
         +'<div class="mc-r"><div class="mc-trk"><div class="mc-fr" style="width:'+Math.min(99,bmHmldPct)+'%;background:'+_bg(bmHmldPct)+'"></div></div>'
         +'<div class="mc-v mc-vr" style="color:'+_col(bmHmldPct)+'">'+sessAvgHmldMin.toFixed(1)+' m/min<span style="display:block;font-size:8px;color:'+_col(bmHmldPct)+'">session avg</span></div></div></div>';
     }
