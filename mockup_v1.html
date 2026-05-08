@@ -805,6 +805,12 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
 <input type="radio" name="page" id="rp34">
 <input type="radio" name="page" id="rp13">
 
+<!-- DATA LOAD ERROR BANNER — hidden until a fetch failure is confirmed -->
+<div id="fetch-error-banner" style="display:none;background:#7b1a1a;color:#ffcccc;font-size:10px;font-weight:600;padding:7px 16px;text-align:center;letter-spacing:.04em;z-index:1000">
+  ⚠ Data load failed — dashboard is showing cached/baked values. Check connection and reload.
+  <button onclick="document.getElementById('fetch-error-banner').style.display='none'" style="margin-left:12px;background:transparent;border:1px solid rgba(255,150,150,.5);color:#ffcccc;border-radius:3px;padding:1px 8px;cursor:pointer;font-size:9px">Dismiss</button>
+</div>
+
 <!-- HEADER -->
 <div class="hdr">
   <div class="hdr-team">KILDARE GAA · U20 FOOTBALL · 2026</div>
@@ -2404,7 +2410,7 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
   </div>
 
   <!-- [2] QUALITY READ STRIP -->
-  <div class="sec-label">[2] Player quality classification</div>
+  <div class="sec-label" style="display:flex;align-items:center;justify-content:space-between">[2] Player quality classification <span id="p15-player-count" style="font-size:8px;font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0"></span></div>
   <div class="q-strip" id="q-strip-live">
     <div class="q-chip qc-good" style="font-style:italic;color:var(--muted)">Loading live data…</div>
   </div>
@@ -3078,7 +3084,7 @@ document.addEventListener('DOMContentLoaded',function(){
     applyFilters(); refreshAll(); renderSessionVerdict(); renderACWRFlags(); renderFullTable();
     setTimeout(function(){
       if(!Object.keys(window.LIVE_SESSION_DATA||{}).length){
-        _runLive().catch(function(e2){ console.error('Live data load failed (final):',e2); });
+        _runLive().catch(function(e2){ console.error('Live data load failed (final):',e2); var eb=document.getElementById('fetch-error-banner');if(eb) eb.style.display='block'; });
       }
     }, 8000);
   });
@@ -3344,7 +3350,7 @@ document.addEventListener('DOMContentLoaded',function(){
     applyFilters(); refreshAll(); renderSessionVerdict(); renderACWRFlags(); renderFullTable();
     setTimeout(function(){
       if(!Object.keys(window.LIVE_SESSION_DATA||{}).length){
-        _runLive().catch(function(e2){ console.error('Live data load failed (final):',e2); });
+        _runLive().catch(function(e2){ console.error('Live data load failed (final):',e2); var eb=document.getElementById('fetch-error-banner');if(eb) eb.style.display='block'; });
       }
     }, 8000);
   });
@@ -6634,9 +6640,10 @@ function updateTrainingQualityPage(){
 
   /* Update quality signal cards */
   var el;
-  var tdCol=avgTdMin>80?'c-red':avgTdMin>=70?'c-green':avgTdMin>=60?'c-amber':'c-red';
+  /* F13: match demand range is 70–83 m/min — ceiling is 83, not 80 */
+  var tdCol=avgTdMin>83?'c-red':avgTdMin>=70?'c-green':avgTdMin>=60?'c-amber':'c-red';
   el=document.getElementById('p15-tdmin-val'); if(el){el.textContent=avgTdMin.toFixed(1)+' m/min';el.className='card-val '+tdCol;}
-  el=document.getElementById('p15-tdmin-ind'); if(el){el.textContent=avgTdMin>80?'⚡ Exceeds match ceiling (80)':avgTdMin>=70?'↑ On target':avgTdMin>=60?'⚠ Below 70 m/min target':'↓ Well below match demand';el.className='card-ind '+tdCol;}
+  el=document.getElementById('p15-tdmin-ind'); if(el){el.textContent=avgTdMin>83?'⚡ Exceeds match ceiling (83)':avgTdMin>=70?'↑ On target':avgTdMin>=60?'⚠ Below 70 m/min target':'↓ Well below match demand';el.className='card-ind '+tdCol;}
   var hsrCol=avgHsr7d>=750?'c-green':avgHsr7d>=500?'c-amber':'c-red';
   el=document.getElementById('p15-hsr-val'); if(el){el.textContent=avgHsr7d.toLocaleString()+' m';el.className='card-val '+hsrCol;}
   el=document.getElementById('p15-hsr-ind'); if(el){el.textContent=avgHsr7d>=750?'↑ Above threshold':avgHsr7d>=500?'⚠ Below 750m target':'↓ Low HSR week';el.className='card-ind '+hsrCol;}
@@ -6680,6 +6687,12 @@ function updateTrainingQualityPage(){
     qStrip.innerHTML=qPlayers.length
       ?qPlayers.map(function(p){return '<div class="q-chip '+clsMap[p.cat]+'">'+_escHtml(p.name)+' — '+lblMap[p.cat]+'</div>';}).join('')
       :'<div style="font-size:9px;color:var(--muted);padding:8px">No data</div>';
+    /* Update player count note */
+    var _cntEl=document.getElementById('p15-player-count');
+    if(_cntEl){
+      var _totalGps=window.PLAYER_META?Object.keys(window.PLAYER_META).length:26;
+      _cntEl.textContent='Individual data: '+qPlayers.length+' of '+_totalGps+' GPS players';
+    }
   }
 
   /* FIX #9: Intensity scatter — dynamic axes based on data range */
@@ -7000,19 +7013,28 @@ function updateDecisionFlagsPage(){
     return                                {border:'var(--dim)',  cls:'c-dim',  lbl:'Monitor · low load',bg:'transparent'};
   }
 
-  var html='';
-  flags.forEach(function(f){
+  function _dfHtml(f){
     var cfg=_dfCfg(f.risk,f.acwr,f.stale);
     var acwrTxt=f.acwr>0?' — ACWR '+f.acwr.toFixed(2)+' '+f.arrow:'';
     var _staleLbl=f.week?'STALE · '+f.week:'ABSENT';
     var staleBadge=f.stale?'<span style="font-size:7px;font-weight:700;color:#FF9800;background:rgba(255,152,0,.15);border:1px solid rgba(255,152,0,.4);border-radius:3px;padding:1px 4px;margin-left:4px">'+_escHtml(_staleLbl)+'</span>':'';
-    html+='<div class="df" style="border-left-color:'+cfg.border+';background:'+cfg.bg+(f.stale?';opacity:.85':'')+'">'
+    return '<div class="df" style="border-left-color:'+cfg.border+';background:'+cfg.bg+(f.stale?';opacity:.85':'')+'">'
       +'<div>'
       +'<div class="df-cls '+cfg.cls+'">'+cfg.lbl+'</div>'
       +'<div class="df-txt"><span class="df-player">'+_escHtml(f.name)+'</span>'+staleBadge
       +_escHtml(acwrTxt)+'. '+_escHtml(f.action)+'</div>'
       +'</div></div>';
-  });
+  }
+  /* Separate actionable cards from low-load monitoring cards */
+  var _actionFlags=flags.filter(function(f){return f.risk!=='low';});
+  var _lowFlags=flags.filter(function(f){return f.risk==='low';});
+  var html='';
+  _actionFlags.forEach(function(f){html+=_dfHtml(f);});
+  /* Collapse low-load cards into a <details> group — keeps critical decisions visible without scrolling */
+  if(_lowFlags.length){
+    var _lowHtml=_lowFlags.map(function(f){return _dfHtml(f);}).join('');
+    html+='<details style="margin-top:4px"><summary style="cursor:pointer;font-size:9px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:7px 0;list-style:none;user-select:none">▶ Monitor · low load — '+_lowFlags.length+' players · click to expand</summary>'+_lowHtml+'</details>';
+  }
   container.innerHTML=html;
 
   /* Update RTP page ACWR proxy list — only ACWR <0.60 (severely under-loaded) */
