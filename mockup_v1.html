@@ -806,14 +806,9 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
 <input type="radio" name="page" id="rp13">
 
 <!-- DATA LOAD ERROR BANNER — hidden until a fetch failure is confirmed -->
-<div id="fetch-error-banner" style="display:none;background:#7b1a1a;color:#ffcccc;font-size:10px;font-weight:600;padding:7px 16px;text-align:center;letter-spacing:.04em;z-index:1000">
+<div id="fetch-error-banner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9999;background:#7b1a1a;color:#ffcccc;font-size:10px;font-weight:600;padding:7px 16px;text-align:center;letter-spacing:.04em">
   ⚠ Data load failed — dashboard is showing cached/baked values. Check connection and reload.
   <button onclick="document.getElementById('fetch-error-banner').style.display='none'" style="margin-left:12px;background:transparent;border:1px solid rgba(255,150,150,.5);color:#ffcccc;border-radius:3px;padding:1px 8px;cursor:pointer;font-size:9px">Dismiss</button>
-</div>
-
-<!-- FETCH ERROR BANNER — shown if both CSV load attempts fail -->
-<div id="fetch-error-banner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9999;background:#b71c1c;color:#fff;font-family:Inter,sans-serif;font-size:11px;font-weight:700;padding:7px 16px;text-align:center;letter-spacing:.04em">
-  ⚠ LIVE DATA FAILED TO LOAD — dashboard is showing baked data from 1 May 2026. Check network connection and reload.
 </div>
 
 <!-- HEADER -->
