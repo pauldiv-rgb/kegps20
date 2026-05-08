@@ -3113,6 +3113,8 @@ document.addEventListener('DOMContentLoaded',function(){
 
 /* ── Main filter function ────────────────────────────────────── */
 function applyFilters(){
+  /* In trend mode, just redraw the trend chart — no .sc-dot elements to filter */
+  if(typeof _SC_MODE!=='undefined'&&_SC_MODE==='trend'){ try{renderTrendChart();}catch(e){} return; }
   var personnel=getVals('ms-personnel-panel');
   var activity =getVals('ms-activity-panel');
   var drill    =getVals('ms-drill-panel');
