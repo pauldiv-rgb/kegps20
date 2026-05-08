@@ -329,6 +329,10 @@ input[name="p0bm"],input[name="p0cv"]{position:absolute;opacity:0;width:0;height
 #p0:has(#cv-pvt:checked) .pv-sub-pvt{display:flex}
 #p0:has(#cv-pvta:checked) .pv-sub-pvtap,
 #p0:has(#cv-pvpa:checked) .pv-sub-pvtap{display:flex}
+/* extend player selector rows to p34 (Comparison page) */
+:root:has(#cv-pvt:checked) #p34 .pv-sub-pvt{display:flex}
+:root:has(#cv-pvta:checked) #p34 .pv-sub-pvtap,
+:root:has(#cv-pvpa:checked) #p34 .pv-sub-pvtap{display:flex}
 .pv-sel{background:var(--s2);border:1px solid var(--border2);color:var(--text);font-size:10px;padding:3px 7px;border-radius:4px;cursor:pointer;font-family:var(--inter)}
 /* duration mismatch warning */
 .dur-warn{display:none;align-items:center;gap:8px;background:rgba(239,159,39,.07);border:1px solid rgba(239,159,39,.28);border-left:3px solid var(--amber);border-radius:6px;padding:8px 12px;margin-bottom:8px}
