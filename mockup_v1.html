@@ -6031,11 +6031,13 @@ function loadLiveData(){
         var dmm=String(dpd.getMonth()+1).padStart(2,'0');
         var ddd=String(dpd.getDate()).padStart(2,'0');
         var dkey='d'+dpd.getFullYear()+dmm+ddd;
-        /* ── Detect match half rows ── */
+        /* ── Detect match half rows ──
+           Matches standalone labels (H1, H2, 1st Half) AND compound labels
+           (Match — 1st Half, In-House Match — 2nd Half, Inhouse Match — 1st Half) */
         var _dnameLow=drillName.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
         var _halfKey=null;
-        if(_dnameLow==='1st half'||_dnameLow==='half 1'||_dnameLow==='h1'||_dnameLow==='first half') _halfKey='h1';
-        else if(_dnameLow==='2nd half'||_dnameLow==='half 2'||_dnameLow==='h2'||_dnameLow==='second half') _halfKey='h2';
+        if(_dnameLow==='1st half'||_dnameLow==='half 1'||_dnameLow==='h1'||_dnameLow==='first half'||_dnameLow.indexOf('1st half')>-1||_dnameLow.indexOf('first half')>-1) _halfKey='h1';
+        else if(_dnameLow==='2nd half'||_dnameLow==='half 2'||_dnameLow==='h2'||_dnameLow==='second half'||_dnameLow.indexOf('2nd half')>-1||_dnameLow.indexOf('second half')>-1) _halfKey='h2';
         if(_halfKey&&ddur>0){
           if(!window.LIVE_HALF_DATA[dkey]) window.LIVE_HALF_DATA[dkey]={h1:{},h2:{}};
           window.LIVE_HALF_DATA[dkey][_halfKey][player]={
