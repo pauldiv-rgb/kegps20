@@ -3919,7 +3919,7 @@ function gfChange(){
   /* Update session bar */
   var siType=document.getElementById('si-type'); if(siType) siType.textContent=sess.typeLabel;
   var siDur=document.getElementById('si-dur'); if(siDur) siDur.textContent=sess.duration+' min';
-  var siDrills=document.getElementById('si-drills'); if(siDrills) siDrills.textContent=sess.drillCount||'—';
+  var siDrills=document.getElementById('si-drills'); if(siDrills) siDrills.textContent=(sess.drillCount!=null?sess.drillCount:(sess.drills?Object.keys(sess.drills).length:null))||'—';
   var siProx=document.getElementById('si-prox'); if(siProx) siProx.textContent=sess.matchProx||'—';
   var siFixture=document.getElementById('si-fixture'); if(siFixture) siFixture.textContent=sess.nextFixture||'—';
   var siAtt=document.getElementById('si-att'); if(siAtt) siAtt.textContent=sess.attendance||'—';
@@ -5683,6 +5683,8 @@ function _rebuildSessionDropdowns(allDates, sessionMeta, drillMeta){
       if(lm.playerCount) SESSION_DB[key].attendance=lm.playerCount+' / 26';
       /* Always replace drills from live — null means no drill data in sheet for this session */
       SESSION_DB[key].drills=liveDrills;
+      /* FIX: also update drillCount so si-drills badge shows correct value */
+      if(liveDrills) SESSION_DB[key].drillCount=Object.keys(liveDrills).length;
       return;
     }
     var d=_parseDate(ds);
@@ -6872,7 +6874,8 @@ function updateMatchStimulusPage(){
   container.innerHTML=html;
 
   /* FIX #12: Compute and update summary cards from live data */
-  var _trainOnly=Object.values(playerMap).filter(function(p){return p.matchTD===0&&p.trainTD>0;}).length;
+  /* FIX: include EA-only players (e.g. Mahon — extHMLD>0 but no GPS match/training TD) */
+  var _trainOnly=Object.values(playerMap).filter(function(p){return p.matchTD===0&&(p.trainTD>0||p.extHMLD>0);}).length;
   var _above30=Object.values(playerMap).filter(function(p){
     var tot=p.matchTD+p.trainTD;return tot>0&&p.matchTD/tot>=0.30;
   }).length;
@@ -6924,10 +6927,19 @@ function updateDecisionFlagsPage(){
     var zeroExp=Object.keys(pTrainTD).filter(function(pk){
       return (!pMatchTD[pk]||pMatchTD[pk]===0)&&pTrainTD[pk]>0;
     });
+    /* FIX: also include EA-only players (external activity, no GPS match or training TD) */
+    if(window.LIVE_EA_HMLD){
+      Object.keys(window.LIVE_EA_HMLD).forEach(function(pk){
+        var ea=window.LIVE_EA_HMLD[pk];
+        if((!pMatchTD[pk]||pMatchTD[pk]===0)&&(!pTrainTD[pk]||pTrainTD[pk]===0)&&ea.estHMLD>0){
+          if(zeroExp.indexOf(pk)<0){ zeroExp.push(pk); if(!pNameMap[pk]) pNameMap[pk]=ea.name; }
+        }
+      });
+    }
     if(zeroExp.length){
       var nameList=zeroExp.map(function(pk){return pNameMap[pk]||pk;});
       flags.push({risk:'exposure',name:nameList.join(' · '),acwr:0,arrow:'',
-        action:'0% match TD. Training only. Selection decision or challenge match needed before next competitive fixture.'});
+        action:'0% match TD. No county GPS match exposure this season. Selection decision or challenge match needed before next competitive fixture.'});
     }
   }
 
@@ -8334,8 +8346,8 @@ function renderProfPerfBars(pk){
     <div style="padding:22px 0 10px;font-size:10px;color:var(--muted);text-align:center">Loading drill data…</div>
   </div>
 
-  
-</div>
+
+</div><!-- /p34 -->
 
 <!-- ═══════════════════════════════════════
      PAGE PROFILE — INDIVIDUAL PLAYER
