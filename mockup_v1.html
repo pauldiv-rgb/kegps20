@@ -7219,10 +7219,10 @@ function updateCmpPlayerSelects(){
     if(!sel) return;
     var prev=sel.value;
     sel.innerHTML=optsHtml;
-    /* Default B to second player so A≠B by default */
-    if(id==='pv-sel-b'&&!prev&&sel.options.length>1) sel.selectedIndex=1;
-    else if(prev&&sel.querySelector('option[value="'+prev+'"]')) sel.value=prev;
-    else sel.selectedIndex=0;
+    /* Restore previous selection if it's a valid player key (not the "Loading…" placeholder);
+       otherwise default A→0, B→1, C→2 so all three start on different players */
+    if(prev&&sel.querySelector('option[value="'+_escHtml(prev)+'"]')) sel.value=prev;
+    else sel.selectedIndex=Math.min(i,sel.options.length-1);
   });
 }
 
