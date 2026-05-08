@@ -5200,6 +5200,319 @@ function cmpSyncSession(){
   var hSub=document.querySelector('#p34 .mc-names .mc-sm .cv-lbl-team'); if(hSub) hSub.textContent=cur.n+' players · '+(sess.label||sessKey);
   var hBm=document.querySelector('#p34 .mc-names .bm-lbl-match'); if(hBm) hBm.textContent=vsLabel.split(' — ')[0]||vsLabel;
   var hBmS=document.querySelector('#p34 .mc-names .mc-sm .bm-lbl-match'); if(hBmS) hBmS.textContent=vsLabel;
+
+  /* ── Rebuild drill dropdowns from live data ── */
+  var _subjSel=document.getElementById('cmp-subject');
+  var _drillSel=document.getElementById('cmp-drill');
+  var _drillSlug=window._cmpDrillSlug||'all';
+  var _sessDB=SESSION_DB[sessKey]||{};
+  var _liveDrills=window.LIVE_DRILL_PLAYER_DATA&&window.LIVE_DRILL_PLAYER_DATA[sessKey]?window.LIVE_DRILL_PLAYER_DATA[sessKey]:null;
+
+  function _buildDrillOpts(){
+    var opts='<option value="all"'+((!_drillSlug||_drillSlug==='all')?' selected':'')+'>All drills</option>';
+    if(_liveDrills){
+      var DCOLS=['#5a9be8','#3dbd84','#9b77dd','#e08844','#26C6DA','#FFA726'];
+      Object.keys(_liveDrills).forEach(function(slug,i){
+        var ps=Object.values(_liveDrills[slug]);
+        if(!ps.length) return;
+        var nm=ps[0].name||slug;
+        var dur=Math.round(ps[0].dur||0);
+        var durStr=dur>0?' ('+dur+' min)':'';
+        opts+='<option value="'+_escHtml(slug)+'"'+(_drillSlug===slug?' selected':'')+'>'+_escHtml(nm)+durStr+'</option>';
+      });
+    } else if(_sessDB.drills){
+      Object.keys(_sessDB.drills).forEach(function(slug){
+        var d=_sessDB.drills[slug];
+        var durStr=d.dur>0?' ('+d.dur+' min)':'';
+        opts+='<option value="'+_escHtml(slug)+'"'+(_drillSlug===slug?' selected':'')+'>'+_escHtml(d.name||slug)+durStr+'</option>';
+      });
+    }
+    return opts;
+  }
+  var _opts=_buildDrillOpts();
+  if(_subjSel) _subjSel.innerHTML=_opts;
+  if(_drillSel) _drillSel.innerHTML=_opts;
+
+  /* ── Render live intensity and drill chart ── */
+  _renderCmpIntensity(sessKey, _drillSlug);
+  renderCmpDrillChart();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   COMPARISON PAGE — LIVE DRILL CHART ENGINE
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Global drill selection state for comparison page */
+window._cmpDrillSlug = window._cmpDrillSlug || 'all';
+
+/* Called by both Subject and bottom Drill selectors */
+function cmpDrillChange(slug){
+  window._cmpDrillSlug = slug || 'all';
+  /* Sync the two selectors */
+  ['cmp-subject','cmp-drill'].forEach(function(id){
+    var el=document.getElementById(id);
+    if(el && el.value !== slug){ try{el.value=slug;}catch(e){} }
+  });
+  var sessEl=document.getElementById('cmp-session');
+  var sessKey=sessEl?sessEl.value:null;
+  if(sessKey){ _renderCmpIntensity(sessKey,slug); }
+  renderCmpDrillChart();
+}
+
+/* Render live intensity section — max speed + HMLD/min per drill vs session best */
+function _renderCmpIntensity(sessKey, drillSlug){
+  var container=document.getElementById('cmp-int-live');
+  if(!container) return;
+  if(!sessKey||!window.LIVE_DRILL_PLAYER_DATA||!window.LIVE_DRILL_PLAYER_DATA[sessKey]){
+    container.innerHTML='<div style="font-size:9px;color:var(--muted);padding:8px 0">No drill intensity data for this session.</div>';
+    return;
+  }
+  var dpd=window.LIVE_DRILL_PLAYER_DATA[sessKey];
+  var activeSlugs=(drillSlug&&drillSlug!=='all'&&dpd[drillSlug])?[drillSlug]:Object.keys(dpd);
+
+  /* Session-level best: max maxSpd and best hmldMin across all drills/players this session */
+  var allMaxSpd=[],allHmldMin=[];
+  Object.keys(dpd).forEach(function(sl){
+    Object.values(dpd[sl]).forEach(function(p){
+      if(p.maxSpd>0) allMaxSpd.push(p.maxSpd);
+      if(p.hmldMin>0) allHmldMin.push(p.hmldMin);
+    });
+  });
+  var sessBestMaxSpd=allMaxSpd.length?Math.max.apply(null,allMaxSpd):0;
+  var sessAvgMaxSpd=allMaxSpd.length?allMaxSpd.reduce(function(a,v){return a+v;},0)/allMaxSpd.length:0;
+  var sessAvgHmldMin=allHmldMin.length?allHmldMin.reduce(function(a,v){return a+v;},0)/allHmldMin.length:0;
+  /* 28-session best HMLD/min across all sessions */
+  var best28HmldMin=0;
+  Object.keys(window.LIVE_DRILL_PLAYER_DATA).forEach(function(sk){
+    Object.keys(window.LIVE_DRILL_PLAYER_DATA[sk]).forEach(function(sl){
+      Object.values(window.LIVE_DRILL_PLAYER_DATA[sk][sl]).forEach(function(p){
+        if((p.hmldMin||0)>best28HmldMin) best28HmldMin=p.hmldMin;
+      });
+    });
+  });
+  if(!best28HmldMin) best28HmldMin=sessAvgHmldMin*1.3||1;
+
+  function _col(pct){ return pct>=90?'var(--green)':pct>=75?'var(--amber)':'var(--red)'; }
+  function _bg(pct){ return pct>=90?'rgba(76,175,80,.45)':pct>=75?'rgba(239,159,39,.45)':'rgba(226,75,74,.4)'; }
+
+  var html='';
+  activeSlugs.forEach(function(slug){
+    var players=Object.values(dpd[slug]);
+    if(!players.length) return;
+    var drillName=players[0].name||slug;
+    var spdVals=players.map(function(p){return p.maxSpd||0;}).filter(Boolean);
+    var hmldVals=players.map(function(p){return p.hmldMin||0;}).filter(Boolean);
+    if(!spdVals.length&&!hmldVals.length) return;
+
+    if(activeSlugs.length>1) html+='<div style="font-size:9px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.07em;margin:8px 0 4px;padding-top:8px;border-top:1px solid var(--border)">'+_escHtml(drillName)+'</div>';
+
+    /* Max Velocity row */
+    if(spdVals.length&&sessBestMaxSpd>0){
+      var avgSpd=spdVals.reduce(function(a,v){return a+v;},0)/spdVals.length;
+      var spdPct=Math.round(avgSpd/sessBestMaxSpd*100);
+      var bmPct=Math.round(sessAvgMaxSpd/sessBestMaxSpd*100);
+      html+='<div class="mc-row">'
+        +'<div class="mc-l"><div class="mc-v mc-vl" style="color:'+_col(spdPct)+'">'+avgSpd.toFixed(1)+' m/s<span class="mc-d" style="color:'+_col(spdPct)+'">'+spdPct+'% of best</span></div>'
+        +'<div class="mc-trk"><div class="mc-fl" style="width:'+Math.min(99,spdPct)+'%;background:'+_bg(spdPct)+'"></div></div></div>'
+        +'<div class="mc-lbl">Max Velocity<span style="display:block;font-size:8px;color:var(--muted)">session best: '+sessBestMaxSpd.toFixed(1)+' m/s</span></div>'
+        +'<div class="mc-r"><div class="mc-trk"><div class="mc-fr" style="width:'+Math.min(99,bmPct)+'%;background:'+_bg(bmPct)+'"></div></div>'
+        +'<div class="mc-v mc-vr" style="color:'+_col(bmPct)+'">'+sessAvgMaxSpd.toFixed(1)+' m/s<span style="display:block;font-size:8px;color:'+_col(bmPct)+'">session avg</span></div></div></div>';
+    }
+    /* HMLD/min row */
+    if(hmldVals.length){
+      var avgHmld=hmldVals.reduce(function(a,v){return a+v;},0)/hmldVals.length;
+      var hmldPct=Math.round(avgHmld/best28HmldMin*100);
+      var bmHmldPct=Math.round(sessAvgHmldMin/best28HmldMin*100);
+      html+='<div class="mc-row">'
+        +'<div class="mc-l"><div class="mc-v mc-vl" style="color:'+_col(hmldPct)+'">'+avgHmld.toFixed(1)+' m/min<span class="mc-d" style="color:'+_col(hmldPct)+'">'+hmldPct+'% of best</span></div>'
+        +'<div class="mc-trk"><div class="mc-fl" style="width:'+Math.min(99,hmldPct)+'%;background:'+_bg(hmldPct)+'"></div></div></div>'
+        +'<div class="mc-lbl">HMLD/min<span style="display:block;font-size:8px;color:var(--muted)">28-session best: '+best28HmldMin.toFixed(1)+'</span></div>'
+        +'<div class="mc-r"><div class="mc-trk"><div class="mc-fr" style="width:'+Math.min(99,bmHmldPct)+'%;background:'+_bg(bmHmldPct)+'"></div></div>'
+        +'<div class="mc-v mc-vr" style="color:'+_col(bmHmldPct)+'">'+sessAvgHmldMin.toFixed(1)+' m/min<span style="display:block;font-size:8px;color:'+_col(bmHmldPct)+'">session avg</span></div></div></div>';
+    }
+  });
+  if(!html) html='<div style="font-size:9px;color:var(--muted);padding:8px 0">No intensity data for selected drill.</div>';
+  container.innerHTML=html;
+}
+
+/* Render live drill bar chart (bottom section) — team / position / individual views */
+function renderCmpDrillChart(){
+  var container=document.getElementById('cmp-drill-chart');
+  if(!container) return;
+
+  var sessEl=document.getElementById('cmp-session');
+  var sessKey=sessEl?sessEl.value:null;
+  if(!sessKey||!window.LIVE_DRILL_PLAYER_DATA||!window.LIVE_DRILL_PLAYER_DATA[sessKey]){
+    container.innerHTML='<div style="padding:22px 0;font-size:10px;color:var(--muted);text-align:center">No drill data available for this session — select a session that has drill-level GPS data.</div>';
+    return;
+  }
+  var dpd=window.LIVE_DRILL_PLAYER_DATA[sessKey];
+  var slugs=Object.keys(dpd);
+  if(!slugs.length){
+    container.innerHTML='<div style="padding:22px 0;font-size:10px;color:var(--muted);text-align:center">No drill records in this session.</div>';
+    return;
+  }
+
+  var metricEl=document.getElementById('cmp-metric');
+  var metricKey=metricEl?metricEl.value:'hmld';
+  var viewEl=document.getElementById('cmp-view');
+  var viewVal=viewEl?viewEl.value:'team';
+  var drillSlug=window._cmpDrillSlug||'all';
+
+  /* Metric config */
+  var MC={
+    hmld:    {f:'hmld',    lbl:'HMLD',          unit:'m',    dp:0},
+    hmldMin: {f:'hmldMin', lbl:'HMLD/min',       unit:'m/min',dp:1},
+    td:      {f:'td',      lbl:'Total Dist',     unit:'m',   dp:0},
+    tdMin:   {f:'tdMin',   lbl:'TD/min',         unit:'m/min',dp:1},
+    hsr:     {f:'hsr',     lbl:'HSR',            unit:'m',    dp:0},
+    hsrMin:  {f:'hsrMin',  lbl:'HSR/min',        unit:'m/min',dp:2},
+    sprint:  {f:'sprint',  lbl:'Sprint Dist',    unit:'m',    dp:0},
+    z6Min:   {f:'z6Min',   lbl:'Sprint/min',     unit:'m/min',dp:2},
+    maxSpd:  {f:'maxSpd',  lbl:'Max Velocity',   unit:'m/s',  dp:1}
+  };
+  var mc=MC[metricKey]||MC.hmld;
+
+  /* Position lookup from LIVE_SESSION_DATA */
+  var posMap={};
+  if(window.LIVE_SESSION_DATA&&window.LIVE_SESSION_DATA[sessKey]){
+    window.LIVE_SESSION_DATA[sessKey].forEach(function(r){
+      if(r.player) posMap[_normPlayerName(r.player)]=(r.pos||'mid').toUpperCase();
+    });
+  }
+  function _getPos(pName){
+    var pk=_normPlayerName(pName);
+    var p=posMap[pk]||'MID';
+    if(p.indexOf('FWD')>-1||p.indexOf('FORWARD')>-1) return 'FWD';
+    if(p.indexOf('DEF')>-1||p.indexOf('BACK')>-1) return 'DEF';
+    if(p.indexOf('GK')>-1||p.indexOf('GOAL')>-1) return 'GK';
+    return 'MID';
+  }
+
+  var DCOL=['#5a9be8','#3dbd84','#9b77dd','#e08844','#26C6DA','#FFA726','#EC407A','#66BB6A'];
+  var POS_TXT={GK:'var(--dim)',DEF:'var(--blue)',MID:'var(--teal)',FWD:'var(--green)'};
+  var POS_BG={GK:'rgba(107,130,153,.4)',DEF:'rgba(79,195,247,.35)',MID:'rgba(159,225,203,.35)',FWD:'rgba(76,175,80,.35)'};
+  var posOrder=['GK','DEF','MID','FWD'];
+
+  function _fmt(v){ return mc.dp===0?String(Math.round(v)):v.toFixed(mc.dp); }
+
+  /* Drills to show */
+  var activeSlugs=(drillSlug!=='all'&&dpd[drillSlug])?[drillSlug]:slugs;
+
+  var html='';
+
+  if(viewVal==='team'){
+    if(drillSlug==='all'){
+      /* All drills: one summary row per drill */
+      html+='<div style="font-size:9px;color:var(--muted);margin-bottom:10px">Team average · '+mc.lbl+' per drill · select a drill above for position and player detail</div>';
+      var rows=[];
+      activeSlugs.forEach(function(slug){
+        var ps=Object.values(dpd[slug]);
+        var vals=ps.map(function(p){return p[mc.f]||0;}).filter(Boolean);
+        if(!vals.length) return;
+        var avg=vals.reduce(function(a,v){return a+v;},0)/vals.length;
+        rows.push({slug:slug,name:ps[0].name||slug,avg:avg,dur:Math.round(ps[0].dur||0)});
+      });
+      if(!rows.length){ container.innerHTML='<div style="padding:22px 0;font-size:10px;color:var(--muted);text-align:center">No data for selected metric.</div>'; return; }
+      var maxVal=Math.max.apply(null,rows.map(function(r){return r.avg;}));
+      rows.forEach(function(r,i){
+        var col=DCOL[i%DCOL.length];
+        var pct=maxVal>0?Math.round(r.avg/maxVal*100):99;
+        var fv=_fmt(r.avg);
+        html+='<div class="hbar-row">'
+          +'<div class="hbar-lbl"><span class="hbar-dot" style="background:'+col+'"></span>'+_escHtml(r.name)+'</div>'
+          +'<div class="hbar-dur">'+r.dur+'m</div>'
+          +'<div class="hbar-track"><div class="hbar-fill" style="width:'+pct+'%;background:'+col.replace('#','rgba(').replace(/([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i,function(m,r,g,b){return parseInt(r,16)+','+parseInt(g,16)+','+parseInt(b,16);})+',0.4)">'+fv+'</div></div>'
+          +'<div class="hbar-val">'+fv+' '+mc.unit+'</div>'
+          +'</div>';
+      });
+    } else {
+      /* Single drill: team avg + position breakdown */
+      var ps=Object.values(dpd[drillSlug]);
+      if(!ps.length){ container.innerHTML='<div style="padding:22px 0;font-size:10px;color:var(--muted);text-align:center">No player data for this drill.</div>'; return; }
+      var drillName=ps[0].name||drillSlug;
+      var drillDur=Math.round(ps[0].dur||0);
+      var allVals=ps.map(function(p){return p[mc.f]||0;}).filter(Boolean);
+      if(!allVals.length){ container.innerHTML='<div style="padding:22px 0;font-size:10px;color:var(--muted);text-align:center">No '+mc.lbl+' data for this drill.</div>'; return; }
+      var teamAvg=allVals.reduce(function(a,v){return a+v;},0)/allVals.length;
+      var posGroups={GK:[],DEF:[],MID:[],FWD:[]};
+      Object.keys(dpd[drillSlug]).forEach(function(pn){ var v=dpd[drillSlug][pn][mc.f]||0; if(v>0) posGroups[_getPos(pn)].push(v); });
+      var maxVal=teamAvg;
+      posOrder.forEach(function(pos){ if(posGroups[pos].length){ var a=posGroups[pos].reduce(function(x,v){return x+v;},0)/posGroups[pos].length; if(a>maxVal)maxVal=a; }});
+      var fta=_fmt(teamAvg);
+      html+='<div class="drill-detail-stats"><div class="dds-card"><div class="dds-lbl">'+mc.lbl+' · Team avg</div><div class="dds-val" style="color:var(--blue)">'+fta+' '+mc.unit+'</div><div class="dds-sub">'+drillDur+' min · '+allVals.length+' players</div></div></div>';
+      html+='<div class="hbar-chart"><div class="hbc-hdr"><div><div class="hbc-title">'+_escHtml(drillName)+' — team average</div><div class="hbc-sub">Position split · '+mc.lbl+' per group</div></div><div class="hbc-badge" style="background:rgba(90,155,232,.08);border-color:rgba(90,155,232,.25);color:var(--blue)">'+_escHtml(drillName)+'</div></div>';
+      html+='<div class="hbar-row"><div class="hbar-lbl"><span class="hbar-dot" style="background:var(--dim)"></span>Team avg</div><div class="hbar-dur">all</div><div class="hbar-track"><div class="hbar-fill" style="width:'+(maxVal>0?Math.round(teamAvg/maxVal*100):99)+'%;background:rgba(90,155,232,.4)">'+fta+'</div></div><div class="hbar-val">'+fta+'</div></div>';
+      posOrder.forEach(function(pos){
+        var vals=posGroups[pos];
+        if(!vals.length) return;
+        var avg=vals.reduce(function(a,v){return a+v;},0)/vals.length;
+        var fa=_fmt(avg);
+        var pct=maxVal>0?Math.round(avg/maxVal*100):50;
+        var diff=teamAvg>0?Math.round((avg/teamAvg-1)*100):0;
+        html+='<div class="hbar-row"><div class="hbar-lbl"><span class="hbar-dot" style="background:'+POS_TXT[pos]+'"></span>'+pos+' avg</div><div class="hbar-dur">'+pos+'</div><div class="hbar-track"><div class="hbar-fill" style="width:'+pct+'%;background:'+POS_BG[pos]+'">'+fa+'</div></div><div class="hbar-val" style="color:'+POS_TXT[pos]+'">'+fa+'</div><div style="font-size:8px;color:var(--dim);margin-left:4px">'+(diff>=0?'+':'')+diff+'%</div></div>';
+      });
+      html+='<div class="team-avg-line"><span style="display:inline-block;width:24px;height:1px;border-top:2px dashed var(--dim);vertical-align:middle"></span>Team avg: <strong style="color:var(--teal);margin-left:4px">'+fta+' '+mc.unit+'</strong></div></div>';
+    }
+  } else if(viewVal==='pos'){
+    activeSlugs.forEach(function(slug,si){
+      var ps=Object.values(dpd[slug]);
+      if(!ps.length) return;
+      var drillName=ps[0].name||slug;
+      var drillDur=Math.round(ps[0].dur||0);
+      var col=DCOL[si%DCOL.length];
+      var posGroups={GK:[],DEF:[],MID:[],FWD:[]};
+      var allV=[];
+      Object.keys(dpd[slug]).forEach(function(pn){ var v=dpd[slug][pn][mc.f]||0; if(v>0){posGroups[_getPos(pn)].push(v);allV.push(v);} });
+      if(!allV.length) return;
+      var teamAvg=allV.reduce(function(a,v){return a+v;},0)/allV.length;
+      var maxVal=teamAvg;
+      posOrder.forEach(function(pos){ if(posGroups[pos].length){ var a=posGroups[pos].reduce(function(x,v){return x+v;},0)/posGroups[pos].length; if(a>maxVal)maxVal=a; }});
+      var fta=_fmt(teamAvg);
+      html+='<div class="pos-bar-chart" style="margin-bottom:18px"><div class="pbc-hdr"><div><div class="hbc-title">'+_escHtml(drillName)+' — position averages · '+mc.lbl+'</div><div class="hbc-sub">'+drillDur+' min · team avg '+fta+' '+mc.unit+'</div></div><div class="hbc-badge" style="background:rgba(90,155,232,.08);border-color:rgba(90,155,232,.25);color:'+col+'">'+_escHtml(drillName)+'</div></div>';
+      posOrder.forEach(function(pos){
+        var vals=posGroups[pos];
+        if(!vals.length) return;
+        var avg=vals.reduce(function(a,v){return a+v;},0)/vals.length;
+        var fa=_fmt(avg);
+        var pct=maxVal>0?Math.round(avg/maxVal*100):50;
+        var diff=teamAvg>0?Math.round((avg/teamAvg-1)*100):0;
+        html+='<div class="pb-row"><div class="pb-pos" style="color:'+POS_TXT[pos]+'">'+pos+'</div><div class="pb-track"><div class="pb-fill" style="width:'+pct+'%;background:'+POS_BG[pos].replace('.4)','.4)')+'">'+fa+'</div></div><div class="pb-val" style="color:'+POS_TXT[pos]+'">'+fa+'</div><div class="pb-vs">'+(diff>=0?'+':'')+diff+'%</div></div>';
+      });
+      html+='<div class="team-avg-line"><span style="display:inline-block;width:24px;height:1px;border-top:2px dashed var(--dim);vertical-align:middle"></span>Team avg: <strong style="color:var(--teal);margin-left:4px">'+fta+' '+mc.unit+'</strong></div></div>';
+    });
+    if(!html) html='<div style="padding:22px 0;font-size:10px;color:var(--muted);text-align:center">No drill data for this session.</div>';
+  } else {
+    /* INDIVIDUAL */
+    activeSlugs.forEach(function(slug,si){
+      var ps=dpd[slug];
+      if(!ps||!Object.keys(ps).length) return;
+      var drillName=Object.values(ps)[0].name||slug;
+      var col=DCOL[si%DCOL.length];
+      var rows=[];
+      var allV=[];
+      Object.keys(ps).forEach(function(pn){ var v=ps[pn][mc.f]||0; if(v>0){rows.push({name:pn,val:v,pos:_getPos(pn)});allV.push(v);} });
+      if(!rows.length) return;
+      rows.sort(function(a,b){return b.val-a.val;});
+      var teamAvg=allV.reduce(function(a,v){return a+v;},0)/allV.length;
+      var maxVal=rows[0].val;
+      var fta=_fmt(teamAvg);
+      html+='<div style="margin-bottom:20px"><div class="hbc-hdr"><div><div class="hbc-title">'+_escHtml(drillName)+' — individual · '+mc.lbl+'</div><div class="hbc-sub">Team avg '+fta+' '+mc.unit+' · '+rows.length+' players · sorted high→low</div></div><div class="hbc-badge" style="background:rgba(90,155,232,.08);border-color:rgba(90,155,232,.25);color:'+col+'">'+_escHtml(drillName)+'</div></div>';
+      rows.forEach(function(r){
+        var pct=maxVal>0?Math.round(r.val/maxVal*100):50;
+        var fv=_fmt(r.val);
+        var diff=teamAvg>0?Math.round((r.val/teamAvg-1)*100):0;
+        var dc=diff>=10?'var(--green)':diff<=-15?'var(--red)':'var(--dim)';
+        var colRgb=col.replace('#','').match(/../g);
+        var colRgba=colRgb?'rgba('+parseInt(colRgb[0],16)+','+parseInt(colRgb[1],16)+','+parseInt(colRgb[2],16)+',0.35)':col;
+        html+='<div class="hbar-row"><div class="hbar-lbl"><span class="hbar-dot" style="background:'+POS_TXT[r.pos]+'"></span>'+_escHtml(r.name)+'</div><div class="hbar-dur" style="color:'+POS_TXT[r.pos]+'">'+r.pos+'</div><div class="hbar-track"><div class="hbar-fill" style="width:'+pct+'%;background:'+colRgba+'">'+fv+'</div></div><div class="hbar-val">'+fv+'</div><div style="font-size:8px;color:'+dc+';margin-left:4px">'+(diff>=0?'+':'')+diff+'%</div></div>';
+      });
+      html+='</div>';
+    });
+    if(!html) html='<div style="padding:22px 0;font-size:10px;color:var(--muted);text-align:center">No individual drill data for this session.</div>';
+  }
+
+  container.innerHTML=html;
 }
 
 function refreshIntensity(){
@@ -7797,12 +8110,9 @@ function renderProfPerfBars(pk){
     <div class="cmp-ctrl-block">
       <div class="cmp-ctrl-row">
         <span class="cmp-ctrl-lbl">Subject</span>
-        <select class="sc-select" onchange="rd(this.value)">
-          <option value="ds-all" selected>All drills</option>
-          <option value="ds-wu">Warm-Up (12 min)</option>
-          <option value="ds-ssg">Small-Sided (20 min)</option>
-          <option value="ds-poss">Possession (25 min)</option>
-          <option value="ds-cg">Conditioned Game (18 min)</option>
+        <select id="cmp-subject" class="sc-select" onchange="cmpDrillChange(this.value)">
+          <option value="all" selected>All drills</option>
+          <!-- populated by cmpSyncSession() from LIVE_DRILL_PLAYER_DATA -->
         </select>
       </div>
       <div class="cmp-ctrl-row bm-ctrl-row">
@@ -7942,140 +8252,32 @@ function renderProfPerfBars(pk){
     </div>
 
     <!-- ── INTENSITY ── -->
-    <div class="cat-section-hdr">Intensity — peak outputs vs 28-day best<span class="int-adj" style="margin-left:6px;font-size:8px">drill-adjusted</span></div>
-    <div style="font-size:9px;color:var(--muted);margin-bottom:12px">Left = peak hit within selected drill · right = benchmark peak · 28d best = overall ceiling (fixed) · <span style="color:var(--green)">≥95%</span> · <span style="color:var(--amber)">85–94%</span> · <span style="color:var(--red)">&lt;85%</span></div>
-
-    <!-- ── ALL DRILLS ── -->
-    <div class="cat-int-drill cat-int-all">
-      <div class="mc-row">
-        <div class="mc-l"><div class="mc-v mc-vl" style="color:var(--amber)">8.9 m/s<span class="mc-d" style="color:var(--amber)">88% of best</span></div><div class="mc-trk"><div class="mc-fl" style="width:88%;background:rgba(239,159,39,.45)"></div></div></div>
-        <div class="mc-lbl">Max Velocity<span style="display:block;font-size:8px;color:var(--muted)">28d best: 10.1 m/s</span></div>
-        <div class="mc-r"><div class="mc-trk"><div class="mc-fr" style="width:95%;background:rgba(76,175,80,.45)"></div></div><div class="mc-v mc-vr" style="color:var(--green)">9.6 m/s<span style="display:block;font-size:8px;color:var(--green)">95% of best</span></div></div>
-      </div>
-      <div class="mc-row">
-        <div class="mc-l"><div class="mc-v mc-vl" style="color:var(--amber)">3.8 m/s²<span class="mc-d" style="color:var(--amber)">90% of best</span></div><div class="mc-trk"><div class="mc-fl" style="width:90%;background:rgba(239,159,39,.45)"></div></div></div>
-        <div class="mc-lbl">Max Acceleration<span style="display:block;font-size:8px;color:var(--muted)">28d best: 4.2 m/s²</span></div>
-        <div class="mc-r"><div class="mc-trk"><div class="mc-fr" style="width:98%;background:rgba(76,175,80,.45)"></div></div><div class="mc-v mc-vr" style="color:var(--green)">4.1 m/s²<span style="display:block;font-size:8px;color:var(--green)">98% of best</span></div></div>
-      </div>
-      <div class="mc-row">
-        <div class="mc-l"><div class="mc-v mc-vl" style="color:var(--red)">−3.4 m/s²<span class="mc-d" style="color:var(--red)">81% of best</span></div><div class="mc-trk"><div class="mc-fl" style="width:81%;background:rgba(226,75,74,.4)"></div></div></div>
-        <div class="mc-lbl">Max Deceleration<span style="display:block;font-size:8px;color:var(--muted)">28d best: −4.2 m/s²</span></div>
-        <div class="mc-r"><div class="mc-trk"><div class="mc-fr" style="width:93%;background:rgba(239,159,39,.45)"></div></div><div class="mc-v mc-vr" style="color:var(--amber)">−3.9 m/s²<span style="display:block;font-size:8px;color:var(--amber)">93% of best</span></div></div>
-      </div>
-      <div style="font-size:9px;color:var(--muted);margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">Session-wide peaks · max decel at 81% — players not reaching peak decel loads in training then exposed to match demands · injury risk pattern · identify which drill drove each peak using filters above</div>
-    </div>
-
-    <!-- ── WARM-UP ── -->
-    <div class="cat-int-drill cat-int-wu">
-      <div class="mc-row">
-        <div class="mc-l"><div class="mc-v mc-vl" style="color:var(--red)">6.2 m/s<span class="mc-d" style="color:var(--red)">61% of best</span></div><div class="mc-trk"><div class="mc-fl" style="width:61%;background:rgba(226,75,74,.4)"></div></div></div>
-        <div class="mc-lbl">Max Velocity<span style="display:block;font-size:8px;color:var(--muted)">28d best: 10.1 m/s</span></div>
-        <div class="mc-r"><div class="mc-trk"><div class="mc-fr" style="width:95%;background:rgba(76,175,80,.45)"></div></div><div class="mc-v mc-vr" style="color:var(--green)">9.6 m/s<span style="display:block;font-size:8px;color:var(--green)">95% of best</span></div></div>
-      </div>
-      <div class="mc-row">
-        <div class="mc-l"><div class="mc-v mc-vl" style="color:var(--red)">2.9 m/s²<span class="mc-d" style="color:var(--red)">69% of best</span></div><div class="mc-trk"><div class="mc-fl" style="width:69%;background:rgba(226,75,74,.4)"></div></div></div>
-        <div class="mc-lbl">Max Acceleration<span style="display:block;font-size:8px;color:var(--muted)">28d best: 4.2 m/s²</span></div>
-        <div class="mc-r"><div class="mc-trk"><div class="mc-fr" style="width:98%;background:rgba(76,175,80,.45)"></div></div><div class="mc-v mc-vr" style="color:var(--green)">4.1 m/s²<span style="display:block;font-size:8px;color:var(--green)">98% of best</span></div></div>
-      </div>
-      <div class="mc-row">
-        <div class="mc-l"><div class="mc-v mc-vl" style="color:var(--red)">−2.6 m/s²<span class="mc-d" style="color:var(--red)">62% of best</span></div><div class="mc-trk"><div class="mc-fl" style="width:62%;background:rgba(226,75,74,.4)"></div></div></div>
-        <div class="mc-lbl">Max Deceleration<span style="display:block;font-size:8px;color:var(--muted)">28d best: −4.2 m/s²</span></div>
-        <div class="mc-r"><div class="mc-trk"><div class="mc-fr" style="width:93%;background:rgba(239,159,39,.45)"></div></div><div class="mc-v mc-vr" style="color:var(--amber)">−3.9 m/s²<span style="display:block;font-size:8px;color:var(--amber)">93% of best</span></div></div>
-      </div>
-      <div style="font-size:9px;color:var(--muted);margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">Warm-Up: low outputs across all metrics — expected for structured movement · not a concern · these numbers should be red by design</div>
-    </div>
-
-    <!-- ── SMALL-SIDED GAME ── -->
-    <div class="cat-int-drill cat-int-ssg">
-      <div class="mc-row">
-        <div class="mc-l"><div class="mc-v mc-vl" style="color:var(--red)">7.1 m/s<span class="mc-d" style="color:var(--red)">70% of best</span></div><div class="mc-trk"><div class="mc-fl" style="width:70%;background:rgba(226,75,74,.4)"></div></div></div>
-        <div class="mc-lbl">Max Velocity<span style="display:block;font-size:8px;color:var(--muted)">28d best: 10.1 m/s</span></div>
-        <div class="mc-r"><div class="mc-trk"><div class="mc-fr" style="width:95%;background:rgba(76,175,80,.45)"></div></div><div class="mc-v mc-vr" style="color:var(--green)">9.6 m/s<span style="display:block;font-size:8px;color:var(--green)">95% of best</span></div></div>
-      </div>
-      <div class="mc-row">
-        <div class="mc-l"><div class="mc-v mc-vl" style="color:var(--amber)">3.9 m/s²<span class="mc-d" style="color:var(--amber)">93% of best</span></div><div class="mc-trk"><div class="mc-fl" style="width:93%;background:rgba(239,159,39,.45)"></div></div></div>
-        <div class="mc-lbl">Max Acceleration<span style="display:block;font-size:8px;color:var(--muted)">28d best: 4.2 m/s²</span></div>
-        <div class="mc-r"><div class="mc-trk"><div class="mc-fr" style="width:98%;background:rgba(76,175,80,.45)"></div></div><div class="mc-v mc-vr" style="color:var(--green)">4.1 m/s²<span style="display:block;font-size:8px;color:var(--green)">98% of best</span></div></div>
-      </div>
-      <div class="mc-row">
-        <div class="mc-l"><div class="mc-v mc-vl" style="color:var(--amber)">−3.8 m/s²<span class="mc-d" style="color:var(--amber)">90% of best</span></div><div class="mc-trk"><div class="mc-fl" style="width:90%;background:rgba(239,159,39,.45)"></div></div></div>
-        <div class="mc-lbl">Max Deceleration<span style="display:block;font-size:8px;color:var(--muted)">28d best: −4.2 m/s²</span></div>
-        <div class="mc-r"><div class="mc-trk"><div class="mc-fr" style="width:93%;background:rgba(239,159,39,.45)"></div></div><div class="mc-v mc-vr" style="color:var(--amber)">−3.9 m/s²<span style="display:block;font-size:8px;color:var(--amber)">93% of best</span></div></div>
-      </div>
-      <div style="font-size:9px;color:var(--muted);margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">SSG: low max velocity is pitch-size constrained — not a fitness flag · high acc/dec (93%/90%) confirms confined-space direction-change stimulus is working · this drill is not a max speed developer · complement with CG or full-pitch work for velocity</div>
-    </div>
-
-    <!-- ── POSSESSION ── -->
-    <div class="cat-int-drill cat-int-poss">
-      <div class="mc-row">
-        <div class="mc-l"><div class="mc-v mc-vl" style="color:var(--red)">7.6 m/s<span class="mc-d" style="color:var(--red)">75% of best</span></div><div class="mc-trk"><div class="mc-fl" style="width:75%;background:rgba(226,75,74,.4)"></div></div></div>
-        <div class="mc-lbl">Max Velocity<span style="display:block;font-size:8px;color:var(--muted)">28d best: 10.1 m/s</span></div>
-        <div class="mc-r"><div class="mc-trk"><div class="mc-fr" style="width:95%;background:rgba(76,175,80,.45)"></div></div><div class="mc-v mc-vr" style="color:var(--green)">9.6 m/s<span style="display:block;font-size:8px;color:var(--green)">95% of best</span></div></div>
-      </div>
-      <div class="mc-row">
-        <div class="mc-l"><div class="mc-v mc-vl" style="color:var(--red)">3.5 m/s²<span class="mc-d" style="color:var(--red)">83% of best</span></div><div class="mc-trk"><div class="mc-fl" style="width:83%;background:rgba(226,75,74,.4)"></div></div></div>
-        <div class="mc-lbl">Max Acceleration<span style="display:block;font-size:8px;color:var(--muted)">28d best: 4.2 m/s²</span></div>
-        <div class="mc-r"><div class="mc-trk"><div class="mc-fr" style="width:98%;background:rgba(76,175,80,.45)"></div></div><div class="mc-v mc-vr" style="color:var(--green)">4.1 m/s²<span style="display:block;font-size:8px;color:var(--green)">98% of best</span></div></div>
-      </div>
-      <div class="mc-row">
-        <div class="mc-l"><div class="mc-v mc-vl" style="color:var(--red)">−3.2 m/s²<span class="mc-d" style="color:var(--red)">76% of best</span></div><div class="mc-trk"><div class="mc-fl" style="width:76%;background:rgba(226,75,74,.4)"></div></div></div>
-        <div class="mc-lbl">Max Deceleration<span style="display:block;font-size:8px;color:var(--muted)">28d best: −4.2 m/s²</span></div>
-        <div class="mc-r"><div class="mc-trk"><div class="mc-fr" style="width:93%;background:rgba(239,159,39,.45)"></div></div><div class="mc-v mc-vr" style="color:var(--amber)">−3.9 m/s²<span style="display:block;font-size:8px;color:var(--amber)">93% of best</span></div></div>
-      </div>
-      <div style="font-size:9px;color:var(--muted);margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">Possession: moderate outputs across all three metrics — technical-focus drill · low intensity is acceptable if session intent is skill-loading · flag if this is the only high-density drill in the week without a higher-intensity complement</div>
-    </div>
-
-    <!-- ── CONDITIONED GAME ── -->
-    <div class="cat-int-drill cat-int-cg">
-      <div class="mc-row">
-        <div class="mc-l"><div class="mc-v mc-vl" style="color:var(--amber)">9.3 m/s<span class="mc-d" style="color:var(--amber)">92% of best</span></div><div class="mc-trk"><div class="mc-fl" style="width:92%;background:rgba(239,159,39,.45)"></div></div></div>
-        <div class="mc-lbl">Max Velocity<span style="display:block;font-size:8px;color:var(--muted)">28d best: 10.1 m/s</span></div>
-        <div class="mc-r"><div class="mc-trk"><div class="mc-fr" style="width:95%;background:rgba(76,175,80,.45)"></div></div><div class="mc-v mc-vr" style="color:var(--green)">9.6 m/s<span style="display:block;font-size:8px;color:var(--green)">95% of best</span></div></div>
-      </div>
-      <div class="mc-row">
-        <div class="mc-l"><div class="mc-v mc-vl" style="color:var(--green)">4.1 m/s²<span class="mc-d" style="color:var(--green)">98% of best</span></div><div class="mc-trk"><div class="mc-fl" style="width:98%;background:rgba(76,175,80,.45)"></div></div></div>
-        <div class="mc-lbl">Max Acceleration<span style="display:block;font-size:8px;color:var(--muted)">28d best: 4.2 m/s²</span></div>
-        <div class="mc-r"><div class="mc-trk"><div class="mc-fr" style="width:98%;background:rgba(76,175,80,.45)"></div></div><div class="mc-v mc-vr" style="color:var(--green)">4.1 m/s²<span style="display:block;font-size:8px;color:var(--green)">98% of best</span></div></div>
-      </div>
-      <div class="mc-row">
-        <div class="mc-l"><div class="mc-v mc-vl" style="color:var(--amber)">−3.7 m/s²<span class="mc-d" style="color:var(--amber)">88% of best</span></div><div class="mc-trk"><div class="mc-fl" style="width:88%;background:rgba(239,159,39,.45)"></div></div></div>
-        <div class="mc-lbl">Max Deceleration<span style="display:block;font-size:8px;color:var(--muted)">28d best: −4.2 m/s²</span></div>
-        <div class="mc-r"><div class="mc-trk"><div class="mc-fr" style="width:93%;background:rgba(239,159,39,.45)"></div></div><div class="mc-v mc-vr" style="color:var(--amber)">−3.9 m/s²<span style="display:block;font-size:8px;color:var(--amber)">93% of best</span></div></div>
-      </div>
-      <div style="font-size:9px;color:var(--muted);margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">✓ Conditioned Game: closest intensity profile to match — max vel at 92% and acc at 98% · this drill is doing the intensity work · max decel still below match (88% vs 93%) · review constraints if closing that gap is a priority pre-championship</div>
-    </div>
-
-  </div>
-
+    <div class="cat-section-hdr">Intensity — peak outputs vs session best<span class="int-adj" style="margin-left:6px;font-size:8px">live · drill-level</span></div>
+    <div style="font-size:9px;color:var(--muted);margin-bottom:12px">Left = this drill team avg · right = session overall avg · ceiling = session best across all drills · <span style="color:var(--green)">≥90%</span> · <span style="color:var(--amber)">75–89%</span> · <span style="color:var(--red)">&lt;75%</span> · Max velocity + HMLD/min available at drill level</div>
+    <div id="cmp-int-live" style="min-height:40px"><div style="font-size:9px;color:var(--muted);padding:8px 0">Loading drill intensity data…</div></div>
 
   <!-- ─── [3] CONTROLS ─── -->
   <div class="ctrl-row" style="gap:14px">
     <div class="ctrl-col">
       <div class="ctrl-label">Drill <span style="font-size:8px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">— linked to Subject above</span></div>
-      <select class="sc-select" onchange="rd(this.value)" style="min-width:170px">
-        <option value="ds-all" selected>All drills</option>
-        <option value="ds-wu">Warm-Up</option>
-        <option value="ds-ssg">Small-Sided</option>
-        <option value="ds-poss">Possession</option>
-        <option value="ds-cg">Conditioned Game</option>
+      <select id="cmp-drill" class="sc-select" onchange="cmpDrillChange(this.value)" style="min-width:170px">
+        <option value="all" selected>All drills</option>
+        <!-- populated by cmpSyncSession() -->
       </select>
     </div>
     <div class="ctrl-sep"></div>
     <div class="ctrl-col">
       <div class="ctrl-label">Metric</div>
-      <select class="sc-select" onchange="rd(this.value)" style="min-width:160px">
-        <option value="mt-hmld" selected>HMLD</option>
-        <option value="mt-hmldm">HMLD/min</option>
-        <option value="mt-td">Total Distance</option>
-        <option value="mt-tdm">TD/min</option>
-        <option value="mt-hsr">HSR</option>
-        <option value="mt-hsrm">HSR/min</option>
-        <option value="mt-acc">Acc events</option>
-        <option value="mt-dec">Dec events</option>
-        <option value="mt-ratio">Dec:Acc ratio</option>
-        <option value="mt-eff">Total efforts</option>
-        <option value="mt-maxv">Max velocity</option>
-        <option value="mt-pacc">Peak acc</option>
+      <select id="cmp-metric" class="sc-select" onchange="renderCmpDrillChart()" style="min-width:160px">
+        <option value="hmld" selected>HMLD</option>
+        <option value="hmldMin">HMLD/min</option>
+        <option value="td">Total Distance</option>
+        <option value="tdMin">TD/min</option>
+        <option value="hsr">HSR</option>
+        <option value="hsrMin">HSR/min</option>
+        <option value="sprint">Sprint Distance</option>
+        <option value="z6Min">Sprint/min</option>
+        <option value="maxSpd">Max velocity</option>
       </select>
     </div>
   </div>
@@ -8083,246 +8285,17 @@ function renderProfPerfBars(pk){
   <!-- ─── [4] VIEW MODE TABS ─── -->
   <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--border)">
     <span style="font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)">View</span>
-    <select class="sc-select" onchange="rd(this.value)" style="min-width:150px">
-      <option value="vm-team" selected>Team average</option>
-      <option value="vm-pos">Position average</option>
-      <option value="vm-ind">Individual</option>
+    <select id="cmp-view" class="sc-select" onchange="renderCmpDrillChart()" style="min-width:150px">
+      <option value="team" selected>Team average</option>
+      <option value="pos">Position average</option>
+      <option value="ind">Individual</option>
     </select>
   </div>
 
-  <!-- ─── [5] CHART AREA ─── -->
-
-  <!-- ════ TEAM AVG VIEW ════ -->
-  <div class="vc vc-team">
-
-    <!-- ALL DRILLS — team view placeholder -->
-    <div class="dc dc-all">
-      <div style="padding:22px 0 10px;font-size:10px;color:var(--muted);text-align:center">↑ Drill overview above shows all-session team averages · select a drill to view position split and metric detail below</div>
-    </div>
-
-    <!-- WARM-UP — team detail -->
-    <div class="dc dc-wu">
-      <div class="drill-detail-stats">
-        <div class="dds-card"><div class="dds-lbl">HMLD · Team avg</div><div class="dds-val" style="color:#5a9be8">53 m</div><div class="dds-sub">Benchmark MD-2: 45–60 m</div></div>
-        <div class="dds-card"><div class="dds-lbl">HMLD/min</div><div class="dds-val c-dim">4.4</div><div class="dds-sub">12 min duration</div></div>
-        <div class="dds-card"><div class="dds-lbl">Dec:Acc ratio</div><div class="dds-val c-green">0.94</div><div class="dds-sub">Well below 1.15 threshold</div></div>
-      </div>
-      <div class="hbar-chart">
-        <div class="hbc-hdr"><div><div class="hbc-title">Warm-Up — team average</div><div class="hbc-sub">Position split · HMLD per player group</div></div><div class="hbc-badge" style="background:rgba(58,123,200,.08);border-color:rgba(58,123,200,.25);color:#5a9be8">Warm-Up</div></div>
-        <div class="hbar-row"><div class="hbar-lbl"><span class="hbar-dot" style="background:var(--dim)"></span>Team avg</div><div class="hbar-dur">all</div><div class="hbar-track"><div class="hbar-fill" style="width:91%;background:rgba(58,123,200,.4)">53 m</div></div><div class="hbar-val">53 m</div></div>
-        <div class="hbar-row"><div class="hbar-lbl"><span class="hbar-dot" style="background:var(--muted)"></span>GK avg</div><div class="hbar-dur">GK</div><div class="hbar-track"><div class="hbar-fill" style="width:78%;background:rgba(107,130,153,.4)">45 m</div></div><div class="hbar-val c-dim">45 m</div></div>
-        <div class="hbar-row"><div class="hbar-lbl"><span class="hbar-dot" style="background:var(--blue)"></span>DEF avg</div><div class="hbar-dur">DEF</div><div class="hbar-track"><div class="hbar-fill" style="width:88%;background:rgba(79,195,247,.35)">51 m</div></div><div class="hbar-val c-dim">51 m</div></div>
-        <div class="hbar-row"><div class="hbar-lbl"><span class="hbar-dot" style="background:var(--teal)"></span>MID avg</div><div class="hbar-dur">MID</div><div class="hbar-track"><div class="hbar-fill" style="width:100%;background:rgba(159,225,203,.35)">58 m</div></div><div class="hbar-val c-teal">58 m</div></div>
-        <div class="hbar-row"><div class="hbar-lbl"><span class="hbar-dot" style="background:var(--green)"></span>FWD avg</div><div class="hbar-dur">FWD</div><div class="hbar-track"><div class="hbar-fill" style="width:95%;background:rgba(76,175,80,.35)">55 m</div></div><div class="hbar-val c-dim">55 m</div></div>
-      </div>
-    </div>
-
-    <!-- SMALL-SIDED GAMES — team detail -->
-    <div class="dc dc-ssg">
-      <div class="drill-detail-stats">
-        <div class="dds-card"><div class="dds-lbl">HMLD · Team avg</div><div class="dds-val" style="color:#3dbd84">108 m</div><div class="dds-sub">Highest HMLD/min of session</div></div>
-        <div class="dds-card"><div class="dds-lbl">HMLD/min</div><div class="dds-val c-teal">5.4</div><div class="dds-sub">20 min duration</div></div>
-        <div class="dds-card"><div class="dds-lbl">Dec:Acc ratio</div><div class="dds-val c-amber">1.08</div><div class="dds-sub">Monitor — below 1.15</div></div>
-      </div>
-      <div class="hbar-chart">
-        <div class="hbc-hdr"><div><div class="hbc-title">Small-Sided Games — team average</div><div class="hbc-sub">Position split · HMLD per player group</div></div><div class="hbc-badge" style="background:rgba(30,158,104,.08);border-color:rgba(30,158,104,.25);color:#3dbd84">SSG</div></div>
-        <div class="hbar-row"><div class="hbar-lbl"><span class="hbar-dot" style="background:var(--dim)"></span>Team avg</div><div class="hbar-dur">all</div><div class="hbar-track"><div class="hbar-fill" style="width:84%;background:rgba(30,158,104,.4)">108 m</div></div><div class="hbar-val">108 m</div></div>
-        <div class="hbar-row"><div class="hbar-lbl"><span class="hbar-dot" style="background:var(--muted)"></span>GK avg</div><div class="hbar-dur">GK</div><div class="hbar-track"><div class="hbar-fill" style="width:56%;background:rgba(107,130,153,.4)">72 m</div></div><div class="hbar-val c-dim">72 m</div></div>
-        <div class="hbar-row"><div class="hbar-lbl"><span class="hbar-dot" style="background:var(--blue)"></span>DEF avg</div><div class="hbar-dur">DEF</div><div class="hbar-track"><div class="hbar-fill" style="width:77%;background:rgba(79,195,247,.35)">98 m</div></div><div class="hbar-val c-dim">98 m</div></div>
-        <div class="hbar-row"><div class="hbar-lbl"><span class="hbar-dot" style="background:var(--teal)"></span>MID avg</div><div class="hbar-dur">MID</div><div class="hbar-track"><div class="hbar-fill" style="width:100%;background:rgba(159,225,203,.35)">128 m</div></div><div class="hbar-val c-teal">128 m</div></div>
-        <div class="hbar-row"><div class="hbar-lbl"><span class="hbar-dot" style="background:var(--green)"></span>FWD avg</div><div class="hbar-dur">FWD</div><div class="hbar-track"><div class="hbar-fill" style="width:90%;background:rgba(76,175,80,.35)">115 m</div></div><div class="hbar-val c-dim">115 m</div></div>
-      </div>
-    </div>
-
-    <!-- POSSESSION — team detail -->
-    <div class="dc dc-poss">
-      <div class="drill-detail-stats">
-        <div class="dds-card"><div class="dds-lbl">HMLD · Team avg</div><div class="dds-val" style="color:#9b77dd">136 m</div><div class="dds-sub">Dominant drill · 35.1% of session</div></div>
-        <div class="dds-card"><div class="dds-lbl">HMLD/min</div><div class="dds-val" style="color:#9b77dd">5.4</div><div class="dds-sub">25 min duration</div></div>
-        <div class="dds-card"><div class="dds-lbl">Dec:Acc ratio</div><div class="dds-val c-amber">1.06</div><div class="dds-sub">Within threshold</div></div>
-      </div>
-      <div class="hbar-chart">
-        <div class="hbc-hdr"><div><div class="hbc-title">Possession — team average</div><div class="hbc-sub">Position split · HMLD per player group</div></div><div class="hbc-badge" style="background:rgba(124,77,204,.08);border-color:rgba(124,77,204,.25);color:#9b77dd">Possession</div></div>
-        <div class="hbar-row"><div class="hbar-lbl"><span class="hbar-dot" style="background:var(--dim)"></span>Team avg</div><div class="hbar-dur">all</div><div class="hbar-track"><div class="hbar-fill" style="width:84%;background:rgba(124,77,204,.4)">136 m</div></div><div class="hbar-val">136 m</div></div>
-        <div class="hbar-row"><div class="hbar-lbl"><span class="hbar-dot" style="background:var(--muted)"></span>GK avg</div><div class="hbar-dur">GK</div><div class="hbar-track"><div class="hbar-fill" style="width:55%;background:rgba(107,130,153,.4)">88 m</div></div><div class="hbar-val c-dim">88 m</div></div>
-        <div class="hbar-row"><div class="hbar-lbl"><span class="hbar-dot" style="background:var(--blue)"></span>DEF avg</div><div class="hbar-dur">DEF</div><div class="hbar-track"><div class="hbar-fill" style="width:77%;background:rgba(79,195,247,.35)">124 m</div></div><div class="hbar-val c-dim">124 m</div></div>
-        <div class="hbar-row"><div class="hbar-lbl"><span class="hbar-dot" style="background:var(--teal)"></span>MID avg</div><div class="hbar-dur">MID</div><div class="hbar-track"><div class="hbar-fill" style="width:100%;background:rgba(159,225,203,.35)">161 m</div></div><div class="hbar-val c-teal">161 m</div></div>
-        <div class="hbar-row"><div class="hbar-lbl"><span class="hbar-dot" style="background:var(--green)"></span>FWD avg</div><div class="hbar-dur">FWD</div><div class="hbar-track"><div class="hbar-fill" style="width:92%;background:rgba(76,175,80,.35)">148 m</div></div><div class="hbar-val c-dim">148 m</div></div>
-      </div>
-    </div>
-
-    <!-- CONDITIONED GAME — team detail -->
-    <div class="dc dc-cg">
-      <div class="drill-detail-stats">
-        <div class="dds-card"><div class="dds-lbl">HMLD · Team avg</div><div class="dds-val" style="color:#e08844">90 m</div><div class="dds-sub">18 min duration</div></div>
-        <div class="dds-card"><div class="dds-lbl">HMLD/min</div><div class="dds-val" style="color:#e08844">5.0</div><div class="dds-sub">Lowest efficiency of session</div></div>
-        <div class="dds-card"><div class="dds-lbl">Dec:Acc ratio</div><div class="dds-val c-amber">1.12</div><div class="dds-sub">⚠ Approaching 1.15 threshold</div></div>
-      </div>
-      <div class="hbar-chart">
-        <div class="hbc-hdr"><div><div class="hbc-title">Conditioned Game — team average</div><div class="hbc-sub">Position split · HMLD per player group</div></div><div class="hbc-badge" style="background:rgba(192,104,26,.08);border-color:rgba(192,104,26,.25);color:#e08844">Conditioned</div></div>
-        <div class="hbar-row"><div class="hbar-lbl"><span class="hbar-dot" style="background:var(--dim)"></span>Team avg</div><div class="hbar-dur">all</div><div class="hbar-track"><div class="hbar-fill" style="width:80%;background:rgba(192,104,26,.4)">90 m</div></div><div class="hbar-val">90 m</div></div>
-        <div class="hbar-row"><div class="hbar-lbl"><span class="hbar-dot" style="background:var(--muted)"></span>GK avg</div><div class="hbar-dur">GK</div><div class="hbar-track"><div class="hbar-fill" style="width:58%;background:rgba(107,130,153,.4)">65 m</div></div><div class="hbar-val c-dim">65 m</div></div>
-        <div class="hbar-row"><div class="hbar-lbl"><span class="hbar-dot" style="background:var(--blue)"></span>DEF avg</div><div class="hbar-dur">DEF</div><div class="hbar-track"><div class="hbar-fill" style="width:74%;background:rgba(79,195,247,.35)">83 m</div></div><div class="hbar-val c-dim">83 m</div></div>
-        <div class="hbar-row"><div class="hbar-lbl"><span class="hbar-dot" style="background:var(--teal)"></span>MID avg</div><div class="hbar-dur">MID</div><div class="hbar-track"><div class="hbar-fill" style="width:100%;background:rgba(159,225,203,.35)">112 m</div></div><div class="hbar-val c-teal">112 m</div></div>
-        <div class="hbar-row"><div class="hbar-lbl"><span class="hbar-dot" style="background:var(--green)"></span>FWD avg</div><div class="hbar-dur">FWD</div><div class="hbar-track"><div class="hbar-fill" style="width:88%;background:rgba(76,175,80,.35)">98 m</div></div><div class="hbar-val c-dim">98 m</div></div>
-        <div style="font-size:9px;color:var(--amber);margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">⚠ Dec:Acc 1.12 in this drill — 3 players above 1.15. Monitor if adding another high-contact session before match.</div>
-      </div>
-    </div>
-  </div><!-- END vc-team -->
-
-  <!-- ════ POSITION AVG VIEW ════ -->
-  <div class="vc vc-pos">
-
-    <!-- ALL DRILLS — position view placeholder -->
-    <div class="dc dc-all">
-      <div style="padding:22px 0 10px;font-size:10px;color:var(--muted);text-align:center">↑ Drill overview above shows position splits per drill · select a drill to view detailed position breakdown below</div>
-    </div>
-
-    <!-- WARM-UP — position avg -->
-    <div class="dc dc-wu">
-      <div class="pos-bar-chart">
-        <div class="pbc-hdr"><div><div class="hbc-title">Warm-Up — position averages · HMLD (m)</div><div class="hbc-sub">12 min · team avg 53 m</div></div><div class="hbc-badge" style="background:rgba(58,123,200,.08);border-color:rgba(58,123,200,.25);color:#5a9be8">Warm-Up</div></div>
-        <div class="pb-row"><div class="pb-pos" style="color:var(--dim)">GK</div><div class="pb-track"><div class="pb-fill" style="width:78%;background:rgba(107,130,153,.45)">45 m</div></div><div class="pb-val c-dim">45 m</div><div class="pb-vs">team 53</div></div>
-        <div class="pb-row"><div class="pb-pos" style="color:var(--blue)">DEF</div><div class="pb-track"><div class="pb-fill" style="width:88%;background:rgba(79,195,247,.4)">51 m</div></div><div class="pb-val">51 m</div><div class="pb-vs">−4%</div></div>
-        <div class="pb-row"><div class="pb-pos" style="color:var(--teal)">MID</div><div class="pb-track"><div class="pb-fill" style="width:100%;background:rgba(159,225,203,.4)">58 m</div></div><div class="pb-val c-teal">58 m</div><div class="pb-vs">+9%</div></div>
-        <div class="pb-row"><div class="pb-pos" style="color:var(--green)">FWD</div><div class="pb-track"><div class="pb-fill" style="width:95%;background:rgba(76,175,80,.4)">55 m</div></div><div class="pb-val c-green">55 m</div><div class="pb-vs">+4%</div></div>
-        <div class="team-avg-line"><span style="display:inline-block;width:24px;height:1px;border-top:2px dashed var(--dim);vertical-align:middle"></span>Team avg: <strong style="color:var(--teal);margin-left:4px">53 m</strong></div>
-      </div>
-    </div>
-
-    <!-- SMALL-SIDED — position avg -->
-    <div class="dc dc-ssg">
-      <div class="pos-bar-chart">
-        <div class="pbc-hdr"><div><div class="hbc-title">Small-Sided Games — position averages · HMLD (m)</div><div class="hbc-sub">20 min · team avg 108 m · largest positional spread in session</div></div><div class="hbc-badge" style="background:rgba(30,158,104,.08);border-color:rgba(30,158,104,.25);color:#3dbd84">SSG</div></div>
-        <div class="pb-row"><div class="pb-pos" style="color:var(--dim)">GK</div><div class="pb-track"><div class="pb-fill" style="width:56%;background:rgba(107,130,153,.45)">72 m</div></div><div class="pb-val c-dim">72 m</div><div class="pb-vs">−33%</div></div>
-        <div class="pb-row"><div class="pb-pos" style="color:var(--blue)">DEF</div><div class="pb-track"><div class="pb-fill" style="width:77%;background:rgba(79,195,247,.4)">98 m</div></div><div class="pb-val">98 m</div><div class="pb-vs">−9%</div></div>
-        <div class="pb-row"><div class="pb-pos" style="color:var(--teal)">MID</div><div class="pb-track"><div class="pb-fill" style="width:100%;background:rgba(159,225,203,.4)">128 m</div></div><div class="pb-val c-teal">128 m</div><div class="pb-vs">+19%</div></div>
-        <div class="pb-row"><div class="pb-pos" style="color:var(--green)">FWD</div><div class="pb-track"><div class="pb-fill" style="width:90%;background:rgba(76,175,80,.4)">115 m</div></div><div class="pb-val c-green">115 m</div><div class="pb-vs">+6%</div></div>
-        <div class="team-avg-line"><span style="display:inline-block;width:24px;height:1px;border-top:2px dashed var(--dim);vertical-align:middle"></span>Team avg: <strong style="color:var(--teal);margin-left:4px">108 m</strong> <span style="margin-left:12px;font-size:9px;color:var(--amber)">GK significantly below — 33% under team avg · expected in SSG format</span></div>
-      </div>
-    </div>
-
-    <!-- POSSESSION — position avg -->
-    <div class="dc dc-poss">
-      <div class="pos-bar-chart">
-        <div class="pbc-hdr"><div><div class="hbc-title">Possession — position averages · HMLD (m)</div><div class="hbc-sub">25 min · team avg 136 m · dominant drill</div></div><div class="hbc-badge" style="background:rgba(124,77,204,.08);border-color:rgba(124,77,204,.25);color:#9b77dd">Possession</div></div>
-        <div class="pb-row"><div class="pb-pos" style="color:var(--dim)">GK</div><div class="pb-track"><div class="pb-fill" style="width:55%;background:rgba(107,130,153,.45)">88 m</div></div><div class="pb-val c-dim">88 m</div><div class="pb-vs">−35%</div></div>
-        <div class="pb-row"><div class="pb-pos" style="color:var(--blue)">DEF</div><div class="pb-track"><div class="pb-fill" style="width:77%;background:rgba(79,195,247,.4)">124 m</div></div><div class="pb-val">124 m</div><div class="pb-vs">−9%</div></div>
-        <div class="pb-row"><div class="pb-pos" style="color:var(--teal)">MID</div><div class="pb-track"><div class="pb-fill" style="width:100%;background:rgba(159,225,203,.4)">161 m</div></div><div class="pb-val c-teal">161 m</div><div class="pb-vs">+18%</div></div>
-        <div class="pb-row"><div class="pb-pos" style="color:var(--green)">FWD</div><div class="pb-track"><div class="pb-fill" style="width:92%;background:rgba(76,175,80,.4)">148 m</div></div><div class="pb-val c-green">148 m</div><div class="pb-vs">+9%</div></div>
-        <div class="team-avg-line"><span style="display:inline-block;width:24px;height:1px;border-top:2px dashed var(--dim);vertical-align:middle"></span>Team avg: <strong style="color:var(--teal);margin-left:4px">136 m</strong></div>
-      </div>
-    </div>
-
-    <!-- CONDITIONED — position avg -->
-    <div class="dc dc-cg">
-      <div class="pos-bar-chart">
-        <div class="pbc-hdr"><div><div class="hbc-title">Conditioned Game — position averages · HMLD (m)</div><div class="hbc-sub">18 min · team avg 90 m</div></div><div class="hbc-badge" style="background:rgba(192,104,26,.08);border-color:rgba(192,104,26,.25);color:#e08844">Conditioned</div></div>
-        <div class="pb-row"><div class="pb-pos" style="color:var(--dim)">GK</div><div class="pb-track"><div class="pb-fill" style="width:58%;background:rgba(107,130,153,.45)">65 m</div></div><div class="pb-val c-dim">65 m</div><div class="pb-vs">−28%</div></div>
-        <div class="pb-row"><div class="pb-pos" style="color:var(--blue)">DEF</div><div class="pb-track"><div class="pb-fill" style="width:74%;background:rgba(79,195,247,.4)">83 m</div></div><div class="pb-val">83 m</div><div class="pb-vs">−8%</div></div>
-        <div class="pb-row"><div class="pb-pos" style="color:var(--teal)">MID</div><div class="pb-track"><div class="pb-fill" style="width:100%;background:rgba(159,225,203,.4)">112 m</div></div><div class="pb-val c-teal">112 m</div><div class="pb-vs">+24%</div></div>
-        <div class="pb-row"><div class="pb-pos" style="color:var(--green)">FWD</div><div class="pb-track"><div class="pb-fill" style="width:88%;background:rgba(76,175,80,.4)">98 m</div></div><div class="pb-val c-green">98 m</div><div class="pb-vs">+9%</div></div>
-        <div class="team-avg-line"><span style="display:inline-block;width:24px;height:1px;border-top:2px dashed var(--dim);vertical-align:middle"></span>Team avg: <strong style="color:var(--teal);margin-left:4px">90 m</strong></div>
-      </div>
-    </div>
-  </div><!-- END vc-pos -->
-
-  <!-- ════ INDIVIDUAL VIEW ════ -->
-  <div class="vc vc-ind">
-
-    <!-- ALL DRILLS — deviation from position avg -->
-    <div class="dc dc-all">
-      <div class="dev-wrap">
-        <div class="dev-hdr">
-          <div class="sec-label" style="margin-bottom:0">Player deviation from position average — session total ·
-            <span class="mn mn-hmld">HMLD</span><span class="mn mn-hmldm">HMLD/min</span><span class="mn mn-td">TD</span><span class="mn mn-tdm">TD/min</span><span class="mn mn-hsr">HSR</span><span class="mn mn-hsrm">HSR/min</span><span class="mn mn-acc">Acc</span><span class="mn mn-dec">Dec</span><span class="mn mn-ratio">Dec:Acc</span><span class="mn mn-eff">Efforts</span><span class="mn mn-maxv">Max V</span><span class="mn mn-pacc">Peak Acc</span>
-          </div>
-        </div>
-        <div style="font-size:9px;color:var(--muted);margin-bottom:14px">vs own position group average · green ±10% · amber ±10–20% · red &gt;20% · all drills combined</div>
-        <div class="d-group-lbl" style="margin-top:0;padding-top:0;border-top:none">Midfielders</div>
-        <div class="dev-row"><div class="d-name">Liam Kelly</div><div class="d-pos">MID</div><div class="d-bars"><div class="d-centre"></div><div class="d-bar d-pos-bar" style="width:19%;background:rgba(226,75,74,.7)"></div></div><div class="d-val c-red">+19%</div></div>
-        <div class="dev-row"><div class="d-name">Sean Gleeson</div><div class="d-pos">MID</div><div class="d-bars"><div class="d-centre"></div><div class="d-bar d-neg-bar" style="width:1%;background:rgba(76,175,80,.55)"></div></div><div class="d-val c-green">−1%</div></div>
-        <div class="dev-row"><div class="d-name">Euan Cowzer</div><div class="d-pos">MID</div><div class="d-bars"><div class="d-centre"></div><div class="d-bar d-neg-bar" style="width:32%;background:rgba(226,75,74,.7)"></div></div><div class="d-val c-red">−32% ↑ illness return</div></div>
-        <div class="dev-row"><div class="d-name">Philip Halinan</div><div class="d-pos">MID</div><div class="d-bars"><div class="d-centre"></div><div class="d-bar d-pos-bar" style="width:6%;background:rgba(76,175,80,.55)"></div></div><div class="d-val c-green">+6%</div></div>
-        <div class="d-group-lbl">Forwards</div>
-        <div class="dev-row"><div class="d-name">Colm Moran</div><div class="d-pos">FWD</div><div class="d-bars"><div class="d-centre"></div><div class="d-bar d-pos-bar" style="width:22%;background:rgba(226,75,74,.7)"></div></div><div class="d-val c-red">+22%</div></div>
-        <div class="dev-row"><div class="d-name">TJ Nolan</div><div class="d-pos">FWD</div><div class="d-bars"><div class="d-centre"></div><div class="d-bar d-pos-bar" style="width:14%;background:rgba(239,159,39,.65)"></div></div><div class="d-val c-amber">+14%</div></div>
-        <div class="dev-row"><div class="d-name">Finn Dowling</div><div class="d-pos">FWD</div><div class="d-bars"><div class="d-centre"></div><div class="d-bar d-pos-bar" style="width:8%;background:rgba(76,175,80,.55)"></div></div><div class="d-val c-green">+8%</div></div>
-        <div class="dev-row"><div class="d-name">Adam Fitzpatrick</div><div class="d-pos">FWD</div><div class="d-bars"><div class="d-centre"></div><div class="d-bar d-neg-bar" style="width:2%;background:rgba(76,175,80,.55)"></div></div><div class="d-val c-green">−2%</div></div>
-        <div class="dev-row"><div class="d-name">Cian Keaveney</div><div class="d-pos">FWD</div><div class="d-bars"><div class="d-centre"></div><div class="d-bar d-neg-bar" style="width:8%;background:rgba(76,175,80,.55)"></div></div><div class="d-val c-green">−8%</div></div>
-        <div class="d-group-lbl">Defenders</div>
-        <div class="dev-row"><div class="d-name">Ronan Kelly</div><div class="d-pos">DEF</div><div class="d-bars"><div class="d-centre"></div><div class="d-bar d-pos-bar" style="width:7%;background:rgba(76,175,80,.55)"></div></div><div class="d-val c-green">+7%</div></div>
-        <div class="dev-row"><div class="d-name">Hugh Martin</div><div class="d-pos">DEF</div><div class="d-bars"><div class="d-centre"></div><div class="d-bar d-neg-bar" style="width:11%;background:rgba(239,159,39,.65)"></div></div><div class="d-val c-amber">−11%</div></div>
-        <div class="dev-row"><div class="d-name">Conor Breen</div><div class="d-pos">DEF</div><div class="d-bars"><div class="d-centre"></div><div class="d-bar d-pos-bar" style="width:2%;background:rgba(76,175,80,.55)"></div></div><div class="d-val c-green">+2%</div></div>
-        <div class="dev-row"><div class="d-name">Senan Gallagher</div><div class="d-pos">DEF</div><div class="d-bars"><div class="d-centre"></div><div class="d-bar d-pos-bar" style="width:8%;background:rgba(76,175,80,.55)"></div></div><div class="d-val c-green">+8%</div></div>
-        <div style="font-size:9px;color:var(--muted);margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">Liam Kelly +19% · Colm Moran +22% — flagged on Page 1 (ACWR). Euan Cowzer −32% = expected illness return, not a concern.</div>
-      </div>
-    </div>
-
-    <!-- WARM-UP individual -->
-    <div class="dc dc-wu">
-      <div class="dev-wrap">
-        <div class="dev-hdr"><div class="sec-label" style="margin-bottom:0">Warm-Up — individual deviation from position avg · HMLD</div></div>
-        <div style="font-size:9px;color:var(--muted);margin-bottom:14px">12 min · team avg 53 m · small deviations in warm-up are normal</div>
-        <div class="d-group-lbl" style="margin-top:0;padding-top:0;border-top:none">Midfielders (position avg 58 m)</div>
-        <div class="dev-row"><div class="d-name">Liam Kelly</div><div class="d-pos">MID</div><div class="d-bars"><div class="d-centre"></div><div class="d-bar d-pos-bar" style="width:12%;background:rgba(239,159,39,.65)"></div></div><div class="d-val c-amber">+12%</div></div>
-        <div class="dev-row"><div class="d-name">Sean Gleeson</div><div class="d-pos">MID</div><div class="d-bars"><div class="d-centre"></div><div class="d-bar d-pos-bar" style="width:3%;background:rgba(76,175,80,.55)"></div></div><div class="d-val c-green">+3%</div></div>
-        <div class="dev-row"><div class="d-name">Philip Halinan</div><div class="d-pos">MID</div><div class="d-bars"><div class="d-centre"></div><div class="d-bar d-neg-bar" style="width:7%;background:rgba(76,175,80,.55)"></div></div><div class="d-val c-green">−7%</div></div>
-        <div class="d-group-lbl">Forwards (position avg 55 m)</div>
-        <div class="dev-row"><div class="d-name">Colm Moran</div><div class="d-pos">FWD</div><div class="d-bars"><div class="d-centre"></div><div class="d-bar d-pos-bar" style="width:9%;background:rgba(76,175,80,.55)"></div></div><div class="d-val c-green">+9%</div></div>
-        <div class="dev-row"><div class="d-name">Finn Dowling</div><div class="d-pos">FWD</div><div class="d-bars"><div class="d-centre"></div><div class="d-bar d-neg-bar" style="width:5%;background:rgba(76,175,80,.55)"></div></div><div class="d-val c-green">−5%</div></div>
-      </div>
-    </div>
-
-    <!-- SSG individual -->
-    <div class="dc dc-ssg">
-      <div class="dev-wrap">
-        <div class="dev-hdr"><div class="sec-label" style="margin-bottom:0">Small-Sided Games — individual deviation from position avg · HMLD</div></div>
-        <div style="font-size:9px;color:var(--muted);margin-bottom:14px">20 min · largest spread of any drill · MID avg 128m · FWD avg 115m</div>
-        <div class="d-group-lbl" style="margin-top:0;padding-top:0;border-top:none">Midfielders (position avg 128 m)</div>
-        <div class="dev-row"><div class="d-name">Liam Kelly</div><div class="d-pos">MID</div><div class="d-bars"><div class="d-centre"></div><div class="d-bar d-pos-bar" style="width:24%;background:rgba(226,75,74,.7)"></div></div><div class="d-val c-red">+24%</div></div>
-        <div class="dev-row"><div class="d-name">Sean Gleeson</div><div class="d-pos">MID</div><div class="d-bars"><div class="d-centre"></div><div class="d-bar d-neg-bar" style="width:4%;background:rgba(76,175,80,.55)"></div></div><div class="d-val c-green">−4%</div></div>
-        <div class="dev-row"><div class="d-name">Philip Halinan</div><div class="d-pos">MID</div><div class="d-bars"><div class="d-centre"></div><div class="d-bar d-pos-bar" style="width:9%;background:rgba(76,175,80,.55)"></div></div><div class="d-val c-green">+9%</div></div>
-        <div class="d-group-lbl">Forwards (position avg 115 m)</div>
-        <div class="dev-row"><div class="d-name">Colm Moran</div><div class="d-pos">FWD</div><div class="d-bars"><div class="d-centre"></div><div class="d-bar d-pos-bar" style="width:27%;background:rgba(226,75,74,.7)"></div></div><div class="d-val c-red">+27%</div></div>
-        <div class="dev-row"><div class="d-name">TJ Nolan</div><div class="d-pos">FWD</div><div class="d-bars"><div class="d-centre"></div><div class="d-bar d-pos-bar" style="width:16%;background:rgba(239,159,39,.65)"></div></div><div class="d-val c-amber">+16%</div></div>
-        <div class="dev-row"><div class="d-name">Finn Dowling</div><div class="d-pos">FWD</div><div class="d-bars"><div class="d-centre"></div><div class="d-bar d-neg-bar" style="width:6%;background:rgba(76,175,80,.55)"></div></div><div class="d-val c-green">−6%</div></div>
-      </div>
-    </div>
-
-    <!-- POSSESSION individual -->
-    <div class="dc dc-poss">
-      <div class="dev-wrap">
-        <div class="dev-hdr"><div class="sec-label" style="margin-bottom:0">Possession — individual deviation from position avg · HMLD</div></div>
-        <div style="font-size:9px;color:var(--muted);margin-bottom:14px">25 min · dominant drill · MID avg 161m · FWD avg 148m · highest absolute load in session</div>
-        <div class="d-group-lbl" style="margin-top:0;padding-top:0;border-top:none">Midfielders (position avg 161 m)</div>
-        <div class="dev-row"><div class="d-name">Liam Kelly</div><div class="d-pos">MID</div><div class="d-bars"><div class="d-centre"></div><div class="d-bar d-pos-bar" style="width:18%;background:rgba(226,75,74,.7)"></div></div><div class="d-val c-red">+18%</div></div>
-        <div class="dev-row"><div class="d-name">Sean Gleeson</div><div class="d-pos">MID</div><div class="d-bars"><div class="d-centre"></div><div class="d-bar d-neg-bar" style="width:2%;background:rgba(76,175,80,.55)"></div></div><div class="d-val c-green">−2%</div></div>
-        <div class="dev-row"><div class="d-name">Philip Halinan</div><div class="d-pos">MID</div><div class="d-bars"><div class="d-centre"></div><div class="d-bar d-pos-bar" style="width:5%;background:rgba(76,175,80,.55)"></div></div><div class="d-val c-green">+5%</div></div>
-        <div class="d-group-lbl">Forwards (position avg 148 m)</div>
-        <div class="dev-row"><div class="d-name">Colm Moran</div><div class="d-pos">FWD</div><div class="d-bars"><div class="d-centre"></div><div class="d-bar d-pos-bar" style="width:20%;background:rgba(226,75,74,.7)"></div></div><div class="d-val c-red">+20%</div></div>
-        <div class="dev-row"><div class="d-name">TJ Nolan</div><div class="d-pos">FWD</div><div class="d-bars"><div class="d-centre"></div><div class="d-bar d-pos-bar" style="width:13%;background:rgba(239,159,39,.65)"></div></div><div class="d-val c-amber">+13%</div></div>
-        <div class="dev-row"><div class="d-name">Finn Dowling</div><div class="d-pos">FWD</div><div class="d-bars"><div class="d-centre"></div><div class="d-bar d-neg-bar" style="width:7%;background:rgba(76,175,80,.55)"></div></div><div class="d-val c-green">−7%</div></div>
-        <div style="font-size:9px;color:var(--amber);margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">⚠ Liam Kelly and Colm Moran consistently elevated across all drills. Accumulating fast on MD−2.</div>
-      </div>
-    </div>
-
-    <!-- CONDITIONED individual -->
-    <div class="dc dc-cg">
-      <div class="dev-wrap">
-        <div class="dev-hdr"><div class="sec-label" style="margin-bottom:0">Conditioned Game — individual deviation from position avg · HMLD</div></div>
-        <div style="font-size:9px;color:var(--muted);margin-bottom:14px">18 min · team avg 90m · MID avg 112m · Dec:Acc 1.12 for team in this drill</div>
-        <div class="d-group-lbl" style="margin-top:0;padding-top:0;border-top:none">Midfielders (position avg 112 m)</div>
-        <div class="dev-row"><div class="d-name">Liam Kelly</div><div class="d-pos">MID</div><div class="d-bars"><div class="d-centre"></div><div class="d-bar d-pos-bar" style="width:16%;background:rgba(226,75,74,.7)"></div></div><div class="d-val c-red">+16%</div></div>
-        <div class="dev-row"><div class="d-name">Sean Gleeson</div><div class="d-pos">MID</div><div class="d-bars"><div class="d-centre"></div><div class="d-neg-bar d-neg-bar" style="width:3%;background:rgba(76,175,80,.55)"></div></div><div class="d-val c-green">−3%</div></div>
-        <div class="dev-row"><div class="d-name">Philip Halinan</div><div class="d-pos">MID</div><div class="d-bars"><div class="d-centre"></div><div class="d-bar d-pos-bar" style="width:4%;background:rgba(76,175,80,.55)"></div></div><div class="d-val c-green">+4%</div></div>
-        <div class="d-group-lbl">Forwards (position avg 98 m)</div>
-        <div class="dev-row"><div class="d-name">Colm Moran</div><div class="d-pos">FWD</div><div class="d-bars"><div class="d-centre"></div><div class="d-bar d-pos-bar" style="width:19%;background:rgba(226,75,74,.7)"></div></div><div class="d-val c-red">+19%</div></div>
-        <div class="dev-row"><div class="d-name">TJ Nolan</div><div class="d-pos">FWD</div><div class="d-bars"><div class="d-centre"></div><div class="d-bar d-pos-bar" style="width:12%;background:rgba(239,159,39,.65)"></div></div><div class="d-val c-amber">+12%</div></div>
-        <div class="dev-row"><div class="d-name">Finn Dowling</div><div class="d-pos">FWD</div><div class="d-bars"><div class="d-centre"></div><div class="d-bar d-neg-bar" style="width:5%;background:rgba(76,175,80,.55)"></div></div><div class="d-val c-green">−5%</div></div>
-      </div>
-    </div>
-  </div><!-- END vc-ind -->
+  <!-- ─── [5] CHART AREA — fully live from LIVE_DRILL_PLAYER_DATA ─── -->
+  <div id="cmp-drill-chart" style="min-height:80px">
+    <div style="padding:22px 0 10px;font-size:10px;color:var(--muted);text-align:center">Loading drill data…</div>
+  </div>
 
   
 </div>
