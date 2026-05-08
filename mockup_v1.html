@@ -431,6 +431,15 @@ input[name="p0ds"],input[name="p0vm"],input[name="p0mt"]{position:absolute;opaci
 #p0:has(#ds-ssg:checked) .dc-ssg{display:block}
 #p0:has(#ds-poss:checked) .dc-poss{display:block}
 #p0:has(#ds-cg:checked) .dc-cg{display:block}
+/* F07: p34 drill/view chart panels — :root:has() so they work outside #p0 */
+:root:has(#vm-team:checked) #p34 .vc-team{display:block}
+:root:has(#vm-pos:checked) #p34 .vc-pos{display:block}
+:root:has(#vm-ind:checked) #p34 .vc-ind{display:block}
+:root:has(#ds-all:checked) #p34 .dc-all{display:block}
+:root:has(#ds-wu:checked) #p34 .dc-wu{display:block}
+:root:has(#ds-ssg:checked) #p34 .dc-ssg{display:block}
+:root:has(#ds-poss:checked) #p34 .dc-poss{display:block}
+:root:has(#ds-cg:checked) #p34 .dc-cg{display:block}
 /* metric name label visibility */
 .mn{display:none}
 #p0:has(#mt-hmld:checked) .mn-hmld{display:inline}
@@ -5992,6 +6001,7 @@ function loadLiveData(){
       try { updateMatchStimulusPage(); } catch(e){ console.warn('updateMatchStimulusPage post-load:', e); }
       try { updateDecisionFlagsPage(); } catch(e){ console.warn('updateDecisionFlagsPage post-load:', e); }
       try { updatePlayerProfileDropdown(); } catch(e){ console.warn('updatePlayerProfileDropdown post-load:', e); }
+      try { updateCmpPlayerSelects(); } catch(e){ console.warn('updateCmpPlayerSelects post-load:', e); }
       try { updateFixtureStrips(); } catch(e){ console.warn('updateFixtureStrips post-load:', e); }
     });
 }
@@ -6598,9 +6608,21 @@ function updateDecisionFlagsPage(){
     return;
   }
 
-  /* Sort: high → caution → exposure → low */
-  var _sortOrd={high:0,caution:1,exposure:2,low:3};
-  flags.sort(function(a,b){return (_sortOrd[a.risk]||9)-(_sortOrd[b.risk]||9);});
+  /* Sort: CRITICAL (high, acwr≥1.70) → ABSENT (high, acwr=0+stale) → HIGH → CAUTION → EXPOSURE → LOW */
+  function _cardPri(f){
+    if(f.risk==='high'){
+      if(f.acwr>=1.70) return 0;           /* CRITICAL */
+      if(f.acwr===0&&f.stale) return 1;    /* ABSENT — spike risk on return */
+      return 2;                             /* plain HIGH */
+    }
+    if(f.risk==='caution') return 3;
+    if(f.risk==='exposure') return 4;
+    return 5; /* low */
+  }
+  flags.sort(function(a,b){
+    var d=_cardPri(a)-_cardPri(b);
+    return d!==0?d:b.acwr-a.acwr; /* within same tier: higher ACWR first */
+  });
 
   /* F21: colour-coded urgency tiers */
   function _dfCfg(risk, acwr, stale){
@@ -6715,6 +6737,54 @@ function updatePlayerProfileDropdown(){
   try { updateProfCompareDropdown(); } catch(e){}
   /* Trigger profile render */
   try { renderPlayerProfile(); } catch(e){}
+}
+
+/* ── Comparison page player selects — populate from full live squad list ── */
+function updateCmpPlayerSelects(){
+  if(!window.LIVE_SESSION_DATA) return;
+
+  /* Collect unique players across all sessions */
+  var playerMap={};
+  Object.keys(window.LIVE_SESSION_DATA).sort().forEach(function(k){
+    window.LIVE_SESSION_DATA[k].forEach(function(r){
+      if(!r.player) return;
+      var pk=_normPlayerName(r.player);
+      playerMap[pk]={name:r.player,pos:r.pos||''};
+    });
+  });
+
+  var players=Object.values(playerMap);
+  if(!players.length) return;
+
+  function _posShort(pos){
+    var p=(pos||'').toLowerCase();
+    if(p.indexOf('fwd')>-1||p.indexOf('forward')>-1) return 'FWD';
+    if(p.indexOf('def')>-1||p.indexOf('back')>-1) return 'DEF';
+    if(p.indexOf('goal')>-1||p==='gk') return 'GK';
+    return 'MID';
+  }
+  function _posOrd(pos){return {MID:0,FWD:1,DEF:2,GK:3}[_posShort(pos)]||4;}
+
+  players.sort(function(a,b){
+    var po=_posOrd(a.pos)-_posOrd(b.pos);
+    return po!==0?po:a.name.localeCompare(b.name);
+  });
+
+  /* Build option HTML */
+  var optsHtml=players.map(function(p){
+    return '<option value="'+_escHtml(_normPlayerName(p.name))+'">'+_escHtml(p.name)+' ('+_posShort(p.pos)+')</option>';
+  }).join('');
+
+  ['pv-sel-a','pv-sel-b','pv-sel-c'].forEach(function(id,i){
+    var sel=document.getElementById(id);
+    if(!sel) return;
+    var prev=sel.value;
+    sel.innerHTML=optsHtml;
+    /* Default B to second player so A≠B by default */
+    if(id==='pv-sel-b'&&!prev&&sel.options.length>1) sel.selectedIndex=1;
+    else if(prev&&sel.querySelector('option[value="'+prev+'"]')) sel.value=prev;
+    else sel.selectedIndex=0;
+  });
 }
 
 /* ── Fixture strips on Pages 4 and 6 — rebuilt from MATCH_RECORD ── */
@@ -7760,22 +7830,12 @@ function renderProfPerfBars(pk){
       <div class="pv-sub-pvt cmp-ctrl-row" style="padding-top:6px">
         <span class="cmp-ctrl-lbl">Players</span>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <select class="pv-sel">
-            <option>Liam Kelly (MID)</option>
-            <option>Sean Gleeson (MID)</option>
-            <option>Senan Gallagher (DEF)</option>
-            <option>Ronan Kelly (DEF)</option>
-            <option>TJ Nolan (FWD)</option>
-            <option>Colm Moran (FWD)</option>
+          <select id="pv-sel-a" class="pv-sel">
+            <option>Loading…</option>
           </select>
           <span style="font-size:9px;color:var(--muted);font-weight:600">vs</span>
-          <select class="pv-sel">
-            <option>Sean Gleeson (MID)</option>
-            <option>Liam Kelly (MID)</option>
-            <option>Senan Gallagher (DEF)</option>
-            <option>Ronan Kelly (DEF)</option>
-            <option>TJ Nolan (FWD)</option>
-            <option>Colm Moran (FWD)</option>
+          <select id="pv-sel-b" class="pv-sel">
+            <option>Loading…</option>
           </select>
           <span style="font-size:9px;color:var(--muted)">· intra-session comparison · benchmark row not applied</span>
         </div>
@@ -7783,13 +7843,8 @@ function renderProfPerfBars(pk){
       <div class="pv-sub-pvtap cmp-ctrl-row" style="padding-top:6px">
         <span class="cmp-ctrl-lbl">Player</span>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <select class="pv-sel">
-            <option>Liam Kelly (MID)</option>
-            <option>Sean Gleeson (MID)</option>
-            <option>Senan Gallagher (DEF)</option>
-            <option>Ronan Kelly (DEF)</option>
-            <option>TJ Nolan (FWD)</option>
-            <option>Colm Moran (FWD)</option>
+          <select id="pv-sel-c" class="pv-sel">
+            <option>Loading…</option>
           </select>
           <span style="font-size:9px;color:var(--muted)">· intra-session comparison · benchmark row not applied</span>
         </div>
