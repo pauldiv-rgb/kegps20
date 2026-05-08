@@ -1301,7 +1301,11 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
 
     <!-- Axis selectors -->
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">
-      <label style="font-size:9px;color:var(--muted);font-weight:600">X axis:</label>
+      <span style="font-size:9px;color:var(--muted);font-weight:600">View:</span>
+      <button id="sc-mode-snapshot" class="ms-btn" style="font-size:9px;padding:3px 9px;font-weight:700;border:1px solid rgba(79,195,247,.6);color:#4FC3F7" onclick="setScatterMode('snapshot')">Snapshot</button>
+      <button id="sc-mode-trend" class="ms-btn" style="font-size:9px;padding:3px 9px;font-weight:600;opacity:.45" onclick="setScatterMode('trend')">Season Trend</button>
+      <span style="width:1px;height:14px;background:var(--border2);display:inline-block;margin:0 2px"></span>
+      <label style="font-size:9px;color:var(--muted);font-weight:600" id="sc-x-axis-label">X axis:</label>
       <select id="sc-x-axis" class="lb-sel" onchange="updateScatterAxes()">
         <option value="tdMin" selected>TD/min</option>
         <option value="hmldMin">HMLD/min</option>
@@ -1337,6 +1341,11 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
       </select>
       <button class="ms-btn" style="font-size:9px;padding:3px 8px" onclick="resetScatterAxes()">Reset</button>
     </div>
+
+    <!-- Season Trend SVG (hidden until trend mode active) -->
+    <svg id="sc-trend-svg" viewBox="0 0 660 330" xmlns="http://www.w3.org/2000/svg" style="display:none;width:100%;font-family:var(--inter)">
+      <g id="sc-trend-layer"></g>
+    </svg>
 
     <!-- Hover tooltip -->
     <div id="sc-tip"><div class="sct-name" id="sct-name"></div><div class="sct-row" id="sct-sess-row" style="display:none"><span>Session</span><span class="sct-val" id="sct-sess"></span></div><div class="sct-row" id="sct-dur-row" style="display:none"><span>Duration</span><span class="sct-val" id="sct-dur"></span></div><div class="sct-row"><span>HMLD/min</span><span class="sct-val" id="sct-hmld"></span></div><div class="sct-row"><span>TD/min</span><span class="sct-val" id="sct-td"></span></div><div class="sct-row"><span>Position</span><span class="sct-val" id="sct-pos"></span></div></div>
@@ -4631,9 +4640,283 @@ function _renderScatterDots(){
   }
 }
 
+/* ── Scatter mode toggle ── */
+var _SC_MODE = 'snapshot';
+function setScatterMode(mode){
+  _SC_MODE = mode;
+  var snapSvg = document.querySelector('#p0 .sc-svg');
+  var trendSvg = document.getElementById('sc-trend-svg');
+  var snapBtn = document.getElementById('sc-mode-snapshot');
+  var trendBtn = document.getElementById('sc-mode-trend');
+  var xLbl = document.getElementById('sc-x-axis-label');
+  var xSel = document.getElementById('sc-x-axis');
+  if(snapSvg) snapSvg.style.display = mode==='snapshot'?'':'none';
+  if(trendSvg) trendSvg.style.display = mode==='trend'?'':'none';
+  if(snapBtn){ snapBtn.style.opacity=mode==='snapshot'?'1':'.45'; snapBtn.style.borderColor=mode==='snapshot'?'rgba(79,195,247,.6)':'rgba(107,130,153,.3)'; snapBtn.style.color=mode==='snapshot'?'#4FC3F7':'var(--muted)'; snapBtn.style.fontWeight=mode==='snapshot'?'700':'600'; }
+  if(trendBtn){ trendBtn.style.opacity=mode==='trend'?'1':'.45'; trendBtn.style.borderColor=mode==='trend'?'rgba(79,195,247,.6)':'rgba(107,130,153,.3)'; trendBtn.style.color=mode==='trend'?'#4FC3F7':'var(--muted)'; trendBtn.style.fontWeight=mode==='trend'?'700':'600'; }
+  /* Hide x-axis selector in trend mode (x is always session date) */
+  if(xLbl) xLbl.style.display=mode==='snapshot'?'':'none';
+  if(xSel) xSel.style.display=mode==='snapshot'?'':'none';
+  if(mode==='trend') renderTrendChart(); else _renderScatterDots();
+}
+
+/* ── Season Trend Chart ── */
+function renderTrendChart(){
+  var svgNS='http://www.w3.org/2000/svg';
+  var layer=document.getElementById('sc-trend-layer');
+  if(!layer) return;
+  layer.innerHTML='';
+
+  var yKey=(document.getElementById('sc-y-axis')||{value:'hmldMin'}).value||'hmldMin';
+  var selDrill=getVals('ms-drill-panel'), isAllDrill=selDrill[0]==='all'||selDrill.indexOf('session')>-1;
+  var selPers=getVals('ms-personnel-panel'), isAllPers=selPers[0]==='all';
+
+  var lsd=window.LIVE_SESSION_DATA;
+  if(!lsd) return;
+  var sessKeys=Object.keys(lsd).filter(function(dk){return lsd[dk]&&lsd[dk].length;}).sort();
+  if(!sessKeys.length) return;
+  if(sessKeys.length>30) sessKeys=sessKeys.slice(sessKeys.length-30);
+  var N=sessKeys.length;
+
+  var PT=20,PB=290,PL=62,PR=642,W=PR-PL,H=PB-PT;
+  var POS_COL={mid:'#4FC3F7',fwd:'#81C784',def:'#FFB74D'};
+
+  /* Build per-session data */
+  var sessionData=[];
+  sessKeys.forEach(function(dk){
+    var rows=lsd[dk];
+    if(!rows||!rows.length) return;
+    var useRows=rows;
+
+    /* If drill filter active, use drill-level data */
+    if(!isAllDrill&&window.LIVE_DRILL_PLAYER_DATA&&window.LIVE_DRILL_PLAYER_DATA[dk]){
+      var dpd=window.LIVE_DRILL_PLAYER_DATA[dk];
+      var mSlugs=Object.keys(dpd).filter(function(slug){
+        return selDrill.some(function(d){
+          var sl=slug.toLowerCase();
+          if(d===slug) return true;
+          if(d==='wu'&&(sl.indexOf('warm')>-1||sl==='wu')) return true;
+          if(d==='ssg'&&(sl.indexOf('small')>-1||sl.indexOf('ssg')>-1)) return true;
+          if(d==='poss'&&sl.indexOf('poss')>-1) return true;
+          if(d==='cg'&&(sl.indexOf('condition')>-1||sl.indexOf('cg')>-1)) return true;
+          if(d==='h1'&&(sl==='h1'||sl.indexOf('half_1')>-1||sl.indexOf('1st_half')>-1)) return true;
+          if(d==='h2'&&(sl==='h2'||sl.indexOf('half_2')>-1||sl.indexOf('2nd_half')>-1)) return true;
+          return false;
+        });
+      });
+      if(mSlugs.length){
+        var pAgg={};
+        mSlugs.forEach(function(slug){
+          Object.keys(dpd[slug]).forEach(function(pName){
+            var pk=window._PM_NAME_MAP&&window._PM_NAME_MAP[_normPlayerName(pName)]; if(!pk) return;
+            var pm=PLAYER_META[pk]; if(!pm) return;
+            var dr=dpd[slug][pName];
+            if(!pAgg[pk]) pAgg[pk]={pm:pm,totTD:0,totHMLD:0,totDur:0,totHSR:0,maxSpd:0};
+            pAgg[pk].totTD+=dr.td||0; pAgg[pk].totHMLD+=dr.hmld||0; pAgg[pk].totDur+=dr.dur||0;
+            pAgg[pk].totHSR+=dr.hsr||0; pAgg[pk].maxSpd=Math.max(pAgg[pk].maxSpd,dr.maxSpd||0);
+          });
+        });
+        useRows=Object.keys(pAgg).filter(function(pk){return pAgg[pk].totDur>0;}).map(function(pk){
+          var a=pAgg[pk];
+          return {player:pk,_pk:pk,pm:a.pm,
+            tdMin:a.totTD/a.totDur,hmldMin:a.totHMLD/a.totDur,hsrMin:a.totHSR/a.totDur,
+            maxSpd:a.maxSpd,td:a.totTD,hmld:a.totHMLD,dur:a.totDur};
+        });
+      }
+    }
+
+    var byPos={mid:[],fwd:[],def:[]};
+    var byPlayer={};
+    useRows.forEach(function(r){
+      var pk=r._pk||(window._PM_NAME_MAP&&window._PM_NAME_MAP[_normPlayerName(r.player)]); if(!pk) return;
+      var pm=r.pm||PLAYER_META[pk]; if(!pm) return;
+      var val=_liveMetricVal(r,yKey)||0; if(!val) return;
+      if(byPos[pm.pos]) byPos[pm.pos].push(val);
+      byPlayer[pk]=val;
+    });
+    function avg(arr){return arr.length?arr.reduce(function(a,b){return a+b;},0)/arr.length:null;}
+    var allVals=Object.keys(byPlayer).map(function(k){return byPlayer[k];});
+
+    /* Date label */
+    var lbl=dk;
+    try{var y=parseInt(dk.slice(1,5)),m=parseInt(dk.slice(5,7))-1,d=parseInt(dk.slice(7,9));
+      lbl=d+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m];}catch(e){}
+
+    sessionData.push({dk:dk,label:lbl,
+      team:avg(allVals),mid:avg(byPos.mid),fwd:avg(byPos.fwd),def:avg(byPos.def),players:byPlayer});
+  });
+  if(!sessionData.length) return;
+
+  /* Y axis range */
+  var allY=[];
+  sessionData.forEach(function(s){
+    [s.team,s.mid,s.fwd,s.def].forEach(function(v){if(v!=null) allY.push(v);});
+    Object.keys(s.players).forEach(function(k){if(s.players[k]) allY.push(s.players[k]);});
+  });
+  if(!allY.length) return;
+  var yMin=Math.max(0,Math.min.apply(null,allY)*0.85);
+  var yMax=Math.max.apply(null,allY)*1.12;
+
+  function toX(i){return PL+(i/(Math.max(N-1,1)))*W;}
+  function toY(v){return PB-((v-yMin)/(yMax-yMin))*H;}
+
+  /* Grid + Y ticks */
+  for(var ti=0;ti<=5;ti++){
+    var yv=yMin+(yMax-yMin)*ti/5, yp=toY(yv).toFixed(1);
+    var lg=document.createElementNS(svgNS,'line');
+    lg.setAttribute('x1',PL);lg.setAttribute('x2',PR);lg.setAttribute('y1',yp);lg.setAttribute('y2',yp);
+    lg.setAttribute('stroke','rgba(107,130,153,'+(ti===0||ti===5?'.18':'.07')+')');lg.setAttribute('stroke-width','1');
+    if(ti>0&&ti<5) lg.setAttribute('stroke-dasharray','2,3');
+    layer.appendChild(lg);
+    var yt=document.createElementNS(svgNS,'text');
+    yt.setAttribute('x',(PL-4).toString());yt.setAttribute('y',(parseFloat(yp)+3).toString());
+    yt.setAttribute('font-size','7');yt.setAttribute('fill','rgba(160,180,200,.65)');yt.setAttribute('text-anchor','end');
+    yt.textContent=(yMax-yMin<5?yv.toFixed(1):yv.toFixed(0));
+    layer.appendChild(yt);
+  }
+
+  /* X baseline */
+  var xb=document.createElementNS(svgNS,'line');
+  xb.setAttribute('x1',PL);xb.setAttribute('x2',PR);xb.setAttribute('y1',PB);xb.setAttribute('y2',PB);
+  xb.setAttribute('stroke','rgba(107,130,153,.18)');xb.setAttribute('stroke-width','1');
+  layer.appendChild(xb);
+
+  /* Session x-axis labels + current session highlight */
+  var labelEvery=Math.ceil(N/10);
+  sessionData.forEach(function(s,i){
+    var xp=toX(i).toFixed(1);
+    if(s.dk===G.session){
+      var vhl=document.createElementNS(svgNS,'line');
+      vhl.setAttribute('x1',xp);vhl.setAttribute('x2',xp);vhl.setAttribute('y1',PT.toString());vhl.setAttribute('y2',PB.toString());
+      vhl.setAttribute('stroke','rgba(255,255,255,.12)');vhl.setAttribute('stroke-width','1');vhl.setAttribute('stroke-dasharray','3,3');
+      layer.appendChild(vhl);
+      var st=document.createElementNS(svgNS,'text');
+      st.setAttribute('x',xp);st.setAttribute('y',(PT-5).toString());
+      st.setAttribute('font-size','6.5');st.setAttribute('fill','rgba(200,220,240,.6)');st.setAttribute('text-anchor','middle');
+      st.textContent='← selected';
+      layer.appendChild(st);
+    }
+    if(i%labelEvery===0||i===N-1){
+      var vt=document.createElementNS(svgNS,'line');
+      vt.setAttribute('x1',xp);vt.setAttribute('x2',xp);vt.setAttribute('y1',PB.toString());vt.setAttribute('y2',(PB+4).toString());
+      vt.setAttribute('stroke','rgba(107,130,153,.3)');vt.setAttribute('stroke-width','1');
+      layer.appendChild(vt);
+      var xt=document.createElementNS(svgNS,'text');
+      xt.setAttribute('x',xp);xt.setAttribute('y',(PB+13).toString());
+      xt.setAttribute('font-size','6.5');xt.setAttribute('fill','rgba(160,180,200,.65)');xt.setAttribute('text-anchor','middle');
+      xt.textContent=s.label;
+      layer.appendChild(xt);
+    }
+  });
+
+  /* Y axis title */
+  var yLbl=(window.METRIC_LABELS&&window.METRIC_LABELS[yKey])||yKey;
+  var yU=(window.METRIC_UNITS&&window.METRIC_UNITS[yKey])||'';
+  var yT=document.createElementNS(svgNS,'text');
+  yT.setAttribute('x','10');yT.setAttribute('y',((PT+PB)/2).toFixed(1));
+  yT.setAttribute('font-size','7.5');yT.setAttribute('fill','rgba(160,180,200,.65)');yT.setAttribute('text-anchor','middle');
+  yT.setAttribute('transform','rotate(-90,10,'+((PT+PB)/2).toFixed(1)+')');
+  yT.textContent=yLbl+(yU?' ('+yU+')':'');
+  layer.appendChild(yT);
+
+  /* Benchmark line */
+  var BM_VALS={hmldMin:25,tdMin:125};
+  var bmV=BM_VALS[yKey];
+  if(bmV&&bmV>yMin&&bmV<yMax){
+    var bmY=toY(bmV).toFixed(1);
+    var bmL=document.createElementNS(svgNS,'line');
+    bmL.setAttribute('x1',PL);bmL.setAttribute('x2',PR);bmL.setAttribute('y1',bmY);bmL.setAttribute('y2',bmY);
+    bmL.setAttribute('stroke','rgba(239,159,39,.35)');bmL.setAttribute('stroke-width','1');bmL.setAttribute('stroke-dasharray','5,3');
+    layer.appendChild(bmL);
+    var bmT=document.createElementNS(svgNS,'text');
+    bmT.setAttribute('x',(PR-2).toString());bmT.setAttribute('y',(parseFloat(bmY)-3).toString());
+    bmT.setAttribute('font-size','6.5');bmT.setAttribute('fill','rgba(239,159,39,.6)');bmT.setAttribute('text-anchor','end');
+    bmT.textContent='U20 target: '+bmV;
+    layer.appendChild(bmT);
+  }
+
+  /* Draw a line+dot series */
+  function drawSeries(dataFn,col,lineW,dashed){
+    var pts=sessionData.map(function(s,i){var v=dataFn(s);return v!=null?{x:toX(i),y:toY(v)}:null;});
+    /* Connected path — skip nulls */
+    var seg='',pen=false;
+    pts.forEach(function(p){
+      if(!p){pen=false;return;}
+      seg+=(pen?'L':'M')+p.x.toFixed(1)+','+p.y.toFixed(1);
+      pen=true;
+    });
+    if(seg){
+      var path=document.createElementNS(svgNS,'path');
+      path.setAttribute('d',seg);path.setAttribute('fill','none');
+      path.setAttribute('stroke',col);path.setAttribute('stroke-width',(lineW||1.5).toString());
+      path.setAttribute('stroke-opacity','0.75');
+      if(dashed) path.setAttribute('stroke-dasharray','5,3');
+      layer.appendChild(path);
+    }
+    /* Dots */
+    pts.forEach(function(p){
+      if(!p) return;
+      var c=document.createElementNS(svgNS,'circle');
+      c.setAttribute('cx',p.x.toFixed(1));c.setAttribute('cy',p.y.toFixed(1));c.setAttribute('r','3');
+      c.setAttribute('fill',col);c.setAttribute('fill-opacity','0.9');
+      c.setAttribute('stroke','var(--s1)');c.setAttribute('stroke-width','1');
+      layer.appendChild(c);
+    });
+  }
+
+  /* Determine what to show based on personnel filter */
+  var showTeam=isAllPers;
+  var showMid=isAllPers||selPers.indexOf('mid')>-1;
+  var showFwd=isAllPers||selPers.indexOf('fwd')>-1;
+  var showDef=isAllPers||selPers.indexOf('def')>-1;
+  var playerPids=isAllPers?[]:selPers.filter(function(v){return /^p\d+$/.test(v);});
+
+  if(showTeam) drawSeries(function(s){return s.team;},'rgba(200,210,225,0.45)',1.2,false);
+  if(showMid||showTeam) drawSeries(function(s){return s.mid;},'#4FC3F7',showMid&&!showTeam?2:1.5,false);
+  if(showFwd||showTeam) drawSeries(function(s){return s.fwd;},'#81C784',showFwd&&!showTeam?2:1.5,false);
+  if(showDef||showTeam) drawSeries(function(s){return s.def;},'#FFB74D',showDef&&!showTeam?2:1.5,false);
+
+  /* Individual player lines */
+  playerPids.forEach(function(pid){
+    var pm=PLAYER_META[pid]; if(!pm) return;
+    var col=POS_COL[pm.pos]||'#aaa';
+    drawSeries(function(s){return s.players[pid]||null;},col,2.5,false);
+    /* Name label at last known point */
+    var lastX=null,lastY=null;
+    sessionData.forEach(function(s,i){if(s.players[pid]!=null){lastX=toX(i);lastY=toY(s.players[pid]);}});
+    if(lastX!=null){
+      var lt=document.createElementNS(svgNS,'text');
+      lt.setAttribute('x',(lastX+4).toFixed(1));lt.setAttribute('y',(lastY+3).toFixed(1));
+      lt.setAttribute('font-size','7');lt.setAttribute('fill',col);lt.setAttribute('font-weight','700');
+      lt.textContent=(pm.n||pid).split('.').pop();
+      layer.appendChild(lt);
+    }
+  });
+
+  /* Legend */
+  var legendItems=[];
+  if(showTeam) legendItems.push({col:'rgba(200,210,225,0.6)',lbl:'Squad avg'});
+  if(showMid||showTeam) legendItems.push({col:'#4FC3F7',lbl:'Mid 8'});
+  if(showFwd||showTeam) legendItems.push({col:'#81C784',lbl:'Fwd'});
+  if(showDef||showTeam) legendItems.push({col:'#FFB74D',lbl:'Def'});
+  var lx=PL;
+  legendItems.forEach(function(item){
+    var lc=document.createElementNS(svgNS,'circle');
+    lc.setAttribute('cx',(lx+4).toString());lc.setAttribute('cy',(PT-8).toString());lc.setAttribute('r','3');lc.setAttribute('fill',item.col);
+    layer.appendChild(lc);
+    var lt=document.createElementNS(svgNS,'text');
+    lt.setAttribute('x',(lx+10).toString());lt.setAttribute('y',(PT-5).toString());
+    lt.setAttribute('font-size','7');lt.setAttribute('fill','rgba(200,210,225,.65)');
+    lt.textContent=item.lbl;
+    layer.appendChild(lt);
+    lx+=55;
+  });
+}
+
 /* Keep updateScatterAxes as alias so existing call sites still work */
 function updateScatterAxes(){
-  _renderScatterDots();
+  if(typeof _SC_MODE!=='undefined'&&_SC_MODE==='trend') renderTrendChart();
+  else _renderScatterDots();
 }
 
 function updateScatterAxes_LEGACY(){
