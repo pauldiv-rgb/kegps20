@@ -5139,6 +5139,13 @@ function cmpSyncSession(){
     var cKeys=allKeys.filter(function(k){return k!==sessKey&&_isChamp(k);}).reverse();
     var avgsCh=cKeys.map(function(k){return _sessAvg(k,null);}).filter(Boolean);
     if(avgsCh.length){vsMetrics=_multiAvg(avgsCh);vsLabel='Championship avg ('+avgsCh.length+' games)';}
+  } else if(vsVal==='bm-md2'){
+    /* MD-2: sessions 2 days before a match (matchProx = 'MD−2') */
+    var md2Keys=allKeys.filter(function(k){
+      return k!==sessKey&&SESSION_DB[k]&&(SESSION_DB[k].matchProx||'').indexOf('MD−2')>-1;
+    });
+    var avgsMd2=md2Keys.map(function(k){return _sessAvg(k,null);}).filter(Boolean);
+    if(avgsMd2.length){vsMetrics=_multiAvg(avgsMd2);vsLabel='MD−2 avg ('+avgsMd2.length+' sessions)';}
   }
   if(!vsMetrics){
     /* Fallback: previous session */
@@ -5201,6 +5208,10 @@ function cmpSyncSession(){
   var hSub=document.querySelector('#p34 .mc-names .mc-sm .cv-lbl-team'); if(hSub) hSub.textContent=cur.n+' players · '+(sess.label||sessKey);
   var hBm=document.querySelector('#p34 .mc-names .bm-lbl-match'); if(hBm) hBm.textContent=vsLabel.split(' — ')[0]||vsLabel;
   var hBmS=document.querySelector('#p34 .mc-names .mc-sm .bm-lbl-match'); if(hBmS) hBmS.textContent=vsLabel;
+  /* Update non-match bm-lbl variants with computed vsLabel (match is already updated above) */
+  ['bm-lbl-3match','bm-lbl-champ','bm-lbl-md2'].forEach(function(cls){
+    document.querySelectorAll('#p34 .mc-names .'+cls).forEach(function(el){el.textContent=vsLabel;});
+  });
 
   /* ── Rebuild drill dropdowns from live data ── */
   var _subjSel=document.getElementById('cmp-subject');
@@ -8149,7 +8160,7 @@ function renderProfPerfBars(pk){
           <option value="bm-match" selected>Last match</option>
           <option value="bm-3match">Last 3 match avg</option>
           <option value="bm-champ">Championship avg</option>
-          <option value="bm-sess">Select session…</option>
+          <!-- bm-sess removed: no secondary session picker implemented -->
           <option value="bm-md2">MD−2 avg</option>
         </select>
       </div>
@@ -8219,8 +8230,7 @@ function renderProfPerfBars(pk){
         <div class="mc-sn c-dim">
           <span class="bm-lbl bm-lbl-match">v Meath · 20 Apr</span>
           <span class="bm-lbl bm-lbl-3match">Last 3 match avg</span>
-          <span class="bm-lbl bm-lbl-champ">Championship avg 2025</span>
-          <span class="bm-lbl bm-lbl-sess">Session 28 Mar</span>
+          <span class="bm-lbl bm-lbl-champ">Championship avg</span>
           <span class="bm-lbl bm-lbl-md2">MD−2 avg</span>
           <span class="cv-bm cv-bm-pvt">S. Gleeson</span>
           <span class="cv-bm cv-bm-pvta">Team avg</span>
@@ -8229,8 +8239,7 @@ function renderProfPerfBars(pk){
         <div class="mc-sm">
           <span class="bm-lbl bm-lbl-match">League · 70 min</span>
           <span class="bm-lbl bm-lbl-3match">3 games rolling</span>
-          <span class="bm-lbl bm-lbl-champ">2025 Leinster / AI</span>
-          <span class="bm-lbl bm-lbl-sess">Field training · 80 min</span>
+          <span class="bm-lbl bm-lbl-champ">Leinster / All-Ireland</span>
           <span class="bm-lbl bm-lbl-md2">Previous MD−2 sessions</span>
           <span class="cv-bm cv-bm-pvt">MID · 24 Apr 2026</span>
           <span class="cv-bm cv-bm-pvta">22 players · 24 Apr 2026</span>
