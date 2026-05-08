@@ -2307,7 +2307,7 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
   <div class="sec-label">[1] Load summary — selected window</div>
   <div class="cards c4">
     <div class="card">
-      <div class="card-lbl">Team Avg 7d TD</div>
+      <div class="card-lbl" id="p1-7dtd-lbl">Team Avg 7d TD</div>
       <div class="card-val c-teal" id="p1-7dtd-val">—</div>
       <div class="card-sub" id="p1-7dtd-sub">7-day total distance · team avg</div>
       <div class="card-ind c-green" id="p1-7dtd-ind">loading…</div>
@@ -2315,7 +2315,7 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
     <div class="card">
       <div class="card-lbl">Sessions Delivered</div>
       <div class="card-val" id="p1-sess-val">—</div>
-      <div class="card-sub">Training sessions in 7-day window</div>
+      <div class="card-sub" id="p1-sess-sub">Training sessions in 7-day window</div>
       <div class="card-ind c-green">↑ from live data</div>
     </div>
     <div class="card">
@@ -2325,9 +2325,9 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
       <div class="card-ind c-green">↑ from live data</div>
     </div>
     <div class="card">
-      <div class="card-lbl">Avg 7d HSR</div>
+      <div class="card-lbl" id="p1-hsr-lbl">Avg 7d HSR</div>
       <div class="card-val" id="p1-hsr-val">—</div>
-      <div class="card-sub">7-day accumulated HSR · team avg</div>
+      <div class="card-sub" id="p1-hsr-sub">7-day accumulated HSR · team avg</div>
       <div class="card-ind c-green" id="p1-hsr-ind">loading…</div>
     </div>
   </div>
@@ -6899,6 +6899,11 @@ function updateWeeklyTargetPage(){
   el=document.getElementById('p1-hmld-sub'); if(el) el.textContent='Avg HMLD per training session · '+windowKeys.length+' sessions';
   el=document.getElementById('p1-hsr-val'); if(el) el.textContent=avgHsr.toLocaleString()+' m';
   el=document.getElementById('p1-hsr-ind'); if(el){el.textContent=avgHsr>=750?'↑ Above threshold':'↓ Below 750m target';el.className='card-ind '+(avgHsr>=750?'c-green':'c-amber');}
+  /* Fix 3: update hardcoded "7d" card labels to reflect selected window */
+  el=document.getElementById('p1-7dtd-lbl'); if(el) el.textContent='Team Avg '+windowDays+'d TD';
+  el=document.getElementById('p1-sess-sub'); if(el) el.textContent='Training sessions in '+windowDays+'-day window';
+  el=document.getElementById('p1-hsr-lbl'); if(el) el.textContent='Avg '+windowDays+'d HSR';
+  el=document.getElementById('p1-hsr-sub'); if(el) el.textContent=windowDays+'-day accumulated HSR · team avg';
 
   /* Benchmark bar chart — benchmarks computed from ALL players, filtered view shows subset */
   var benchRows=document.getElementById('bench-rows');
@@ -7740,6 +7745,9 @@ function renderFlagCards(){
       }
     }
     var stale=_isStaleAcwr(rec.week);
+    /* Fix 2: if ACWR is stale AND player has been absent >21 days, skip — F01 absent detection handles them */
+    var _weekAgeDays=rec.week?Math.round((new Date()-new Date(rec.week))/86400000):0;
+    if(stale&&_weekAgeDays>21) return;
     flagged.push({key:key,name:rec.name,pos:_flagPosLabel(rec.pos),
       acwr:rec.acwr,acute:rec.acute,risk:risk,arrow:arrow,peakSpd:peakSpd,stale:stale,week:rec.week||''});
   });
@@ -7838,6 +7846,10 @@ function renderFlagCards(){
     underLoaded.forEach(function(p){html+=_flagCard(p);});
     html+='</div></details>';
   }
+
+  /* Fix 1: update sec-label "[N] Flagged players" to reflect actual count */
+  var _secLbl=container.previousElementSibling;
+  if(_secLbl&&_secLbl.classList.contains('sec-label')) _secLbl.textContent='['+priority.length+'] Flagged players — action required';
 
   container.innerHTML=html;
 }
