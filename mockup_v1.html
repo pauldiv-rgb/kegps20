@@ -6044,7 +6044,7 @@ function loadLiveData(){
         }
         /* ── Store per-player per-drill for all drills (incl non-half) ── */
         var dslug=drillName.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'').substring(0,24);
-        if(ddur>0){
+        if(ddur>=1){  /* F07: min 1 min duration — filters data entry errors (e.g. dur=0.01041666667 min) */
           if(!window.LIVE_DRILL_PLAYER_DATA[dkey]) window.LIVE_DRILL_PLAYER_DATA[dkey]={};
           if(!window.LIVE_DRILL_PLAYER_DATA[dkey][dslug]) window.LIVE_DRILL_PLAYER_DATA[dkey][dslug]={};
           window.LIVE_DRILL_PLAYER_DATA[dkey][dslug][player]={
