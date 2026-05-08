@@ -4361,7 +4361,19 @@ function _liveScatterData(sessKey, matchOnly){
       n:nm, pos:pm?pm.pos:r.pos, st:pm?pm.status:'full',
       td:r.td||0, hmld:r.hmld||0, hsr:r.hsr||0,
       acc:r.acc||0, dec:r.dec||0,
-      maxSpd:r.maxSpd||0, maxSpdP:0, maxAcc:0, maxAccP:0, maxDec:0, maxDecP:0,
+      maxSpd:r.maxSpd||0, maxSpdP:0,
+      /* maxAcc/maxDec: look up from LIVE_HISTORY_DATA (LS_Daily_Export cols 10/11) for this date+player */
+      maxAcc:(function(){
+        var _hRows=(window.LIVE_HISTORY_DATA&&window.LIVE_HISTORY_DATA[sessKey])||[];
+        var _hRow=_hRows.filter(function(h){return _normPlayerName(h.player)===_normPlayerName(r.player);})[0];
+        return _hRow?_hRow.maxAcc||0:0;
+      })(),
+      maxDec:(function(){
+        var _hRows=(window.LIVE_HISTORY_DATA&&window.LIVE_HISTORY_DATA[sessKey])||[];
+        var _hRow=_hRows.filter(function(h){return _normPlayerName(h.player)===_normPlayerName(r.player);})[0];
+        return _hRow?_hRow.maxDec||0:0;
+      })(),
+      maxAccP:0, maxDecP:0,
       tdMin:r.tdMin||0, hmldMin:r.hmldMin||0,
       sprintMin:r.sprintMin||0, z6Min:r.sprintMin||0, z6:r.sprint||0,
       hsrMin:r.hsrMin||0, hmldPct:r.hmld&&r.td?(r.hmld/r.td*100):0
@@ -6486,7 +6498,9 @@ function loadLiveData(){
             hsr:parseFloat(_hv[6])||0,
             acc:parseFloat(_hv[7])||0,
             dec:parseFloat(_hv[8])||0,
-            maxSpd:parseFloat(_hv[9])||0
+            maxSpd:parseFloat(_hv[9])||0,
+            maxAcc:parseFloat(_hv[10])||0,
+            maxDec:parseFloat(_hv[11])||0
           });
         }
       }
@@ -7306,6 +7320,19 @@ function updateDecisionFlagsPage(){
     if(!risk) return;
     var arrow=rec.acwr>1.10?'↑':rec.acwr<0.90?'↓':'→';
     var stale=_isStaleAcwr(rec.week);
+    /* If ACWR is stale and player absent >21 days, the live ACWR is meaningless —
+       acute load will now be near zero. Generate an ABSENT flag instead of CRITICAL. */
+    var _weekAgeDays=0;
+    if(stale&&rec.week){
+      var _wp=rec.week.split('-');
+      var _wd=new Date(parseInt(_wp[0]),parseInt(_wp[1])-1,parseInt(_wp[2]));
+      _weekAgeDays=Math.round((new Date()-_wd)/(1000*60*60*24));
+    }
+    if(stale&&_weekAgeDays>21){
+      flags.push({risk:'high',name:rec.name,acwr:0,arrow:'',stale:true,week:rec.week||'',
+        action:'Absent '+_weekAgeDays+' days — last GPS: wk '+rec.week+'. Stale ACWR '+rec.acwr.toFixed(2)+' does not reflect current load state (acute near zero). Graduated reload protocol essential on return.'});
+      return;
+    }
     var staleNote=stale?' [STALE DATA — wk '+rec.week+']':'';
     flags.push({risk:risk,name:rec.name,acwr:rec.acwr,arrow:arrow,stale:stale,week:rec.week||'',
       action:_flagAction(risk,rec.acwr,arrow)+staleNote});
