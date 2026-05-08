@@ -6978,10 +6978,20 @@ function updateTrainingQualityPage(){
   if(selVal&&selVal!=='auto'&&window.LIVE_SESSION_DATA[selVal]){
     trainKey=selVal;
   } else {
-    /* Most recent training session (non-match preferred) */
+    /* Most recent predominantly-training session (>50% of rows non-match)
+       Prevents match-day sessions with a handful of rehab/RTP players
+       from being mistakenly selected as the training quality baseline */
     for(var i=allKeys.length-1;i>=0;i--){
       var rs=window.LIVE_SESSION_DATA[allKeys[i]];
-      if(rs.some(function(r){return r.matchType!=='Match';})){trainKey=allKeys[i];break;}
+      var _trainCount=rs.filter(function(r){return r.matchType!=='Match';}).length;
+      if(_trainCount>rs.length/2){trainKey=allKeys[i];break;}
+    }
+    /* Fallback: any session with at least one training row */
+    if(!trainKey){
+      for(var i=allKeys.length-1;i>=0;i--){
+        var rs=window.LIVE_SESSION_DATA[allKeys[i]];
+        if(rs.some(function(r){return r.matchType!=='Match';})){trainKey=allKeys[i];break;}
+      }
     }
     if(!trainKey) trainKey=allKeys[allKeys.length-1];
   }
