@@ -6450,7 +6450,7 @@ function loadLiveData(){
           hmldMin:dur>0?parseFloat((hmld/dur).toFixed(1)):0,
           sprintMin:dur>0?parseFloat((spd/dur).toFixed(2)):0,
           hsrMin:dur>0?parseFloat((hsr/dur).toFixed(1)):0,
-          tdMin:parseFloat(v[9])||0});
+          tdMin:dur>0?parseFloat(((parseFloat(v[8])||0)/dur).toFixed(1)):(parseFloat(v[9])||0)});
       }
       all=all.filter(function(s){return s.date&&!isNaN(s.date.getTime())&&s.player;});
       all.sort(function(a,b){return a.date-b.date;});
