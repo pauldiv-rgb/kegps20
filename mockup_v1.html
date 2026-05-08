@@ -5989,7 +5989,8 @@ var CFG_LIVE={
   MATCH_RECORD_URL:'https://docs.google.com/spreadsheets/d/e/2PACX-1vTaiT2EXrwkobUINl0zCLTAa7G7vZy6J3AGgOEJubAAD8zaqEfv7XgPgF_lF7toYi0am6IKWFkAjEX4/pub?gid=2100000002&single=true&output=csv',
   LOAD_TREND_URL:'https://docs.google.com/spreadsheets/d/e/2PACX-1vTaiT2EXrwkobUINl0zCLTAa7G7vZy6J3AGgOEJubAAD8zaqEfv7XgPgF_lF7toYi0am6IKWFkAjEX4/pub?gid=2100000009&single=true&output=csv',
   EXTERNAL_ACTIVITY_URL:'https://docs.google.com/spreadsheets/d/e/2PACX-1vTaiT2EXrwkobUINl0zCLTAa7G7vZy6J3AGgOEJubAAD8zaqEfv7XgPgF_lF7toYi0am6IKWFkAjEX4/pub?gid=1093848037&single=true&output=csv',
-  SESSION_ATTEND_URL:'https://docs.google.com/spreadsheets/d/e/2PACX-1vTaiT2EXrwkobUINl0zCLTAa7G7vZy6J3AGgOEJubAAD8zaqEfv7XgPgF_lF7toYi0am6IKWFkAjEX4/pub?gid=2100000001&single=true&output=csv'
+  SESSION_ATTEND_URL:'https://docs.google.com/spreadsheets/d/e/2PACX-1vTaiT2EXrwkobUINl0zCLTAa7G7vZy6J3AGgOEJubAAD8zaqEfv7XgPgF_lF7toYi0am6IKWFkAjEX4/pub?gid=2100000001&single=true&output=csv',
+  HISTORY_URL:'https://docs.google.com/spreadsheets/d/e/2PACX-1vTaiT2EXrwkobUINl0zCLTAa7G7vZy6J3AGgOEJubAAD8zaqEfv7XgPgF_lF7toYi0am6IKWFkAjEX4/pub?gid=2100000012&single=true&output=csv'
 };
 
 /* Live ACWR lookup — populated from LS_Load_Trend_Export on load */
@@ -6248,9 +6249,10 @@ function loadLiveData(){
     _fetchCSV(CFG_LIVE.LOAD_TREND_URL, true),
     _fetchCSV(CFG_LIVE.MATCH_RECORD_URL, true),
     _fetchCSV(CFG_LIVE.EXTERNAL_ACTIVITY_URL, true),
-    _fetchCSV(CFG_LIVE.SESSION_ATTEND_URL, true)
+    _fetchCSV(CFG_LIVE.SESSION_ATTEND_URL, true),
+    _fetchCSV(CFG_LIVE.HISTORY_URL, true)
   ]).then(function(results){
-    var txt=results[0], ddTxt=results[1], ltTxt=results[2], mrTxt=results[3], eaTxt=results[4], atTxt=results[5];
+    var txt=results[0], ddTxt=results[1], ltTxt=results[2], mrTxt=results[3], eaTxt=results[4], atTxt=results[5], histTxt=results[6];
 
     /* ── Parse Match Record → next upcoming fixture + all match dates ── */
     if(mrTxt){
@@ -6455,6 +6457,40 @@ function loadLiveData(){
       var dSet={},allDates=[];
       all.forEach(function(s){if(!dSet[s.dateStr]){dSet[s.dateStr]=true;allDates.push(s.dateStr);}});
       var last8=allDates.slice(-8);
+
+      /* ── Build LIVE_HISTORY_DATA from LS_Daily_Export for p1 window filter ── */
+      /* Columns: v[0]=Player_Name v[1]=Date(yyyy-mm-dd) v[2]=Session_Type v[3]=Session_Label
+                  v[4]=Total_Distance v[5]=HMLD v[6]=HSR v[7]=Acc_Events v[8]=Dec_Events
+                  v[9]=Max_Speed v[10]=Max_Acc v[11]=Max_Dec v[12]=Sprint_Quality_Pct
+                  v[13]=Match_Label v[14]=Position_Group */
+      window.LIVE_HISTORY_DATA={};
+      if(histTxt){
+        var _hlines=histTxt.trim().split(/\r?\n/);
+        for(var _hi=1;_hi<_hlines.length;_hi++){
+          if(!_hlines[_hi].trim()) continue;
+          var _hv=_parseCSVLine(_hlines[_hi]);
+          var _hPlayer=(_hv[0]||'').trim();
+          var _hDateRaw=(_hv[1]||'').trim();
+          if(!_hPlayer||!_hDateRaw) continue;
+          var _hDate=_parseDate(_hDateRaw);
+          if(!_hDate||isNaN(_hDate.getTime())) continue;
+          var _hKey='d'+_hDate.getFullYear()+String(_hDate.getMonth()+1).padStart(2,'0')+String(_hDate.getDate()).padStart(2,'0');
+          if(!window.LIVE_HISTORY_DATA[_hKey]) window.LIVE_HISTORY_DATA[_hKey]=[];
+          window.LIVE_HISTORY_DATA[_hKey].push({
+            player:_hPlayer,
+            pos:(_hv[14]||'').trim(),
+            matchType:(_hv[2]||'Training').trim(),
+            sessionType:(_hv[3]||'Training').trim(),
+            td:parseFloat(_hv[4])||0,
+            hmld:parseFloat(_hv[5])||0,
+            hsr:parseFloat(_hv[6])||0,
+            acc:parseFloat(_hv[7])||0,
+            dec:parseFloat(_hv[8])||0,
+            maxSpd:parseFloat(_hv[9])||0
+          });
+        }
+      }
+
       /* ── Store per-session player rows globally for live squad stats ── */
       window.LIVE_SESSION_DATA={};
       var _posNorm=function(p){var pl=(p||'').toLowerCase();return pl.indexOf('middle')>-1?'mid':pl.indexOf('forward')>-1?'fwd':pl.indexOf('defend')>-1?'def':'mid';};
@@ -6754,8 +6790,10 @@ function updateAcwrSummaryCards(){
 
 /* ── Page 2: Weekly targets — rebuild from LIVE_SESSION_DATA ── */
 function updateWeeklyTargetPage(){
-  if(!window.LIVE_SESSION_DATA) return;
-  var allKeys=Object.keys(window.LIVE_SESSION_DATA).sort();
+  /* Use full-history data source if available, otherwise fall back to LIVE_SESSION_DATA */
+  var _histSrc=window.LIVE_HISTORY_DATA&&Object.keys(window.LIVE_HISTORY_DATA).length>1?window.LIVE_HISTORY_DATA:window.LIVE_SESSION_DATA;
+  if(!_histSrc) return;
+  var allKeys=Object.keys(_histSrc).sort();
   if(!allKeys.length) return;
 
   function _keyToDate(k){var y=parseInt(k.substring(1,5)),m=parseInt(k.substring(5,7))-1,d=parseInt(k.substring(7,9));return new Date(y,m,d);}
@@ -6784,7 +6822,7 @@ function updateWeeklyTargetPage(){
   /* Per-player accumulation across window */
   var playerMap={};
   windowKeys.forEach(function(k){
-    var rows=window.LIVE_SESSION_DATA[k];
+    var rows=_histSrc[k];
     rows.forEach(function(r){
       if(!r.player) return;
       var pk=_normPlayerName(r.player);
@@ -6798,7 +6836,7 @@ function updateWeeklyTargetPage(){
   if(!allPlayers.length){
     /* No sessions in window — show most recent session's data as fallback */
     var fallbackKey=allKeys[allKeys.length-1];
-    var fallbackRows=window.LIVE_SESSION_DATA[fallbackKey]||[];
+    var fallbackRows=_histSrc[fallbackKey]||[];
     fallbackRows.forEach(function(r){
       if(!r.player) return;
       var pk=_normPlayerName(r.player);
@@ -6825,11 +6863,11 @@ function updateWeeklyTargetPage(){
   /* Summary metrics — always team-wide */
   var avgTd=Math.round(allPlayers.reduce(function(a,p){return a+p.td;},0)/n);
   var sessionCount=windowKeys.filter(function(k){
-    return window.LIVE_SESSION_DATA[k].some(function(r){return r.matchType!=='Match';});
+    return _histSrc[k].some(function(r){return r.matchType!=='Match';});
   }).length;
   var hmldSessVals=[];
   windowKeys.forEach(function(k){
-    var trainR=window.LIVE_SESSION_DATA[k].filter(function(r){return r.matchType!=='Match';});
+    var trainR=_histSrc[k].filter(function(r){return r.matchType!=='Match';});
     if(!trainR.length) return;
     hmldSessVals.push(Math.round(trainR.reduce(function(a,r){return a+(r.hmld||0);},0)/trainR.length));
   });
