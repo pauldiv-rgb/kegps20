@@ -2289,6 +2289,7 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
   </div>
 
   <!-- [1] WEEK SUMMARY CARDS -->
+  <div class="sec-label">[1] Load summary — selected window</div>
   <div class="cards c4">
     <div class="card">
       <div class="card-lbl">Team Avg 7d TD</div>
@@ -4971,7 +4972,7 @@ function lbIntRowHtml(p,rank,meta){
     +'</div>'
     +'<div class="lb-vals">'
       +'<span class="lb-val">'+val+' <span style="font-size:9px;font-weight:400;color:var(--muted)">'+meta.unit+'</span></span>'
-      +'<span class="lb-pct">'+pct+'%</span>'
+      +(pct>0?'<span class="lb-pct">'+pct+'%</span>':'<span class="lb-pct" style="color:var(--muted);font-weight:400">—</span>')
     +'</div>'
     +'</div>';
 }
@@ -6185,20 +6186,29 @@ function loadLiveData(){
           strain:l8.map(function(s){return s.hmld;})};
       });
       SPARK_DATA2=newSpark;
-      /* ── Update SVG x-axis date labels from last8 session dates ── */
+      /* ── Update SVG x-axis date labels ── */
       (function(){
         var MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-        var prefixes=['ac-dt','ms2-dt','da-dt'];
+        /* ACWR chart (ac-dt): use week-end dates matching _acwrSeries windows so labels align
+           with the weekly data points plotted (8 weeks back from lastDate, newest on right) */
+        for(var w=0;w<8;w++){
+          var we=new Date(lastDate); we.setDate(we.getDate()-(7-w)*7);
+          var lbl=we.getDate()+' '+MON[we.getMonth()];
+          var el=document.getElementById('ac-dt-'+w);
+          if(el) el.textContent=lbl;
+        }
+        /* ms2-dt and da-dt: session-date labels (last 8 session dates) */
+        var prefixes2=['ms2-dt','da-dt'];
         for(var i=0;i<8;i++){
           var ds=last8[i];
-          var lbl='';
+          var lbl2='';
           if(ds){
             var d=_parseDate(ds);
-            if(d&&!isNaN(d.getTime())) lbl=d.getDate()+' '+MON[d.getMonth()];
+            if(d&&!isNaN(d.getTime())) lbl2=d.getDate()+' '+MON[d.getMonth()];
           }
-          prefixes.forEach(function(pfx){
+          prefixes2.forEach(function(pfx){
             var el=document.getElementById(pfx+'-'+i);
-            if(el&&lbl) el.textContent=lbl;
+            if(el&&lbl2) el.textContent=lbl2;
           });
         }
       })();
@@ -6428,7 +6438,25 @@ function updateWeeklyTargetPage(){
     });
   });
   var allPlayers=Object.values(playerMap);
-  if(!allPlayers.length) return;
+  if(!allPlayers.length){
+    /* No sessions in window — show most recent session's data as fallback */
+    var fallbackKey=allKeys[allKeys.length-1];
+    var fallbackRows=window.LIVE_SESSION_DATA[fallbackKey]||[];
+    fallbackRows.forEach(function(r){
+      if(!r.player) return;
+      var pk=_normPlayerName(r.player);
+      if(!playerMap[pk]) playerMap[pk]={name:r.player,pos:_benchPos(r.pos||''),td:0,hmld:0,hsr:0};
+      playerMap[pk].td+=(r.td||0);
+      playerMap[pk].hmld+=(r.hmld||0);
+      playerMap[pk].hsr+=(r.hsr||0);
+    });
+    allPlayers=Object.values(playerMap);
+    if(!allPlayers.length){
+      var benchRows=document.getElementById('bench-rows');
+      if(benchRows) benchRows.innerHTML='<div style="font-size:9px;color:var(--muted);padding:10px 0">No player data in '+windowDays+'d window — update LS_Squad_Load CSV to refresh.</div>';
+      return;
+    }
+  }
   var n=allPlayers.length;
 
   /* Apply position filter for bar chart */
@@ -6591,9 +6619,9 @@ function updateTrainingQualityPage(){
 
   /* Update quality signal cards */
   var el;
-  var tdCol=avgTdMin>83?'c-red':avgTdMin>=70?'c-green':avgTdMin>=60?'c-amber':'c-red';
+  var tdCol=avgTdMin>80?'c-red':avgTdMin>=70?'c-green':avgTdMin>=60?'c-amber':'c-red';
   el=document.getElementById('p15-tdmin-val'); if(el){el.textContent=avgTdMin.toFixed(1)+' m/min';el.className='card-val '+tdCol;}
-  el=document.getElementById('p15-tdmin-ind'); if(el){el.textContent=avgTdMin>83?'⚡ Exceeds match ceiling (83)':avgTdMin>=70?'↑ On target':avgTdMin>=60?'⚠ Below 70 m/min target':'↓ Well below match demand';el.className='card-ind '+tdCol;}
+  el=document.getElementById('p15-tdmin-ind'); if(el){el.textContent=avgTdMin>80?'⚡ Exceeds match ceiling (80)':avgTdMin>=70?'↑ On target':avgTdMin>=60?'⚠ Below 70 m/min target':'↓ Well below match demand';el.className='card-ind '+tdCol;}
   var hsrCol=avgHsr7d>=750?'c-green':avgHsr7d>=500?'c-amber':'c-red';
   el=document.getElementById('p15-hsr-val'); if(el){el.textContent=avgHsr7d.toLocaleString()+' m';el.className='card-val '+hsrCol;}
   el=document.getElementById('p15-hsr-ind'); if(el){el.textContent=avgHsr7d>=750?'↑ Above threshold':avgHsr7d>=500?'⚠ Below 750m target':'↓ Low HSR week';el.className='card-ind '+hsrCol;}
