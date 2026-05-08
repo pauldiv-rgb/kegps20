@@ -5263,6 +5263,52 @@ function cmpSyncSession(){
 /* Global drill selection state for comparison page */
 window._cmpDrillSlug = window._cmpDrillSlug || 'all';
 
+/* ── Benchmark match type state ── */
+window._cmpBenchmarkType = window._cmpBenchmarkType || 'competition';
+
+/* Compute best28HmldMin from match halves in LIVE_DRILL_PLAYER_DATA filtered by match type.
+   matchType: 'competition' (Match — 1st/2nd Half only),
+              'inhouse'     (In-House Match / Inhouse Match halves only),
+              'all'         (all half-pattern drills) */
+function _computeBest28HmldMin(matchType){
+  var dpd=window.LIVE_DRILL_PLAYER_DATA||{};
+  var best=0;
+  Object.keys(dpd).forEach(function(sk){
+    Object.keys(dpd[sk]).forEach(function(slug){
+      var players=Object.values(dpd[sk][slug]);
+      if(!players.length) return;
+      var dname=players[0].name||'';
+      var dlow=dname.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+      var isHalf=dlow.indexOf('1st half')>-1||dlow.indexOf('first half')>-1||
+                 dlow.indexOf('2nd half')>-1||dlow.indexOf('second half')>-1;
+      if(!isHalf) return;
+      var isInhouse=dlow.indexOf('in house')>-1||dlow.indexOf('inhouse')>-1;
+      if(matchType==='competition'&&isInhouse) return;
+      if(matchType==='inhouse'&&!isInhouse) return;
+      players.forEach(function(p){ if((p.hmldMin||0)>best) best=p.hmldMin; });
+    });
+  });
+  return best;
+}
+
+/* Called by benchmark toggle buttons */
+function _cmpBmType(type){
+  window._cmpBenchmarkType=type||'competition';
+  /* Update button styles */
+  ['competition','inhouse','all'].forEach(function(t){
+    var btn=document.getElementById('cmp-bm-'+t);
+    if(!btn) return;
+    var active=(t===window._cmpBenchmarkType);
+    btn.style.background=active?'var(--accent)':'transparent';
+    btn.style.color=active?'#fff':'var(--dim)';
+    btn.style.borderColor=active?'var(--accent)':'var(--border)';
+  });
+  /* Re-render intensity chart */
+  var sessEl=document.getElementById('cmp-session');
+  var sessKey=sessEl?sessEl.value:null;
+  if(sessKey) _renderCmpIntensity(sessKey,window._cmpDrillSlug);
+}
+
 /* Called by both Subject and bottom Drill selectors */
 function cmpDrillChange(slug){
   window._cmpDrillSlug = slug || 'all';
@@ -5299,18 +5345,15 @@ function _renderCmpIntensity(sessKey, drillSlug){
   var sessBestMaxSpd=allMaxSpd.length?Math.max.apply(null,allMaxSpd):0;
   var sessAvgMaxSpd=allMaxSpd.length?allMaxSpd.reduce(function(a,v){return a+v;},0)/allMaxSpd.length:0;
   var sessAvgHmldMin=allHmldMin.length?allHmldMin.reduce(function(a,v){return a+v;},0)/allHmldMin.length:0;
-  /* 28-session best HMLD/min — match halves only (H1/H2 from LIVE_HALF_DATA)
-     Using match halves ensures the benchmark reflects match demand, not short SSG spikes */
-  var best28HmldMin=0;
-  Object.keys(window.LIVE_HALF_DATA||{}).forEach(function(sk){
-    ['h1','h2'].forEach(function(hk){
-      var half=window.LIVE_HALF_DATA[sk]&&window.LIVE_HALF_DATA[sk][hk];
-      if(!half) return;
-      Object.values(half).forEach(function(p){
-        if((p.hmldMin||0)>best28HmldMin) best28HmldMin=p.hmldMin;
-      });
-    });
-  });
+  /* best28HmldMin — match halves only, filtered by selected benchmark type */
+  var _bmType=window._cmpBenchmarkType||'competition';
+  var best28HmldMin=_computeBest28HmldMin(_bmType);
+  var _bmFallback=false;
+  if(!best28HmldMin&&_bmType!=='all'){
+    /* No data for selected type — fall back to all halves */
+    best28HmldMin=_computeBest28HmldMin('all');
+    _bmFallback=true;
+  }
   if(!best28HmldMin) best28HmldMin=sessAvgHmldMin*1.3||1;
 
   function _col(pct){ return pct>=90?'var(--green)':pct>=75?'var(--amber)':'var(--red)'; }
@@ -5347,12 +5390,15 @@ function _renderCmpIntensity(sessKey, drillSlug){
       html+='<div class="mc-row">'
         +'<div class="mc-l"><div class="mc-v mc-vl" style="color:'+_col(hmldPct)+'">'+avgHmld.toFixed(1)+' m/min<span class="mc-d" style="color:'+_col(hmldPct)+'">'+hmldPct+'% of best</span></div>'
         +'<div class="mc-trk"><div class="mc-fl" style="width:'+Math.min(99,hmldPct)+'%;background:'+_bg(hmldPct)+'"></div></div></div>'
-        +'<div class="mc-lbl">HMLD/min<span style="display:block;font-size:8px;color:var(--muted)">match half best: '+best28HmldMin.toFixed(1)+' m/min</span></div>'
+        +'<div class="mc-lbl">HMLD/min<span style="display:block;font-size:8px;color:var(--muted)">'+(_bmFallback?'all halves (fallback)':(_bmType==='competition'?'competition halves':_bmType==='inhouse'?'in-house halves':'all halves'))+' best: '+best28HmldMin.toFixed(1)+'</span></div>'
         +'<div class="mc-r"><div class="mc-trk"><div class="mc-fr" style="width:'+Math.min(99,bmHmldPct)+'%;background:'+_bg(bmHmldPct)+'"></div></div>'
         +'<div class="mc-v mc-vr" style="color:'+_col(bmHmldPct)+'">'+sessAvgHmldMin.toFixed(1)+' m/min<span style="display:block;font-size:8px;color:'+_col(bmHmldPct)+'">session avg</span></div></div></div>';
     }
   });
   if(!html) html='<div style="font-size:9px;color:var(--muted);padding:8px 0">No intensity data for selected drill.</div>';
+  /* Show/hide fallback warning note */
+  var _noteEl=document.getElementById('cmp-bm-note');
+  if(_noteEl) _noteEl.style.display=_bmFallback?'inline':'none';
   container.innerHTML=html;
 }
 
@@ -8330,8 +8376,15 @@ function renderProfPerfBars(pk){
     </div>
 
     <!-- ── INTENSITY ── -->
-    <div class="cat-section-hdr">Intensity — peak outputs vs session best<span class="int-adj" style="margin-left:6px;font-size:8px">live · drill-level</span></div>
-    <div style="font-size:9px;color:var(--muted);margin-bottom:12px">Left = this drill team avg · right = session overall avg · ceiling = session best across all drills · <span style="color:var(--green)">≥90%</span> · <span style="color:var(--amber)">75–89%</span> · <span style="color:var(--red)">&lt;75%</span> · Max velocity + HMLD/min available at drill level</div>
+    <div class="cat-section-hdr">Intensity — peak outputs vs match half best<span class="int-adj" style="margin-left:6px;font-size:8px">live · drill-level</span></div>
+    <div style="font-size:9px;color:var(--muted);margin-bottom:8px">Left = this drill team avg · right = session overall avg · ceiling = best player HMLD/min from selected match type · <span style="color:var(--green)">≥90%</span> · <span style="color:var(--amber)">75–89%</span> · <span style="color:var(--red)">&lt;75%</span></div>
+    <div style="display:flex;align-items:center;gap:7px;margin-bottom:10px">
+      <span style="font-size:8px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap">Benchmark</span>
+      <button id="cmp-bm-competition" onclick="_cmpBmType('competition')" style="font-size:8px;font-weight:600;padding:2px 8px;border-radius:3px;border:1px solid var(--accent);cursor:pointer;background:var(--accent);color:#fff;letter-spacing:.04em;transition:all .15s">Competition</button>
+      <button id="cmp-bm-inhouse" onclick="_cmpBmType('inhouse')" style="font-size:8px;font-weight:600;padding:2px 8px;border-radius:3px;border:1px solid var(--border);cursor:pointer;background:transparent;color:var(--dim);letter-spacing:.04em;transition:all .15s">In-house</button>
+      <button id="cmp-bm-all" onclick="_cmpBmType('all')" style="font-size:8px;font-weight:600;padding:2px 8px;border-radius:3px;border:1px solid var(--border);cursor:pointer;background:transparent;color:var(--dim);letter-spacing:.04em;transition:all .15s">All halves</button>
+      <span id="cmp-bm-note" style="font-size:8px;color:var(--amber);display:none">⚠ No data for selected type — showing all halves</span>
+    </div>
     <div id="cmp-int-live" style="min-height:40px"><div style="font-size:9px;color:var(--muted);padding:8px 0">Loading drill intensity data…</div></div>
 
   <!-- ─── [3] CONTROLS ─── -->
