@@ -3919,7 +3919,7 @@ function gfChange(){
   /* Update session bar */
   var siType=document.getElementById('si-type'); if(siType) siType.textContent=sess.typeLabel;
   var siDur=document.getElementById('si-dur'); if(siDur) siDur.textContent=sess.duration+' min';
-  var siDrills=document.getElementById('si-drills'); if(siDrills) siDrills.textContent=(sess.drillCount!=null?sess.drillCount:(sess.drills?Object.keys(sess.drills).length:null))||'—';
+  var siDrills=document.getElementById('si-drills'); if(siDrills){var _dCnt=sess.drillCount!=null?sess.drillCount:(sess.drills?Object.keys(sess.drills).length:(window.LIVE_DRILL_PLAYER_DATA&&window.LIVE_DRILL_PLAYER_DATA[G.session]?Object.keys(window.LIVE_DRILL_PLAYER_DATA[G.session]).length:null));siDrills.textContent=_dCnt||'—';}
   var siProx=document.getElementById('si-prox'); if(siProx) siProx.textContent=sess.matchProx||'—';
   var siFixture=document.getElementById('si-fixture'); if(siFixture) siFixture.textContent=sess.nextFixture||'—';
   var siAtt=document.getElementById('si-att'); if(siAtt) siAtt.textContent=sess.attendance||'—';
@@ -5683,8 +5683,10 @@ function _rebuildSessionDropdowns(allDates, sessionMeta, drillMeta){
       if(lm.playerCount) SESSION_DB[key].attendance=lm.playerCount+' / 26';
       /* Always replace drills from live — null means no drill data in sheet for this session */
       SESSION_DB[key].drills=liveDrills;
-      /* FIX: also update drillCount so si-drills badge shows correct value */
+      /* FIX: update drillCount — prefer drillMeta liveDrills, fall back to LIVE_DRILL_PLAYER_DATA keys */
       if(liveDrills) SESSION_DB[key].drillCount=Object.keys(liveDrills).length;
+      else if(window.LIVE_DRILL_PLAYER_DATA&&window.LIVE_DRILL_PLAYER_DATA[key])
+        SESSION_DB[key].drillCount=Object.keys(window.LIVE_DRILL_PLAYER_DATA[key]).length;
       return;
     }
     var d=_parseDate(ds);
