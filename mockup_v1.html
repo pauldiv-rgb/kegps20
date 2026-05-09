@@ -14,6 +14,8 @@
   --teal:#9FE1CB; --red:#E24B4A; --amber:#EF9F27;
   --green:#4CAF50; --blue:#4FC3F7; --purple:#9B77DD;
   --syne:'Syne',sans-serif; --inter:'Inter',sans-serif;
+  /* Alias variables used throughout components */
+  --accent:#4FC3F7; --card:#121d2b; --fg:#dce8f0; --sub:#6b8299; --sub2:#2e4a62;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--text);font-family:var(--inter);font-size:13px;line-height:1.5;min-height:100vh}
@@ -2855,91 +2857,12 @@ function toggleBm(btn){
 
 /* ── Main filter function ────────────────────────────────────── */
 function applyFilters(){
-  var personnel=getVals('ms-personnel-panel');
-  var activity =getVals('ms-activity-panel');
-  var drill    =getVals('ms-drill-panel');
-  var status   =getVals('ms-status-panel');
-  var dates    =getVals('ms-dates-panel');
-
-  /* Build allowed activity classes from dates filter */
-  var dateActClasses=null;
-  if(dates[0]!=='all'){
-    dateActClasses={};
-    dates.forEach(function(d){var ac=_getActClass(d);if(ac) dateActClasses[ac]=true;});
-    /* If only historical sessions selected (no scatter representation), show all dots */
-    if(Object.keys(dateActClasses).length===0) dateActClasses=null;
-  }
-
-  document.querySelectorAll('.sc-dot').forEach(function(dot){
-    var cls=dot.classList;
-
-    /* ── Personnel ── */
-    var pPass=false;
-    if(personnel[0]==='all'){
-      pPass=true;
-    } else {
-      if(personnel.indexOf('mid')>-1&&cls.contains('sc-mid')) pPass=true;
-      if(personnel.indexOf('fwd')>-1&&cls.contains('sc-fwd')) pPass=true;
-      if(personnel.indexOf('def')>-1&&cls.contains('sc-def')) pPass=true;
-      var _pKeys=Object.keys(PLAYER_META);
-      for(var _pi=0;_pi<_pKeys.length;_pi++){
-        if(personnel.indexOf(_pKeys[_pi])>-1&&cls.contains('sc-'+_pKeys[_pi])){pPass=true;break;}
-      }
-    }
-
-    /* ── Activity ── */
-    /* When a specific date is selected, dateActClasses already handles activity-type
-       filtering — bypass the activity filter so match/championship dots aren't hidden
-       by the default "Training only" selection in the activity dropdown. */
-    var aPass=false;
-    if(activity[0]==='all' || dateActClasses!==null){
-      aPass=true;
-    } else {
-      if(activity.indexOf('training')>-1&&cls.contains('sc-sess-dot')) aPass=true;
-      if(activity.indexOf('challenge')>-1&&cls.contains('sc-csess-dot')) aPass=true;
-      if(activity.indexOf('match')>-1&&cls.contains('sc-match-dot')) aPass=true;
-      if(activity.indexOf('championship')>-1&&cls.contains('sc-match2-dot')) aPass=true;
-    }
-
-    /* ── Drill (training sub-filter) ── */
-    var dPass=false;
-    if(!cls.contains('sc-sess-dot')){
-      dPass=true; /* not a training dot – drill filter N/A */
-    } else {
-      if(drill[0]==='all'||(drill.length===1&&drill[0]==='session')){
-        dPass=cls.contains('sc-all-dot');
-      } else {
-        if(drill.indexOf('session')>-1&&cls.contains('sc-all-dot')) dPass=true;
-        if(drill.indexOf('wu')>-1&&cls.contains('sc-cdrillwu-dot')) dPass=true;
-        if(drill.indexOf('ssg')>-1&&cls.contains('sc-cdrillssg-dot')) dPass=true;
-        if(drill.indexOf('poss')>-1&&cls.contains('sc-cdrillposs-dot')) dPass=true;
-        if(drill.indexOf('cg')>-1&&cls.contains('sc-cdrillcg-dot')) dPass=true;
-      }
-    }
-
-    /* ── Status ── */
-    var sPass=false;
-    if(status[0]==='all'){
-      sPass=true;
-    } else {
-      if(status.indexOf('full')>-1&&cls.contains('sc-full')) sPass=true;
-      if(status.indexOf('mod')>-1&&cls.contains('sc-mod')) sPass=true;
-      if(status.indexOf('rtp')>-1&&cls.contains('sc-rtp')) sPass=true;
-    }
-
-    /* ── Dates ── */
-    var dtPass=true;
-    if(dateActClasses!==null){
-      dtPass=false;
-      var actCls=['sc-sess-dot','sc-match-dot','sc-csess-dot','sc-match2-dot'];
-      for(var j=0;j<actCls.length;j++){
-        if(cls.contains(actCls[j])&&dateActClasses[actCls[j]]){dtPass=true;break;}
-      }
-    }
-
-    var visible=pPass&&aPass&&dPass&&sPass&&dtPass;
-    dot.style.display=visible?'block':'none';
-  });
+  /* In trend mode, just redraw the trend chart */
+  if(typeof _SC_MODE!=='undefined'&&_SC_MODE==='trend'){ try{renderTrendChart();}catch(e){} return; }
+  /* Scatter dots are rendered dynamically by _renderScatterDots() which already applies
+     all filters (personnel, activity, drill, status, dates) during entry collection.
+     Re-render the scatter to pick up any filter state changes. */
+  try{ if(typeof updateScatterAxes==='function') updateScatterAxes(); }catch(e){}
   /* Keep drill bar avg in sync with drill filter */
   renderDrillBars();
 }
@@ -3121,93 +3044,12 @@ document.addEventListener('DOMContentLoaded',function(){
 
 /* ── Main filter function ────────────────────────────────────── */
 function applyFilters(){
-  /* In trend mode, just redraw the trend chart — no .sc-dot elements to filter */
+  /* In trend mode, just redraw the trend chart */
   if(typeof _SC_MODE!=='undefined'&&_SC_MODE==='trend'){ try{renderTrendChart();}catch(e){} return; }
-  var personnel=getVals('ms-personnel-panel');
-  var activity =getVals('ms-activity-panel');
-  var drill    =getVals('ms-drill-panel');
-  var status   =getVals('ms-status-panel');
-  var dates    =getVals('ms-dates-panel');
-
-  /* Build allowed activity classes from dates filter */
-  var dateActClasses=null;
-  if(dates[0]!=='all'){
-    dateActClasses={};
-    dates.forEach(function(d){var ac=_getActClass(d);if(ac) dateActClasses[ac]=true;});
-    /* If only historical sessions selected (no scatter representation), show all dots */
-    if(Object.keys(dateActClasses).length===0) dateActClasses=null;
-  }
-
-  document.querySelectorAll('.sc-dot').forEach(function(dot){
-    var cls=dot.classList;
-
-    /* ── Personnel ── */
-    var pPass=false;
-    if(personnel[0]==='all'){
-      pPass=true;
-    } else {
-      if(personnel.indexOf('mid')>-1&&cls.contains('sc-mid')) pPass=true;
-      if(personnel.indexOf('fwd')>-1&&cls.contains('sc-fwd')) pPass=true;
-      if(personnel.indexOf('def')>-1&&cls.contains('sc-def')) pPass=true;
-      var _pKeys=Object.keys(PLAYER_META);
-      for(var _pi=0;_pi<_pKeys.length;_pi++){
-        if(personnel.indexOf(_pKeys[_pi])>-1&&cls.contains('sc-'+_pKeys[_pi])){pPass=true;break;}
-      }
-    }
-
-    /* ── Activity ── */
-    /* When a specific date is selected, dateActClasses already handles activity-type
-       filtering — bypass the activity filter so match/championship dots aren't hidden
-       by the default "Training only" selection in the activity dropdown. */
-    var aPass=false;
-    if(activity[0]==='all' || dateActClasses!==null){
-      aPass=true;
-    } else {
-      if(activity.indexOf('training')>-1&&cls.contains('sc-sess-dot')) aPass=true;
-      if(activity.indexOf('challenge')>-1&&cls.contains('sc-csess-dot')) aPass=true;
-      if(activity.indexOf('match')>-1&&cls.contains('sc-match-dot')) aPass=true;
-      if(activity.indexOf('championship')>-1&&cls.contains('sc-match2-dot')) aPass=true;
-    }
-
-    /* ── Drill (training sub-filter) ── */
-    var dPass=false;
-    if(!cls.contains('sc-sess-dot')){
-      dPass=true; /* not a training dot – drill filter N/A */
-    } else {
-      if(drill[0]==='all'||(drill.length===1&&drill[0]==='session')){
-        dPass=cls.contains('sc-all-dot');
-      } else {
-        if(drill.indexOf('session')>-1&&cls.contains('sc-all-dot')) dPass=true;
-        if(drill.indexOf('wu')>-1&&cls.contains('sc-cdrillwu-dot')) dPass=true;
-        if(drill.indexOf('ssg')>-1&&cls.contains('sc-cdrillssg-dot')) dPass=true;
-        if(drill.indexOf('poss')>-1&&cls.contains('sc-cdrillposs-dot')) dPass=true;
-        if(drill.indexOf('cg')>-1&&cls.contains('sc-cdrillcg-dot')) dPass=true;
-      }
-    }
-
-    /* ── Status ── */
-    var sPass=false;
-    if(status[0]==='all'){
-      sPass=true;
-    } else {
-      if(status.indexOf('full')>-1&&cls.contains('sc-full')) sPass=true;
-      if(status.indexOf('mod')>-1&&cls.contains('sc-mod')) sPass=true;
-      if(status.indexOf('rtp')>-1&&cls.contains('sc-rtp')) sPass=true;
-    }
-
-    /* ── Dates ── */
-    var dtPass=true;
-    if(dateActClasses!==null){
-      dtPass=false;
-      var actCls=['sc-sess-dot','sc-match-dot','sc-csess-dot','sc-match2-dot'];
-      for(var j=0;j<actCls.length;j++){
-        if(cls.contains(actCls[j])&&dateActClasses[actCls[j]]){dtPass=true;break;}
-      }
-    }
-
-    var visible=pPass&&aPass&&dPass&&sPass&&dtPass;
-    dot.style.display=visible?'block':'none';
-  });
+  /* Scatter dots are rendered dynamically by _renderScatterDots() which already applies
+     all filters (personnel, activity, drill, status, dates) during entry collection.
+     Re-render the scatter to pick up any filter state changes. */
+  try{ if(typeof updateScatterAxes==='function') updateScatterAxes(); }catch(e){}
   /* Keep drill bar avg in sync with drill filter */
   renderDrillBars();
 }
@@ -3334,46 +3176,6 @@ function _buildPlayerDropdown(){
     if(found) sel.value = cur;
   }
 }
-
-/* ── Init on load ────────────────────────────────────────────── */
-document.addEventListener('DOMContentLoaded',function(){
-  _buildPlayerDropdown(); /* populate all 30 players from PLAYER_META */
-  _buildDrillPanel();    /* populate all drills from SESSION_DB */
-  document.querySelectorAll('.sc-dot').forEach(function(d){d.style.display='block';});
-  Object.keys(MS_TITLES).forEach(updateLabel);
-  _updateAllFilterOptions(); /* initialise all filter panels based on default selections */
-  lbRender();
-  renderDrillCards();
-  renderDrillBars();
-  renderPlayerProfile();
-  renderSessionVerdict();
-  renderACWRFlags();
-  renderFullTable();
-  /* Sync global header fixture to default session */
-  var _sess0=SESSION_DB[G.session];
-  if(_sess0){
-    var _hdr=document.querySelector('.hdr-match');
-    if(_hdr)_hdr.innerHTML='Next fixture: <strong>'+(_sess0.nextFixture||'TBC')+'</strong>';
-    var _att=document.querySelector('.att-note');
-    if(_att&&_sess0.attendance){
-      var _p0=_sess0.attendance.split('/');var _pr=parseInt(_p0[0])||0;var _to=parseInt(_p0[1])||0;var _ab=_to-_pr;
-      if(_ab<=0){_att.style.display='none';}else{_att.style.display='';_att.textContent='⚠ '+_ab+' absent from '+_to+'-player panel — session averages based on '+_pr+' GPS readings';}
-    }
-  }
-  var badge=document.querySelector('.badge');
-  if(badge) badge.textContent='Baked · 1-May-2026';
-  function _runLive(){ return loadLiveData()
-    .then(function(){ applyFilters(); refreshAll(); renderSessionVerdict(); renderACWRFlags(); renderFullTable(); }); }
-  _runLive().catch(function(e){
-    console.warn('Live data load failed (will retry in 8s):',e);
-    applyFilters(); refreshAll(); renderSessionVerdict(); renderACWRFlags(); renderFullTable();
-    setTimeout(function(){
-      if(!Object.keys(window.LIVE_SESSION_DATA||{}).length){
-        _runLive().catch(function(e2){ console.error('Live data load failed (final):',e2); var eb=document.getElementById('fetch-error-banner');if(eb) eb.style.display='block'; });
-      }
-    }, 8000);
-  });
-});
 
 /* ══════════════════════════════════════════════════════════════
    STANDOUT PERFORMERS — data + render
