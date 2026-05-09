@@ -2395,6 +2395,8 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
 
   <!-- Match session warning banner — shown when a match is selected -->
   <div id="p15-match-warning" style="display:none;background:rgba(239,159,39,.1);border:1px solid rgba(239,159,39,.3);border-radius:6px;padding:8px 12px;margin-bottom:14px;font-size:9px;color:#EF9F27">⚠ Match session selected — training quality thresholds do not apply to match output. Switch to a training session for accurate quality assessment.</div>
+  <!-- Mixed session note — shown when session contains significant match rows -->
+  <div id="p15-mixed-warning" style="display:none;background:rgba(100,181,246,.07);border:1px solid rgba(100,181,246,.25);border-radius:6px;padding:8px 12px;margin-bottom:14px;font-size:9px;color:#64B5F6">ℹ Mixed session — <span id="p15-mixed-detail"></span> players recorded as match rows (in-house game / challenge match) and are excluded from training quality metrics. Showing training-only rows below. Select "Auto (most recent training)" to view the last full training session.</div>
 
   <!-- [1] QUALITY SIGNAL CARDS -->
   <div class="cards c4">
@@ -7075,8 +7077,14 @@ function updateTrainingQualityPage(){
 
   /* FIX #11: Match session warning */
   var _sessIsMatch=sessRows&&sessRows.length&&sessRows.every(function(r){return r.matchType==='Match';});
+  var _matchCount=sessRows?sessRows.filter(function(r){return r.matchType==='Match';}).length:0;
+  var _isMixed=!_sessIsMatch&&_matchCount>0&&trainRows.length<sessRows.length*0.5;
   var _mwEl=document.getElementById('p15-match-warning');
   if(_mwEl) _mwEl.style.display=_sessIsMatch?'block':'none';
+  var _mixEl=document.getElementById('p15-mixed-warning');
+  var _mixDt=document.getElementById('p15-mixed-detail');
+  if(_mixEl) _mixEl.style.display=(_isMixed&&!_sessIsMatch)?'block':'none';
+  if(_mixDt&&_isMixed) _mixDt.textContent=_matchCount;
 
   /* FIX #10: Context-aware quality labels — check squad ACWR for deload context */
   var _sqAcwrVals=Object.values(LIVE_ACWR).map(function(r){return r.acwr||0;}).filter(Boolean);
