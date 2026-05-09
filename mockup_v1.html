@@ -328,11 +328,13 @@ input[name="p0bm"],input[name="p0cv"]{position:absolute;opacity:0;width:0;height
 .pv-sub-pvt,.pv-sub-pvtap{display:none}
 #p0:has(#cv-pvt:checked) .pv-sub-pvt{display:flex}
 #p0:has(#cv-pvta:checked) .pv-sub-pvtap,
-#p0:has(#cv-pvpa:checked) .pv-sub-pvtap{display:flex}
+#p0:has(#cv-pvpa:checked) .pv-sub-pvtap,
+#p0:has(#cv-player:checked) .pv-sub-pvtap{display:flex}
 /* extend player selector rows to p34 (Comparison page) */
 :root:has(#cv-pvt:checked) #p34 .pv-sub-pvt{display:flex}
 :root:has(#cv-pvta:checked) #p34 .pv-sub-pvtap,
-:root:has(#cv-pvpa:checked) #p34 .pv-sub-pvtap{display:flex}
+:root:has(#cv-pvpa:checked) #p34 .pv-sub-pvtap,
+:root:has(#cv-player:checked) #p34 .pv-sub-pvtap{display:flex}
 .pv-sel{background:var(--s2);border:1px solid var(--border2);color:var(--text);font-size:10px;padding:3px 7px;border-radius:4px;cursor:pointer;font-family:var(--inter)}
 /* duration mismatch warning */
 .dur-warn{display:none;align-items:center;gap:8px;background:rgba(239,159,39,.07);border:1px solid rgba(239,159,39,.28);border-left:3px solid var(--amber);border-radius:6px;padding:8px 12px;margin-bottom:8px}
@@ -1865,7 +1867,7 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
       <!-- ── CHART 2: MONOTONY / STRAIN ── -->
       <div>
         <div style="font-size:8px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px">Rolling HMLD · Monotony · Strain</div>
-        <svg width="100%" viewBox="0 0 560 130" style="display:block;overflow:visible">
+        <svg width="100%" viewBox="0 0 560 130" style="display:block;overflow:hidden">
           <!-- Grid lines -->
           <line x1="45" y1="108" x2="515" y2="108" stroke="rgba(160,185,205,0.2)" stroke-width="0.8"/>
           <line x1="45" y1="58.0" x2="515" y2="58.0" stroke="rgba(160,185,205,0.07)" stroke-width="0.5"/>
@@ -3630,9 +3632,17 @@ function refreshACWR(){
 
 function refreshMS(){
   var xs=[45.0,112.1,179.3,246.4,313.6,380.7,447.9,515.0];
-  var YB=108,R=100,MM=3.0,BW=24,GW=14;
+  var YB=108,R=100,BW=24,GW=14;
   var cfg=METRIC_CFG[_metric];
   var LM=_density?cfg.lmD:cfg.lm;
+  /* Dynamic MM: mono now stores hmldMin (15-25 m/min), not monotony ratio (1-3).
+     Compute max across all active players to prevent SVG overflow. */
+  var _mVals=[];
+  for(var _mp=0;_mp<3;_mp++){
+    if(_players[_mp]){var _td=getD(_players[_mp],_metric,_density);_mVals=_mVals.concat(_td.mono.filter(function(v){return v>0;}));}
+  }
+  var _mMax=_mVals.length?Math.max.apply(null,_mVals):1;
+  var MM=_mMax>0?_mMax*1.4:30;
 
   // Session bars (weekly bars removed)
   var d0=getD(_players[0],_metric,_density);
