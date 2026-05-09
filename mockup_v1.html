@@ -8788,11 +8788,22 @@ function renderProfPerfBars(pk){
   <div class="pg-sub">Match performance · live GPS · auto-selects most recent match session</div>
 
   <!-- SESSION SELECTOR -->
-  <div style="display:flex;align-items:center;gap:12px;margin-bottom:22px;flex-wrap:wrap">
-    <select id="md-sess-sel" class="lb-sel" style="min-width:240px" onchange="try{_renderMDScorecardForSession(this.value);}catch(e){}">
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap">
+    <select id="md-sess-sel" class="lb-sel" style="min-width:240px" onchange="try{_mdSessKey=this.value;_rebuildMDDrillList(this.value);_renderMDScorecardForSession(this.value);}catch(e){}">
       <option>Loading live data…</option>
     </select>
     <span style="font-size:9px;color:var(--muted)">Selects from all match sessions with GPS data</span>
+  </div>
+
+  <!-- DRILL FILTER PANEL -->
+  <div id="md-drill-panel" style="display:none;margin-bottom:22px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap">
+      <span class="sec-label" style="margin:0">Include drills</span>
+      <button onclick="try{document.querySelectorAll('#md-drill-checks input').forEach(function(c){c.checked=true;});_renderMDScorecardForSession(_mdSessKey);}catch(e){}" style="font-size:9px;padding:2px 8px;border-radius:3px;border:1px solid var(--border);background:var(--s2);color:var(--dim);cursor:pointer">All</button>
+      <button onclick="try{document.querySelectorAll('#md-drill-checks input').forEach(function(c){c.checked=false;});_renderMDScorecardForSession(_mdSessKey);}catch(e){}" style="font-size:9px;padding:2px 8px;border-radius:3px;border:1px solid var(--border);background:var(--s2);color:var(--dim);cursor:pointer">None</button>
+      <span style="font-size:9px;color:var(--muted)">Selected drills are combined — uncheck warm-up to remove it</span>
+    </div>
+    <div id="md-drill-checks" style="display:flex;gap:6px;flex-wrap:wrap"></div>
   </div>
 
   <!-- NO DATA NOTICE -->
@@ -8976,7 +8987,7 @@ function renderMDScorecard(){
     });
   }
 
-  /* Sort descending by date key (dYYYYMMDD string sorts correctly) */
+  /* Sort descending by date key */
   matchKeys.sort(function(a,b){return b.key.localeCompare(a.key);});
 
   /* ── Populate selector ── */
@@ -9001,30 +9012,131 @@ function renderMDScorecard(){
   }
   _mdSessKey = sel.value;
 
+  /* Build drill list first (so render can read checkbox state) */
+  _rebuildMDDrillList(_mdSessKey);
   _renderMDScorecardForSession(_mdSessKey);
+}
+
+/* ── Populate drill checkboxes for a session ── */
+function _rebuildMDDrillList(sessKey){
+  var panel = document.getElementById('md-drill-panel');
+  var checks = document.getElementById('md-drill-checks');
+  if(!panel||!checks) return;
+
+  var dpd = window.LIVE_DRILL_PLAYER_DATA && window.LIVE_DRILL_PLAYER_DATA[sessKey];
+  if(!dpd||!Object.keys(dpd).length){
+    panel.style.display = 'none';
+    return;
+  }
+  panel.style.display = '';
+
+  /* Get drill slugs + display names */
+  var drills = Object.keys(dpd).map(function(slug){
+    var players = Object.keys(dpd[slug]||{});
+    var name = players.length ? (dpd[slug][players[0]].name || slug) : slug;
+    return {slug:slug, name:name};
+  });
+
+  /* Sort: match halves first, then warm-up, then alpha */
+  drills.sort(function(a,b){
+    var al=a.name.toLowerCase(), bl=b.name.toLowerCase();
+    var aH=al.indexOf('half')>-1||al.indexOf('1st')>-1||al.indexOf('2nd')>-1;
+    var bH=bl.indexOf('half')>-1||bl.indexOf('1st')>-1||bl.indexOf('2nd')>-1;
+    var aW=al.indexOf('warm')>-1||al.indexOf('w/u')>-1||al.indexOf('wu')>-1;
+    var bW=bl.indexOf('warm')>-1||bl.indexOf('w/u')>-1||bl.indexOf('wu')>-1;
+    if(aH&&!bH) return -1; if(!aH&&bH) return 1;
+    if(!aW&&bW) return -1; if(aW&&!bW) return 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  var html = '';
+  drills.forEach(function(d){
+    var isWu = d.name.toLowerCase().indexOf('warm')>-1||d.name.toLowerCase().indexOf('w/u')>-1;
+    /* Default: all checked — warm-up included */
+    html += '<label style="display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--text);cursor:pointer;padding:4px 10px;background:var(--s2);border:1px solid var(--border);border-radius:4px;white-space:nowrap">'
+      + '<input type="checkbox" value="' + d.slug + '" checked onchange="try{_renderMDScorecardForSession(_mdSessKey);}catch(e){}">'
+      + '<span>' + _escHtml(d.name) + '</span>'
+      + '</label>';
+  });
+  checks.innerHTML = html;
+}
+
+/* ── Get selected drill slugs (null = no panel / use full session) ── */
+function _getMDSelectedDrills(){
+  var checks = document.getElementById('md-drill-checks');
+  var panel  = document.getElementById('md-drill-panel');
+  if(!panel || panel.style.display==='none' || !checks) return null;
+  var boxes = checks.querySelectorAll('input[type=checkbox]');
+  if(!boxes.length) return null;
+  var selected = [];
+  boxes.forEach(function(cb){ if(cb.checked) selected.push(cb.value); });
+  return selected;
+}
+
+/* ── Aggregate player rows from selected drills ── */
+function _aggregateMDDrillRows(sessKey, selectedSlugs){
+  var dpd = window.LIVE_DRILL_PLAYER_DATA && window.LIVE_DRILL_PLAYER_DATA[sessKey];
+  if(!dpd || !selectedSlugs.length) return [];
+
+  var agg = {}; /* playerName → {dur,td,hmld,hsr,sprint,maxSpd} */
+  selectedSlugs.forEach(function(slug){
+    var sd = dpd[slug]; if(!sd) return;
+    Object.keys(sd).forEach(function(pn){
+      var d = sd[pn];
+      if(!agg[pn]) agg[pn] = {player:pn, dur:0, td:0, hmld:0, hsr:0, sprint:0, maxSpd:0};
+      agg[pn].dur    += (d.dur||0);
+      agg[pn].td     += (d.td||0);
+      agg[pn].hmld   += (d.hmld||0);
+      agg[pn].hsr    += (d.hsr||0);
+      agg[pn].sprint += (d.sprint||0);
+      if((d.maxSpd||0) > agg[pn].maxSpd) agg[pn].maxSpd = d.maxSpd;
+    });
+  });
+
+  /* Merge pos + acc/dec from LIVE_SESSION_DATA (not available at drill level) */
+  var sessRows = (window.LIVE_SESSION_DATA && window.LIVE_SESSION_DATA[sessKey]) || [];
+  var sessMap  = {};
+  sessRows.forEach(function(r){ sessMap[r.player] = r; });
+
+  return Object.values(agg).map(function(p){
+    var sr = sessMap[p.player];
+    if(sr){ p.pos=sr.pos; p.acc=sr.acc||0; p.dec=sr.dec||0; p.matchType=sr.matchType; }
+    else   { p.pos='mid'; p.acc=0; p.dec=0; }
+    p.tdMin   = p.dur>0 ? parseFloat((p.td/p.dur).toFixed(1))   : 0;
+    p.hmldMin = p.dur>0 ? parseFloat((p.hmld/p.dur).toFixed(1)) : 0;
+    p.hsrMin  = p.dur>0 ? parseFloat((p.hsr/p.dur).toFixed(2))  : 0;
+    return p;
+  });
 }
 
 function _renderMDScorecardForSession(sessKey){
   if(!sessKey) return;
   _mdSessKey = sessKey;
 
-  var rows = (window.LIVE_SESSION_DATA && window.LIVE_SESSION_DATA[sessKey]) || [];
-  var sess = SESSION_DB[sessKey] || {};
+  /* ── Decide data source: drill aggregation or full session ── */
+  var selectedDrills = _getMDSelectedDrills();
+  var usingDrills = selectedDrills !== null;
+  var rows;
+  if(usingDrills){
+    rows = _aggregateMDDrillRows(sessKey, selectedDrills);
+  } else {
+    rows = (window.LIVE_SESSION_DATA && window.LIVE_SESSION_DATA[sessKey]) || [];
+  }
 
-  var noData = document.getElementById('md-no-data');
-  var mainWrap = document.getElementById('md-main-wrap');
+  var noData  = document.getElementById('md-no-data');
+  var mainWrap= document.getElementById('md-main-wrap');
 
   if(!rows.length){
-    if(noData) noData.style.display = 'block';
+    if(noData)   noData.style.display   = 'block';
     if(mainWrap) mainWrap.style.display = 'none';
     return;
   }
-  if(noData) noData.style.display = 'none';
+  if(noData)   noData.style.display   = 'none';
   if(mainWrap) mainWrap.style.display = '';
 
   var n = rows.length;
   var HMLD_BENCH = 16.0;
-  var TD_BENCH = 9000;
+  var TD_BENCH   = 9000;
 
   /* Squad averages */
   var avgHmld    = rows.reduce(function(a,r){return a+(r.hmld||0);},0)/n;
@@ -9042,13 +9154,17 @@ function _renderMDScorecardForSession(sessKey){
   function _pctCol(p){return p>=90?'c-green':p>=75?'c-amber':'c-red';}
   function _hmldMinCol(v){return v>=HMLD_BENCH*0.9?'c-green':v>=HMLD_BENCH*0.75?'c-amber':'c-red';}
 
+  /* Drill-filter note in bench label when active */
+  var drillNote = usingDrills && selectedDrills.length < (Object.keys((window.LIVE_DRILL_PLAYER_DATA&&window.LIVE_DRILL_PLAYER_DATA[sessKey])||{}).length)
+    ? ' ('+selectedDrills.length+' drill'+(selectedDrills.length!==1?'s':'')+' selected)' : '';
+
   var el;
   el=document.getElementById('md-n-players');    if(el) el.textContent=n;
   el=document.getElementById('md-avg-hmld');     if(el){el.textContent=Math.round(avgHmld).toLocaleString()+' m';el.className='card-val '+_pctCol(hmldPct);}
   el=document.getElementById('md-avg-hmldmin');  if(el){el.textContent=avgHmldMin.toFixed(1)+' m/min';el.className='card-val '+_pctCol(hmldPct);}
-  el=document.getElementById('md-hmldmin-bench');if(el){el.textContent=hmldPct+'% of '+HMLD_BENCH.toFixed(1)+' m/min benchmark';el.style.color=hmldPct>=90?'var(--green)':hmldPct>=75?'var(--amber)':'var(--red)';}
+  el=document.getElementById('md-hmldmin-bench');if(el){el.textContent=hmldPct+'% of '+HMLD_BENCH.toFixed(1)+' m/min benchmark'+drillNote;el.style.color=hmldPct>=90?'var(--green)':hmldPct>=75?'var(--amber)':'var(--red)';}
   el=document.getElementById('md-avg-td');       if(el){el.textContent=Math.round(avgTD).toLocaleString()+' m';el.className='card-val '+_pctCol(tdPct);}
-  el=document.getElementById('md-td-bench');     if(el){el.textContent=tdPct+'% of '+TD_BENCH.toLocaleString()+'m benchmark';el.style.color=tdPct>=90?'var(--green)':tdPct>=75?'var(--amber)':'var(--red)';}
+  el=document.getElementById('md-td-bench');     if(el){el.textContent=tdPct+'% of '+TD_BENCH.toLocaleString()+'m benchmark'+drillNote;el.style.color=tdPct>=90?'var(--green)':tdPct>=75?'var(--amber)':'var(--red)';}
   el=document.getElementById('md-avg-maxspd');   if(el) el.textContent=avgMaxSpd>0?avgMaxSpd.toFixed(1)+' m/s':'—';
   el=document.getElementById('md-avg-hsr');      if(el) el.textContent=Math.round(avgHSR).toLocaleString()+' m';
   el=document.getElementById('md-avg-acc');      if(el) el.textContent=Math.round(avgAcc);
@@ -9062,8 +9178,7 @@ function _renderMDScorecardForSession(sessKey){
     posBuckets[b].push(r);
   });
   ['def','mid','fwd'].forEach(function(pos){
-    var pr = posBuckets[pos];
-    var n2 = pr.length;
+    var pr = posBuckets[pos], n2 = pr.length;
     var avH = n2?pr.reduce(function(a,r){return a+(r.hmldMin||0);},0)/n2:0;
     var avT = n2?pr.reduce(function(a,r){return a+(r.tdMin||0);},0)/n2:0;
     el=document.getElementById('md-pos-'+pos+'-hmldmin');
@@ -9072,7 +9187,7 @@ function _renderMDScorecardForSession(sessKey){
     el=document.getElementById('md-pos-'+pos+'-tdmin'); if(el) el.textContent=n2?'TD/min '+avT.toFixed(1)+' m/min':'';
   });
 
-  /* ── Half data ── */
+  /* ── Half data (always from raw LIVE_HALF_DATA regardless of drill filter) ── */
   var halfData = window.LIVE_HALF_DATA && window.LIVE_HALF_DATA[sessKey];
   var halfWrap = document.getElementById('md-half-wrap');
   var hasHalf  = halfData && (Object.keys(halfData.h1||{}).length>0 || Object.keys(halfData.h2||{}).length>0);
@@ -9083,7 +9198,6 @@ function _renderMDScorecardForSession(sessKey){
     var h2Rows = Object.values(halfData.h2||{});
     ['h1','h2'].forEach(function(hk){
       var hR = hk==='h1'?h1Rows:h2Rows;
-      var hn = hR.length||1;
       var avHH = hR.length?hR.reduce(function(a,r){return a+(r.hmldMin||0);},0)/hR.length:0;
       var avTH = hR.length?hR.reduce(function(a,r){return a+(r.tdMin||0);},0)/hR.length:0;
       el=document.getElementById('md-'+hk+'-hmldmin');
@@ -9091,7 +9205,6 @@ function _renderMDScorecardForSession(sessKey){
       el=document.getElementById('md-'+hk+'-n');     if(el) el.textContent=hR.length+' player'+(hR.length!==1?'s':'');
       el=document.getElementById('md-'+hk+'-tdmin'); if(el) el.textContent=hR.length?'TD/min '+avTH.toFixed(1)+' m/min':'';
     });
-    /* Drop-off */
     if(h1Rows.length && h2Rows.length){
       var h1H = h1Rows.reduce(function(a,r){return a+(r.hmldMin||0);},0)/h1Rows.length;
       var h2H = h2Rows.reduce(function(a,r){return a+(r.hmldMin||0);},0)/h2Rows.length;
@@ -9111,6 +9224,7 @@ function _renderMDScorecardForSession(sessKey){
   if(!tbody) return;
 
   var sorted = rows.slice().sort(function(a,b){return (b.hmld||0)-(a.hmld||0);});
+  var accDecNote = usingDrills ? '<span style="font-size:8px;color:var(--muted)"> (full sess)</span>' : '';
   var html = '';
   sorted.forEach(function(r){
     var pmKey = window._PM_NAME_MAP && window._PM_NAME_MAP[_normPlayerName(r.player)];
@@ -9138,8 +9252,8 @@ function _renderMDScorecardForSession(sessKey){
       + '</td>'
       + '<td style="padding:7px 10px;font-size:10px;text-align:right">' + Math.round(r.hsr||0).toLocaleString() + '</td>'
       + '<td style="padding:7px 10px;font-size:10px;text-align:right">' + (r.maxSpd&&r.maxSpd>0?r.maxSpd.toFixed(1):'—') + '</td>'
-      + '<td style="padding:7px 10px;font-size:9.5px;text-align:center;color:var(--dim)">' + Math.round(r.acc||0) + ' / ' + Math.round(r.dec||0) + '</td>'
-      + '<td style="padding:7px 10px;font-size:10px;font-weight:600;text-align:center;' + daStyle + '">' + (daRatio!==null?daRatio.toFixed(2):'—') + '</td>'
+      + '<td style="padding:7px 10px;font-size:9.5px;text-align:center;color:var(--dim)">' + Math.round(r.acc||0) + ' / ' + Math.round(r.dec||0) + accDecNote + '</td>'
+      + '<td style="padding:7px 10px;font-size:10px;font-weight:600;text-align:center;' + daStyle + '">' + (daRatio!==null?daRatio.toFixed(2):'—') + accDecNote + '</td>'
       + '<td style="padding:7px 10px;font-size:10px;font-weight:700;text-align:right;color:' + barCol + '">' + hmldPctP + '%</td>'
       + '</tr>';
   });
