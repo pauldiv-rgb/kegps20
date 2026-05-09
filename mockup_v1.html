@@ -1534,10 +1534,7 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
         </select>
         <select class="lb-sel" id="lb-drill" onchange="lbRender()">
           <option value="sess">Full session</option>
-          <option value="wu">Warm-Up</option>
-          <option value="ssg">SSG</option>
-          <option value="poss">Possession</option>
-          <option value="cg">Conditioned Game</option>
+          <option value="all_drills" disabled style="color:var(--muted)">── Drill type filter (pending) ──</option>
         </select>
         <select class="lb-sel" id="lb-date" onchange="lbRender()">
           <option value="d20260429">Wed 29 Apr 2026 — Championship SF</option>
@@ -7762,6 +7759,8 @@ function updateDecAccChart(){
     var nEl=document.getElementById('da-note');
     if(nEl) nEl.textContent=last>1.15?'Dec load elevated — eccentric risk flagged':last>1.0?'Decel slightly dominant — monitor':'Deceleration load balanced';
   }
+  /* Restore per-player sparklines on top of the squad baseline — prevents ID collision */
+  try{refreshDecAcc();}catch(e){}
 }
 
 /* ── ACWR strip: populate Sprint/min and HMLD/min current values ── */
