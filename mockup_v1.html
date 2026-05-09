@@ -6140,8 +6140,10 @@ function loadLiveData(){
         var mDate=new Date(mDateRaw);
         if(mDate<today) mDate=new Date(today.getFullYear()+1, mMon, mDay);
         var result=(mv[3]||'').trim();
-        /* Future match = no result yet */
-        if(mDate>=today && (!result||result==='N/A'||result==='')){
+        /* Future match = no result yet, and within 180 days (prevents pre-season dates
+           from prior year appearing as far-future fixtures after year-bumping) */
+        var maxFuture=new Date(today.getTime()+180*24*60*60*1000);
+        if(mDate>=today && mDate<=maxFuture && (!result||result==='N/A'||result==='')){
           var opp=(mv[1]||'').trim();
           var comp=(mv[2]||'').trim();
           var venue=(mv[5]||'').trim();
@@ -9049,12 +9051,18 @@ function _rebuildMDDrillList(sessKey){
     return a.name.localeCompare(b.name);
   });
 
+  /* Default: check match-half drills only; fall back to all if no match halves exist */
+  var hasMatchHalves = drills.some(function(d){
+    var sl=d.slug.toLowerCase();
+    return sl.indexOf('match_1st')>-1||sl.indexOf('match_2nd')>-1||sl.indexOf('1st_half')>-1||sl.indexOf('2nd_half')>-1;
+  });
   var html = '';
   drills.forEach(function(d){
-    var isWu = d.name.toLowerCase().indexOf('warm')>-1||d.name.toLowerCase().indexOf('w/u')>-1;
-    /* Default: all checked — warm-up included */
+    var sl=d.slug.toLowerCase();
+    var isMatchHalf=sl.indexOf('match_1st')>-1||sl.indexOf('match_2nd')>-1||sl.indexOf('1st_half')>-1||sl.indexOf('2nd_half')>-1;
+    var defaultChecked = hasMatchHalves ? isMatchHalf : true;
     html += '<label style="display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--text);cursor:pointer;padding:4px 10px;background:var(--s2);border:1px solid var(--border);border-radius:4px;white-space:nowrap">'
-      + '<input type="checkbox" value="' + d.slug + '" checked onchange="try{_renderMDScorecardForSession(_mdSessKey);}catch(e){}">'
+      + '<input type="checkbox" value="' + d.slug + '"' + (defaultChecked?' checked':'') + ' onchange="try{_renderMDScorecardForSession(_mdSessKey);}catch(e){}">'
       + '<span>' + _escHtml(d.name) + '</span>'
       + '</label>';
   });
