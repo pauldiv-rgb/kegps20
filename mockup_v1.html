@@ -3953,7 +3953,7 @@ function gfChange(){
   var siType=document.getElementById('si-type'); if(siType) siType.textContent=sess.typeLabel;
   var siDur=document.getElementById('si-dur'); if(siDur) siDur.textContent=sess.duration+' min';
   var siDrills=document.getElementById('si-drills'); if(siDrills){var _dCnt=sess.drillCount!=null?sess.drillCount:(sess.drills?Object.keys(sess.drills).length:(window.LIVE_DRILL_PLAYER_DATA&&window.LIVE_DRILL_PLAYER_DATA[G.session]?Object.keys(window.LIVE_DRILL_PLAYER_DATA[G.session]).length:null));siDrills.textContent=_dCnt||'—';}
-  var siProx=document.getElementById('si-prox'); if(siProx) siProx.textContent=sess.matchProx||'—';
+  var siProx=document.getElementById('si-prox'); if(siProx){var _prox=sess.matchProx;if(!_prox||_prox==='MD'){var _fx=sess.nextFixture||'';var _mMatch=_fx.match(/(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i);if(_mMatch){var _MONTHS={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};var _mMo=_MONTHS[_mMatch[2].toLowerCase()];var _mDay=parseInt(_mMatch[1]);var _sk=G.session.replace(/^d/,'');var _sessYr=parseInt(_sk.substring(0,4));var _sessMo=parseInt(_sk.substring(4,6))-1;var _sessDy=parseInt(_sk.substring(6,8));var _matchDate=new Date(_sessYr,_mMo,_mDay);var _sessDate=new Date(_sessYr,_sessMo,_sessDy);var _diff=Math.round((_matchDate-_sessDate)/86400000);if(_diff===0)_prox='MD';else if(_diff>0)_prox='MD−'+_diff;else _prox='MD+'+Math.abs(_diff);}}siProx.textContent=_prox||'—';}
   var siFixture=document.getElementById('si-fixture'); if(siFixture) siFixture.textContent=sess.nextFixture||'—';
   var siAtt=document.getElementById('si-att'); if(siAtt) siAtt.textContent=sess.attendance||'—';
   /* Update global header fixture */
