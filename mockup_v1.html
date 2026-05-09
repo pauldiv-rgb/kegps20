@@ -41,13 +41,14 @@ input[name="page"]{position:absolute;opacity:0;width:0;height:0;pointer-events:n
 #rp14:checked~.nav .nb[for="rp14"],
 #rp8:checked~.nav .nb[for="rp8"],
 #rp34:checked~.nav .nb[for="rp34"],
-#rp13:checked~.nav .nb[for="rp13"]{color:var(--teal);border-bottom-color:var(--teal)}
+#rp13:checked~.nav .nb[for="rp13"],
+#rp50:checked~.nav .nb[for="rp50"]{color:var(--teal);border-bottom-color:var(--teal)}
 
 /* PAGES */
 .pg{display:none;padding:24px;max-width:1400px;margin:0 auto}
 #rp0:checked~.pg#p0,#rp37:checked~.pg#p34,#rp1:checked~.pg#p37,#rp15:checked~.pg#p1,
 #rp27:checked~.pg#p15,#rp14:checked~.pg#p27,#rp8:checked~.pg#p14,#rp34:checked~.pg#p8,
-#rp13:checked~.pg#pprof{display:block}
+#rp13:checked~.pg#pprof,#rp50:checked~.pg#pmd{display:block}
 
 /* PLAYER PROFILE PAGE */
 .prof-scatter-area{position:relative;height:260px;background:var(--s2);border-radius:8px;overflow:hidden;border:1px solid var(--border)}
@@ -812,6 +813,7 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
 <input type="radio" name="page" id="rp8">
 <input type="radio" name="page" id="rp34">
 <input type="radio" name="page" id="rp13">
+<input type="radio" name="page" id="rp50">
 
 <!-- DATA LOAD ERROR BANNER — hidden until a fetch failure is confirmed -->
 <div id="fetch-error-banner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9999;background:#7b1a1a;color:#ffcccc;font-size:10px;font-weight:600;padding:7px 16px;text-align:center;letter-spacing:.04em">
@@ -837,6 +839,7 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
   <label class="nb" for="rp8">6 · RTP readiness</label>
   <label class="nb" for="rp34">7 · Planning summary</label>
   <label class="nb" for="rp13">8 · Player profile</label>
+  <label class="nb" for="rp50">9 · MD Scorecard</label>
 </div>
 
 <!-- ═══════════════════════════════════════
@@ -3015,7 +3018,7 @@ document.addEventListener('DOMContentLoaded',function(){
   var badge=document.querySelector('.badge');
   if(badge) badge.textContent='Baked · 1-May-2026';
   function _runLive(){ return loadLiveData()
-    .then(function(){ applyFilters(); refreshAll(); renderSessionVerdict(); renderACWRFlags(); renderFullTable(); }); }
+    .then(function(){ applyFilters(); refreshAll(); renderSessionVerdict(); renderACWRFlags(); renderFullTable(); try{renderMDScorecard();}catch(e){console.warn('renderMDScorecard:',e);} }); }
   _runLive().catch(function(e){
     console.warn('Live data load failed (will retry in 8s):',e);
     applyFilters(); refreshAll(); renderSessionVerdict(); renderACWRFlags(); renderFullTable();
@@ -8775,6 +8778,375 @@ function renderProfPerfBars(pk){
   </div><!-- /grid -->
 
 </div><!-- /pprof -->
+
+<!-- ═══════════════════════════════════════
+     PAGE 9 — MD SCORECARD
+════════════════════════════════════════ -->
+<div class="pg" id="pmd">
+
+  <div class="pg-q">MD Scorecard</div>
+  <div class="pg-sub">Match performance · live GPS · auto-selects most recent match session</div>
+
+  <!-- SESSION SELECTOR -->
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:22px;flex-wrap:wrap">
+    <select id="md-sess-sel" class="lb-sel" style="min-width:240px" onchange="try{_renderMDScorecardForSession(this.value);}catch(e){}">
+      <option>Loading live data…</option>
+    </select>
+    <span style="font-size:9px;color:var(--muted)">Selects from all match sessions with GPS data</span>
+  </div>
+
+  <!-- NO DATA NOTICE -->
+  <div id="md-no-data" style="display:none;font-size:11px;color:var(--muted);padding:20px;background:var(--s1);border-radius:8px;border:1px solid var(--border);margin-bottom:16px">
+    No GPS data found for this session. Check live data has loaded and the session key matches LS_Squad_Load.
+  </div>
+
+  <div id="md-main-wrap">
+
+    <!-- HEADLINE CARDS -->
+    <div class="sec-label">Squad output</div>
+    <div class="cards c4" style="margin-bottom:22px">
+      <div class="card">
+        <div class="card-lbl">Players tracked</div>
+        <div class="card-val c-blue" id="md-n-players">—</div>
+        <div class="card-sub">GPS units active</div>
+      </div>
+      <div class="card">
+        <div class="card-lbl">Avg HMLD / match</div>
+        <div class="card-val" id="md-avg-hmld">—</div>
+        <div class="card-sub">High-metabolic load distance</div>
+      </div>
+      <div class="card">
+        <div class="card-lbl">Avg HMLD/min</div>
+        <div class="card-val" id="md-avg-hmldmin">—</div>
+        <div class="card-ind" id="md-hmldmin-bench" style="color:var(--dim)">— % of 16.0 benchmark</div>
+      </div>
+      <div class="card">
+        <div class="card-lbl">Avg Total Distance</div>
+        <div class="card-val" id="md-avg-td">—</div>
+        <div class="card-ind" id="md-td-bench" style="color:var(--dim)">— % of 9,000m benchmark</div>
+      </div>
+    </div>
+
+    <!-- SECONDARY CARDS -->
+    <div class="cards c4" style="margin-bottom:22px">
+      <div class="card">
+        <div class="card-lbl">Avg Max Speed</div>
+        <div class="card-val c-blue" id="md-avg-maxspd">—</div>
+        <div class="card-sub">m/s · squad average</div>
+      </div>
+      <div class="card">
+        <div class="card-lbl">Avg HSR Distance</div>
+        <div class="card-val c-green" id="md-avg-hsr">—</div>
+        <div class="card-sub">High-speed running m</div>
+      </div>
+      <div class="card">
+        <div class="card-lbl">Avg Acc events</div>
+        <div class="card-val" id="md-avg-acc">—</div>
+        <div class="card-sub">Accelerations</div>
+      </div>
+      <div class="card">
+        <div class="card-lbl">Avg Dec events</div>
+        <div class="card-val" id="md-avg-dec">—</div>
+        <div class="card-sub">Decelerations</div>
+      </div>
+    </div>
+
+    <!-- POSITION BREAKDOWN -->
+    <div class="sec-label">Position group — HMLD/min · TD/min</div>
+    <div class="cards c3" style="margin-bottom:22px">
+      <div class="card">
+        <div class="card-lbl">Defenders</div>
+        <div class="card-val" id="md-pos-def-hmldmin">—</div>
+        <div class="card-sub" id="md-pos-def-n">— players</div>
+        <div class="card-ind" id="md-pos-def-tdmin" style="color:var(--dim);font-size:9px"></div>
+      </div>
+      <div class="card">
+        <div class="card-lbl">Midfield</div>
+        <div class="card-val" id="md-pos-mid-hmldmin">—</div>
+        <div class="card-sub" id="md-pos-mid-n">— players</div>
+        <div class="card-ind" id="md-pos-mid-tdmin" style="color:var(--dim);font-size:9px"></div>
+      </div>
+      <div class="card">
+        <div class="card-lbl">Forwards</div>
+        <div class="card-val" id="md-pos-fwd-hmldmin">—</div>
+        <div class="card-sub" id="md-pos-fwd-n">— players</div>
+        <div class="card-ind" id="md-pos-fwd-tdmin" style="color:var(--dim);font-size:9px"></div>
+      </div>
+    </div>
+
+    <!-- HALF DATA (hidden if not available) -->
+    <div id="md-half-wrap" style="display:none">
+      <div class="sec-label">First vs second half — HMLD/min</div>
+      <div class="cards c3" style="margin-bottom:22px">
+        <div class="card">
+          <div class="card-lbl">First half</div>
+          <div class="card-val" id="md-h1-hmldmin">—</div>
+          <div class="card-sub" id="md-h1-n">—</div>
+          <div class="card-ind" id="md-h1-tdmin" style="color:var(--dim);font-size:9px"></div>
+        </div>
+        <div class="card">
+          <div class="card-lbl">Second half</div>
+          <div class="card-val" id="md-h2-hmldmin">—</div>
+          <div class="card-sub" id="md-h2-n">—</div>
+          <div class="card-ind" id="md-h2-tdmin" style="color:var(--dim);font-size:9px"></div>
+        </div>
+        <div class="card">
+          <div class="card-lbl">H2 vs H1 (HMLD/min)</div>
+          <div class="card-val" id="md-half-dropoff">—</div>
+          <div class="card-sub">Second-half change</div>
+          <div class="card-ind" style="color:var(--dim);font-size:9px">≤−10% = acceptable · &gt;−20% = fatigue flag</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PER-PLAYER TABLE -->
+    <div class="sec-label" style="margin-bottom:10px">Individual breakdown — sorted by HMLD</div>
+    <div style="background:var(--s1);border:1px solid var(--border);border-radius:8px;overflow:auto;margin-bottom:22px">
+      <table style="width:100%;border-collapse:collapse;min-width:700px">
+        <thead>
+          <tr style="border-bottom:1px solid var(--border)">
+            <th style="font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);padding:8px 10px;text-align:left">Player</th>
+            <th style="font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);padding:8px 10px;text-align:left">Pos</th>
+            <th style="font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);padding:8px 10px;text-align:right">TD (m)</th>
+            <th style="font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);padding:8px 10px;text-align:right">HMLD (m)</th>
+            <th style="font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);padding:8px 10px">HMLD/min → vs 16.0</th>
+            <th style="font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);padding:8px 10px;text-align:right">HSR (m)</th>
+            <th style="font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);padding:8px 10px;text-align:right">Max Spd</th>
+            <th style="font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);padding:8px 10px;text-align:center">Acc / Dec</th>
+            <th style="font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);padding:8px 10px;text-align:center">Dec:Acc</th>
+            <th style="font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);padding:8px 10px;text-align:right">vs bench</th>
+          </tr>
+        </thead>
+        <tbody id="md-player-tbody">
+          <tr><td colspan="10" style="color:var(--muted);padding:16px;text-align:center;font-size:10px">Waiting for live data…</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div style="font-size:9px;color:var(--muted);display:flex;gap:18px;flex-wrap:wrap;margin-bottom:8px">
+      <span>Benchmarks: HMLD/min = 16.0 m/min · TD = 9,000m (full game)</span>
+      <span><span style="color:#81C784">●</span> ≥90% of benchmark</span>
+      <span><span style="color:#EF9F27">●</span> ≥75%</span>
+      <span><span style="color:#E24B4A">●</span> &lt;75%</span>
+      <span style="color:var(--muted)">Dec:Acc: &gt;1.15 = watch · &gt;1.0 = elevated</span>
+    </div>
+
+  </div><!-- /md-main-wrap -->
+
+</div><!-- /pmd -->
+
+<script>
+/* ═══════════════════════════════════════════════════════════
+   PAGE 9 — MD SCORECARD  (live session data, match sessions only)
+   ══════════════════════════════════════════════════════════ */
+
+var _mdSessKey = null; /* currently selected match session key */
+
+function renderMDScorecard(){
+  var sel = document.getElementById('md-sess-sel');
+  if(!sel) return;
+
+  /* ── Collect all match sessions ── */
+  var matchKeys = [];
+
+  /* From SESSION_DB */
+  Object.keys(SESSION_DB).forEach(function(k){
+    var s = SESSION_DB[k];
+    var tl = (s.typeLabel||'').toLowerCase();
+    if(tl.indexOf('championship')>-1 || tl.indexOf('challenge')>-1 ||
+       (tl.indexOf('match')>-1 && tl.indexOf('field')===-1)){
+      matchKeys.push({key:k, label:(s.label||k)+' · '+s.typeLabel});
+    }
+  });
+
+  /* From LIVE_SESSION_DATA — sessions not in SESSION_DB where ≥50% rows are match type */
+  if(window.LIVE_SESSION_DATA){
+    Object.keys(window.LIVE_SESSION_DATA).forEach(function(k){
+      if(matchKeys.some(function(m){return m.key===k;})) return;
+      var rows = window.LIVE_SESSION_DATA[k]||[];
+      if(!rows.length) return;
+      var matchRows = rows.filter(function(r){return _isMatchType(r.matchType);});
+      if(matchRows.length >= Math.ceil(rows.length * 0.5)){
+        var ds = k.replace('d','');
+        var d = new Date(parseInt(ds.substr(0,4)), parseInt(ds.substr(4,2))-1, parseInt(ds.substr(6,2)));
+        var days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+        var mons=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        matchKeys.push({key:k, label:days[d.getDay()]+' '+d.getDate()+' '+mons[d.getMonth()]+' · Match'});
+      }
+    });
+  }
+
+  /* Sort descending by date key (dYYYYMMDD string sorts correctly) */
+  matchKeys.sort(function(a,b){return b.key.localeCompare(a.key);});
+
+  /* ── Populate selector ── */
+  var prevVal = _mdSessKey || sel.value;
+  sel.innerHTML = '';
+  if(!matchKeys.length){
+    sel.innerHTML = '<option value="">No match sessions found in live data</option>';
+    return;
+  }
+  matchKeys.forEach(function(m){
+    var opt = document.createElement('option');
+    opt.value = m.key;
+    opt.textContent = m.label;
+    sel.appendChild(opt);
+  });
+
+  /* Restore previous selection or default to most recent */
+  if(prevVal && matchKeys.some(function(m){return m.key===prevVal;})){
+    sel.value = prevVal;
+  } else {
+    sel.value = matchKeys[0].key;
+  }
+  _mdSessKey = sel.value;
+
+  _renderMDScorecardForSession(_mdSessKey);
+}
+
+function _renderMDScorecardForSession(sessKey){
+  if(!sessKey) return;
+  _mdSessKey = sessKey;
+
+  var rows = (window.LIVE_SESSION_DATA && window.LIVE_SESSION_DATA[sessKey]) || [];
+  var sess = SESSION_DB[sessKey] || {};
+
+  var noData = document.getElementById('md-no-data');
+  var mainWrap = document.getElementById('md-main-wrap');
+
+  if(!rows.length){
+    if(noData) noData.style.display = 'block';
+    if(mainWrap) mainWrap.style.display = 'none';
+    return;
+  }
+  if(noData) noData.style.display = 'none';
+  if(mainWrap) mainWrap.style.display = '';
+
+  var n = rows.length;
+  var HMLD_BENCH = 16.0;
+  var TD_BENCH = 9000;
+
+  /* Squad averages */
+  var avgHmld    = rows.reduce(function(a,r){return a+(r.hmld||0);},0)/n;
+  var avgHmldMin = rows.reduce(function(a,r){return a+(r.hmldMin||0);},0)/n;
+  var avgTD      = rows.reduce(function(a,r){return a+(r.td||0);},0)/n;
+  var avgTDMin   = rows.reduce(function(a,r){return a+(r.tdMin||0);},0)/n;
+  var avgHSR     = rows.reduce(function(a,r){return a+(r.hsr||0);},0)/n;
+  var avgMaxSpd  = rows.reduce(function(a,r){return a+(r.maxSpd||0);},0)/n;
+  var avgAcc     = rows.reduce(function(a,r){return a+(r.acc||0);},0)/n;
+  var avgDec     = rows.reduce(function(a,r){return a+(r.dec||0);},0)/n;
+
+  var hmldPct = Math.round(avgHmldMin / HMLD_BENCH * 100);
+  var tdPct   = Math.round(avgTD / TD_BENCH * 100);
+
+  function _pctCol(p){return p>=90?'c-green':p>=75?'c-amber':'c-red';}
+  function _hmldMinCol(v){return v>=HMLD_BENCH*0.9?'c-green':v>=HMLD_BENCH*0.75?'c-amber':'c-red';}
+
+  var el;
+  el=document.getElementById('md-n-players');    if(el) el.textContent=n;
+  el=document.getElementById('md-avg-hmld');     if(el){el.textContent=Math.round(avgHmld).toLocaleString()+' m';el.className='card-val '+_pctCol(hmldPct);}
+  el=document.getElementById('md-avg-hmldmin');  if(el){el.textContent=avgHmldMin.toFixed(1)+' m/min';el.className='card-val '+_pctCol(hmldPct);}
+  el=document.getElementById('md-hmldmin-bench');if(el){el.textContent=hmldPct+'% of '+HMLD_BENCH.toFixed(1)+' m/min benchmark';el.style.color=hmldPct>=90?'var(--green)':hmldPct>=75?'var(--amber)':'var(--red)';}
+  el=document.getElementById('md-avg-td');       if(el){el.textContent=Math.round(avgTD).toLocaleString()+' m';el.className='card-val '+_pctCol(tdPct);}
+  el=document.getElementById('md-td-bench');     if(el){el.textContent=tdPct+'% of '+TD_BENCH.toLocaleString()+'m benchmark';el.style.color=tdPct>=90?'var(--green)':tdPct>=75?'var(--amber)':'var(--red)';}
+  el=document.getElementById('md-avg-maxspd');   if(el) el.textContent=avgMaxSpd>0?avgMaxSpd.toFixed(1)+' m/s':'—';
+  el=document.getElementById('md-avg-hsr');      if(el) el.textContent=Math.round(avgHSR).toLocaleString()+' m';
+  el=document.getElementById('md-avg-acc');      if(el) el.textContent=Math.round(avgAcc);
+  el=document.getElementById('md-avg-dec');      if(el) el.textContent=Math.round(avgDec);
+
+  /* ── Position breakdown ── */
+  var posBuckets = {def:[], mid:[], fwd:[]};
+  rows.forEach(function(r){
+    var p = (r.pos||'mid').toLowerCase();
+    var b = p.indexOf('def')>-1?'def':p.indexOf('fwd')>-1||p.indexOf('for')>-1?'fwd':'mid';
+    posBuckets[b].push(r);
+  });
+  ['def','mid','fwd'].forEach(function(pos){
+    var pr = posBuckets[pos];
+    var n2 = pr.length;
+    var avH = n2?pr.reduce(function(a,r){return a+(r.hmldMin||0);},0)/n2:0;
+    var avT = n2?pr.reduce(function(a,r){return a+(r.tdMin||0);},0)/n2:0;
+    el=document.getElementById('md-pos-'+pos+'-hmldmin');
+    if(el){el.textContent=n2?avH.toFixed(1)+' m/min':'—';el.className='card-val '+_hmldMinCol(avH);}
+    el=document.getElementById('md-pos-'+pos+'-n');     if(el) el.textContent=n2+' player'+(n2!==1?'s':'');
+    el=document.getElementById('md-pos-'+pos+'-tdmin'); if(el) el.textContent=n2?'TD/min '+avT.toFixed(1)+' m/min':'';
+  });
+
+  /* ── Half data ── */
+  var halfData = window.LIVE_HALF_DATA && window.LIVE_HALF_DATA[sessKey];
+  var halfWrap = document.getElementById('md-half-wrap');
+  var hasHalf  = halfData && (Object.keys(halfData.h1||{}).length>0 || Object.keys(halfData.h2||{}).length>0);
+
+  if(hasHalf){
+    if(halfWrap) halfWrap.style.display = '';
+    var h1Rows = Object.values(halfData.h1||{});
+    var h2Rows = Object.values(halfData.h2||{});
+    ['h1','h2'].forEach(function(hk){
+      var hR = hk==='h1'?h1Rows:h2Rows;
+      var hn = hR.length||1;
+      var avHH = hR.length?hR.reduce(function(a,r){return a+(r.hmldMin||0);},0)/hR.length:0;
+      var avTH = hR.length?hR.reduce(function(a,r){return a+(r.tdMin||0);},0)/hR.length:0;
+      el=document.getElementById('md-'+hk+'-hmldmin');
+      if(el){el.textContent=hR.length?avHH.toFixed(1)+' m/min':'—';el.className='card-val '+_hmldMinCol(avHH);}
+      el=document.getElementById('md-'+hk+'-n');     if(el) el.textContent=hR.length+' player'+(hR.length!==1?'s':'');
+      el=document.getElementById('md-'+hk+'-tdmin'); if(el) el.textContent=hR.length?'TD/min '+avTH.toFixed(1)+' m/min':'';
+    });
+    /* Drop-off */
+    if(h1Rows.length && h2Rows.length){
+      var h1H = h1Rows.reduce(function(a,r){return a+(r.hmldMin||0);},0)/h1Rows.length;
+      var h2H = h2Rows.reduce(function(a,r){return a+(r.hmldMin||0);},0)/h2Rows.length;
+      var dropPct = h1H>0?Math.round((h2H-h1H)/h1H*100):0;
+      el=document.getElementById('md-half-dropoff');
+      if(el){
+        el.textContent=(dropPct>=0?'+':'')+dropPct+'%';
+        el.className='card-val '+(Math.abs(dropPct)<=10?'c-green':Math.abs(dropPct)<=20?'c-amber':'c-red');
+      }
+    }
+  } else {
+    if(halfWrap) halfWrap.style.display = 'none';
+  }
+
+  /* ── Per-player table ── */
+  var tbody = document.getElementById('md-player-tbody');
+  if(!tbody) return;
+
+  var sorted = rows.slice().sort(function(a,b){return (b.hmld||0)-(a.hmld||0);});
+  var html = '';
+  sorted.forEach(function(r){
+    var pmKey = window._PM_NAME_MAP && window._PM_NAME_MAP[_normPlayerName(r.player)];
+    var meta  = pmKey && typeof PLAYER_META!=='undefined' && PLAYER_META[pmKey];
+    var displayName = meta ? meta.n : (r.player||'—');
+    var posLabel = ((r.pos||'mid').toUpperCase()+'   ').substring(0,3).trim();
+
+    var hmldPctP = r.hmldMin&&r.hmldMin>0 ? Math.round(r.hmldMin/HMLD_BENCH*100) : 0;
+    var barCol   = hmldPctP>=90?'#81C784':hmldPctP>=75?'#EF9F27':'#E24B4A';
+    var daRatio  = (r.acc||0)>0 ? parseFloat(((r.dec||0)/(r.acc||1)).toFixed(2)) : null;
+    var daStyle  = daRatio===null?'color:var(--dim)':daRatio>1.15?'color:#E24B4A':daRatio>1.0?'color:#EF9F27':'color:#81C784';
+
+    html += '<tr style="border-bottom:1px solid var(--border2)">'
+      + '<td style="padding:7px 10px;font-size:10.5px;font-weight:600">' + _escHtml(displayName) + '</td>'
+      + '<td style="padding:7px 10px;font-size:9px;color:var(--dim)">' + posLabel + '</td>'
+      + '<td style="padding:7px 10px;font-size:10px;text-align:right">' + Math.round(r.td||0).toLocaleString() + '</td>'
+      + '<td style="padding:7px 10px;font-size:10px;font-weight:600;text-align:right;color:' + barCol + '">' + Math.round(r.hmld||0).toLocaleString() + '</td>'
+      + '<td style="padding:7px 10px;min-width:140px">'
+        + '<div style="display:flex;align-items:center;gap:6px">'
+          + '<div style="flex:1;background:var(--s3);border-radius:3px;height:8px;overflow:hidden">'
+            + '<div style="height:100%;border-radius:3px;background:' + barCol + ';width:' + Math.min(100,hmldPctP) + '%"></div>'
+          + '</div>'
+          + '<span style="font-size:10px;font-weight:700;color:' + barCol + ';width:48px;text-align:right;flex-shrink:0">' + (r.hmldMin?r.hmldMin.toFixed(1):'—') + '</span>'
+        + '</div>'
+      + '</td>'
+      + '<td style="padding:7px 10px;font-size:10px;text-align:right">' + Math.round(r.hsr||0).toLocaleString() + '</td>'
+      + '<td style="padding:7px 10px;font-size:10px;text-align:right">' + (r.maxSpd&&r.maxSpd>0?r.maxSpd.toFixed(1):'—') + '</td>'
+      + '<td style="padding:7px 10px;font-size:9.5px;text-align:center;color:var(--dim)">' + Math.round(r.acc||0) + ' / ' + Math.round(r.dec||0) + '</td>'
+      + '<td style="padding:7px 10px;font-size:10px;font-weight:600;text-align:center;' + daStyle + '">' + (daRatio!==null?daRatio.toFixed(2):'—') + '</td>'
+      + '<td style="padding:7px 10px;font-size:10px;font-weight:700;text-align:right;color:' + barCol + '">' + hmldPctP + '%</td>'
+      + '</tr>';
+  });
+
+  tbody.innerHTML = html || '<tr><td colspan="10" style="color:var(--muted);padding:16px;text-align:center;font-size:10px">No GPS rows found for this session</td></tr>';
+}
+</script>
 
 </body>
 </html>
