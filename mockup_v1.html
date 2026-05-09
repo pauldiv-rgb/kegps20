@@ -6679,12 +6679,29 @@ function loadLiveData(){
           var dr=Math.round(bd);
           SESSION_DB[k].matchProx=dr===0?'MD':dr>0?'MD+'+dr:'MD−'+Math.abs(dr);
         });
-        /* Re-push si-prox to DOM now that backfill is complete */
+        /* Re-push si-prox to DOM now that backfill is complete — compute from nextFixture */
         var _gf=document.getElementById('gf-session');
         var _ck=_gf?_gf.value:null;
         if(_ck&&SESSION_DB[_ck]){
           var _sp=document.getElementById('si-prox');
-          if(_sp) _sp.textContent=SESSION_DB[_ck].matchProx||'—';
+          if(_sp){
+            var _sess2=SESSION_DB[_ck];
+            var _prox2=_sess2.matchProx;
+            if(!_prox2||_prox2==='MD'){
+              var _fx2=_sess2.nextFixture||'';
+              var _mM2=_fx2.match(/(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i);
+              if(_mM2){
+                var _MO2={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+                var _sk3=_ck.replace(/^d/,'');
+                var _sYr2=parseInt(_sk3.substring(0,4)),_sMo2=parseInt(_sk3.substring(4,6))-1,_sDy2=parseInt(_sk3.substring(6,8));
+                var _mDate2=new Date(_sYr2,_MO2[_mM2[2].toLowerCase()],parseInt(_mM2[1]));
+                var _sDate2=new Date(_sYr2,_sMo2,_sDy2);
+                var _diff2=Math.round((_mDate2-_sDate2)/86400000);
+                _prox2=_diff2===0?'MD':_diff2>0?'MD−'+_diff2:'MD+'+Math.abs(_diff2);
+              }
+            }
+            _sp.textContent=_prox2||'—';
+          }
         }
       }
       /* ── Parse External Activity → per-player estimated HMLD ── */
