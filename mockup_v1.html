@@ -8791,7 +8791,7 @@ function renderProfPerfBars(pk){
 
   <!-- SESSION SELECTOR -->
   <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap">
-    <select id="md-sess-sel" class="lb-sel" style="min-width:240px" onchange="try{_mdSessKey=this.value;_rebuildMDDrillList(this.value);_renderMDScorecardForSession(this.value);}catch(e){}">
+    <select id="md-sess-sel" class="lb-sel" style="min-width:240px" onchange="try{_mdSessKey=this.value;_mdPosFilter='team';_rebuildMDDrillList(this.value);_renderMDScorecardForSession(this.value);}catch(e){}">
       <option>Loading live data…</option>
     </select>
     <span style="font-size:9px;color:var(--muted)">Selects from all match sessions with GPS data</span>
@@ -8864,23 +8864,29 @@ function renderProfPerfBars(pk){
       </div>
     </div>
 
-    <!-- POSITION BREAKDOWN -->
-    <div class="sec-label">Position group — HMLD/min · TD/min</div>
-    <div class="cards c3" style="margin-bottom:22px">
-      <div class="card">
-        <div class="card-lbl">Defenders</div>
+    <!-- POSITION BREAKDOWN — 4 clickable cards, active card filters player table -->
+    <div class="sec-label" style="margin-bottom:6px">Position group — HMLD/min · TD/min <span style="font-size:9px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">· click to filter table</span></div>
+    <div class="cards c4" style="margin-bottom:22px">
+      <div class="card" id="md-pos-team-card" style="cursor:pointer;transition:border-color .15s,background .15s" onclick="try{_mdPosFilter='team';_renderMDScorecardForSession(_mdSessKey);}catch(e){}">
+        <div class="card-lbl">Team</div>
+        <div class="card-val" id="md-pos-team-hmldmin">—</div>
+        <div class="card-sub" id="md-pos-team-n">— players</div>
+        <div class="card-ind" id="md-pos-team-tdmin" style="color:var(--dim);font-size:9px"></div>
+      </div>
+      <div class="card" id="md-pos-def-card" style="cursor:pointer;transition:border-color .15s,background .15s" onclick="try{_mdPosFilter='def';_renderMDScorecardForSession(_mdSessKey);}catch(e){}">
+        <div class="card-lbl">Inside Def</div>
         <div class="card-val" id="md-pos-def-hmldmin">—</div>
         <div class="card-sub" id="md-pos-def-n">— players</div>
         <div class="card-ind" id="md-pos-def-tdmin" style="color:var(--dim);font-size:9px"></div>
       </div>
-      <div class="card">
-        <div class="card-lbl">Midfield</div>
+      <div class="card" id="md-pos-mid-card" style="cursor:pointer;transition:border-color .15s,background .15s" onclick="try{_mdPosFilter='mid';_renderMDScorecardForSession(_mdSessKey);}catch(e){}">
+        <div class="card-lbl">Mid 8</div>
         <div class="card-val" id="md-pos-mid-hmldmin">—</div>
         <div class="card-sub" id="md-pos-mid-n">— players</div>
         <div class="card-ind" id="md-pos-mid-tdmin" style="color:var(--dim);font-size:9px"></div>
       </div>
-      <div class="card">
-        <div class="card-lbl">Forwards</div>
+      <div class="card" id="md-pos-fwd-card" style="cursor:pointer;transition:border-color .15s,background .15s" onclick="try{_mdPosFilter='fwd';_renderMDScorecardForSession(_mdSessKey);}catch(e){}">
+        <div class="card-lbl">Inside For</div>
         <div class="card-val" id="md-pos-fwd-hmldmin">—</div>
         <div class="card-sub" id="md-pos-fwd-n">— players</div>
         <div class="card-ind" id="md-pos-fwd-tdmin" style="color:var(--dim);font-size:9px"></div>
@@ -8922,12 +8928,12 @@ function renderProfPerfBars(pk){
             <th style="font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);padding:8px 10px;text-align:left">Pos</th>
             <th style="font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);padding:8px 10px;text-align:right">TD (m)</th>
             <th style="font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);padding:8px 10px;text-align:right">HMLD (m)</th>
-            <th style="font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);padding:8px 10px">HMLD/min → vs 16.0</th>
+            <th style="font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);padding:8px 10px">HMLD/min → vs pos avg</th>
             <th style="font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);padding:8px 10px;text-align:right">HSR (m)</th>
             <th style="font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);padding:8px 10px;text-align:right">Max Spd</th>
             <th style="font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);padding:8px 10px;text-align:center">Acc / Dec</th>
             <th style="font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);padding:8px 10px;text-align:center">Dec:Acc</th>
-            <th style="font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);padding:8px 10px;text-align:right">vs bench</th>
+            <th style="font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);padding:8px 10px;text-align:right">vs pos avg</th>
           </tr>
         </thead>
         <tbody id="md-player-tbody">
@@ -8937,8 +8943,8 @@ function renderProfPerfBars(pk){
     </div>
 
     <div style="font-size:9px;color:var(--muted);display:flex;gap:18px;flex-wrap:wrap;margin-bottom:8px">
-      <span>Benchmarks: HMLD/min = 16.0 m/min · TD = 9,000m (full game)</span>
-      <span><span style="color:#81C784">●</span> ≥90% of benchmark</span>
+      <span>Bar colour = player HMLD/min vs their position group average</span>
+      <span><span style="color:#81C784">●</span> ≥90% of pos avg</span>
       <span><span style="color:#EF9F27">●</span> ≥75%</span>
       <span><span style="color:#E24B4A">●</span> &lt;75%</span>
       <span style="color:var(--muted)">Dec:Acc: &gt;1.15 = watch · &gt;1.0 = elevated</span>
@@ -8953,7 +8959,8 @@ function renderProfPerfBars(pk){
    PAGE 9 — MD SCORECARD  (live session data, match sessions only)
    ══════════════════════════════════════════════════════════ */
 
-var _mdSessKey = null; /* currently selected match session key */
+var _mdSessKey   = null; /* currently selected match session key */
+var _mdPosFilter = 'team'; /* 'team' | 'def' | 'mid' | 'fwd' — filters player table */
 
 function renderMDScorecard(){
   var sel = document.getElementById('md-sess-sel');
@@ -9178,21 +9185,32 @@ function _renderMDScorecardForSession(sessKey){
   el=document.getElementById('md-avg-acc');      if(el) el.textContent=Math.round(avgAcc);
   el=document.getElementById('md-avg-dec');      if(el) el.textContent=Math.round(avgDec);
 
-  /* ── Position breakdown ── */
-  var posBuckets = {def:[], mid:[], fwd:[]};
+  /* ── Position breakdown — 4 groups: team, def (Inside Def), mid (Mid 8), fwd (Inside For) ── */
+  var posBuckets = {team:[], def:[], mid:[], fwd:[]};
   rows.forEach(function(r){
     var p = (r.pos||'mid').toLowerCase();
     var b = p.indexOf('def')>-1?'def':p.indexOf('fwd')>-1||p.indexOf('for')>-1?'fwd':'mid';
     posBuckets[b].push(r);
+    posBuckets.team.push(r);
   });
-  ['def','mid','fwd'].forEach(function(pos){
+  var posAvgs = {team:0, def:0, mid:0, fwd:0}; /* stored for per-player comparison */
+  ['team','def','mid','fwd'].forEach(function(pos){
     var pr = posBuckets[pos], n2 = pr.length;
     var avH = n2?pr.reduce(function(a,r){return a+(r.hmldMin||0);},0)/n2:0;
     var avT = n2?pr.reduce(function(a,r){return a+(r.tdMin||0);},0)/n2:0;
+    posAvgs[pos] = avH;
+    /* Active card highlight */
+    var card = document.getElementById('md-pos-'+pos+'-card');
+    if(card){
+      card.style.borderColor = _mdPosFilter===pos?'var(--teal)':'';
+      card.style.background  = _mdPosFilter===pos?'rgba(38,166,154,.08)':'';
+    }
     el=document.getElementById('md-pos-'+pos+'-hmldmin');
     if(el){el.textContent=n2?avH.toFixed(1)+' m/min':'—';el.className='card-val '+_hmldMinCol(avH);}
-    el=document.getElementById('md-pos-'+pos+'-n');     if(el) el.textContent=n2+' player'+(n2!==1?'s':'');
-    el=document.getElementById('md-pos-'+pos+'-tdmin'); if(el) el.textContent=n2?'TD/min '+avT.toFixed(1)+' m/min':'';
+    el=document.getElementById('md-pos-'+pos+'-n');
+    if(el) el.textContent=n2+' player'+(n2!==1?'s':'');
+    el=document.getElementById('md-pos-'+pos+'-tdmin');
+    if(el) el.textContent=n2?'TD/min '+avT.toFixed(1)+' m/min':'';
   });
 
   /* ── Half data (always from raw LIVE_HALF_DATA regardless of drill filter) ── */
@@ -9227,20 +9245,31 @@ function _renderMDScorecardForSession(sessKey){
     if(halfWrap) halfWrap.style.display = 'none';
   }
 
-  /* ── Per-player table ── */
+  /* ── Per-player table — filtered by _mdPosFilter, vs pos group avg ── */
   var tbody = document.getElementById('md-player-tbody');
   if(!tbody) return;
 
-  var sorted = rows.slice().sort(function(a,b){return (b.hmld||0)-(a.hmld||0);});
+  /* Filter rows to selected position group */
+  var tableRows = _mdPosFilter==='team' ? rows.slice() : rows.filter(function(r){
+    var p=(r.pos||'mid').toLowerCase();
+    var b=p.indexOf('def')>-1?'def':p.indexOf('fwd')>-1||p.indexOf('for')>-1?'fwd':'mid';
+    return b===_mdPosFilter;
+  });
+
+  var sorted = tableRows.sort(function(a,b){return (b.hmld||0)-(a.hmld||0);});
   var accDecNote = usingDrills ? '<span style="font-size:8px;color:var(--muted)"> (full sess)</span>' : '';
   var html = '';
   sorted.forEach(function(r){
     var pmKey = window._PM_NAME_MAP && window._PM_NAME_MAP[_normPlayerName(r.player)];
     var meta  = pmKey && typeof PLAYER_META!=='undefined' && PLAYER_META[pmKey];
     var displayName = meta ? meta.n : (r.player||'—');
-    var posLabel = ((r.pos||'mid').toUpperCase()+'   ').substring(0,3).trim();
+    var rPos = (r.pos||'mid').toLowerCase();
+    var rBucket = rPos.indexOf('def')>-1?'def':rPos.indexOf('fwd')>-1||rPos.indexOf('for')>-1?'fwd':'mid';
+    var posLabel = rBucket==='def'?'DEF':rBucket==='fwd'?'FWD':'MID';
 
-    var hmldPctP = r.hmldMin&&r.hmldMin>0 ? Math.round(r.hmldMin/HMLD_BENCH*100) : 0;
+    /* Compare player to their position group average */
+    var posRef   = posAvgs[rBucket] > 0 ? posAvgs[rBucket] : HMLD_BENCH;
+    var hmldPctP = r.hmldMin&&r.hmldMin>0&&posRef>0 ? Math.round(r.hmldMin/posRef*100) : 0;
     var barCol   = hmldPctP>=90?'#81C784':hmldPctP>=75?'#EF9F27':'#E24B4A';
     var daRatio  = (r.acc||0)>0 ? parseFloat(((r.dec||0)/(r.acc||1)).toFixed(2)) : null;
     var daStyle  = daRatio===null?'color:var(--dim)':daRatio>1.15?'color:#E24B4A':daRatio>1.0?'color:#EF9F27':'color:#81C784';
