@@ -5237,9 +5237,9 @@ function cmpSyncSession(){
     });
   }
   function _isChamp(k){
-    return (window.LIVE_SESSION_DATA[k]||[]).some(function(r){
-      return (r.matchType||'').toLowerCase().indexOf('championship')>-1;
-    });
+    /* Use SESSION_DB typeLabel — matchType column is "Match"/"Training", never "championship" */
+    var s=SESSION_DB[k]||{};
+    return s.typeLabel==='Championship';
   }
   function _multiAvg(avgs){
     if(!avgs.length) return null;
@@ -5337,16 +5337,44 @@ function cmpSyncSession(){
 
   /* ── Rebuild drill dropdowns from live data ── */
   var _subjSel=document.getElementById('cmp-subject');
-  var _drillSel=document.getElementById('cmp-drill');
-  var _drillSlug=window._cmpDrillSlug||'all';
   var _sessDB=SESSION_DB[sessKey]||{};
   var _liveDrills=window.LIVE_DRILL_PLAYER_DATA&&window.LIVE_DRILL_PLAYER_DATA[sessKey]?window.LIVE_DRILL_PLAYER_DATA[sessKey]:null;
 
+  /* Detect halves and match session */
+  var _halfData=window.LIVE_HALF_DATA&&window.LIVE_HALF_DATA[sessKey]?window.LIVE_HALF_DATA[sessKey]:null;
+  var _hasHalves=_halfData&&(Object.keys(_halfData.h1||{}).length>0||Object.keys(_halfData.h2||{}).length>0);
+  var _isMatchSess=_sessDB.typeLabel==='Championship'||_sessDB.typeLabel==='Challenge Match'||
+    (window.LIVE_SESSION_DATA[sessKey]||[]).some(function(r){return (r.matchType||'').toLowerCase().indexOf('match')>-1;});
+
+  /* Auto-select full-match for match sessions with half data on first load */
+  var _drillSlug=window._cmpDrillSlug||'all';
+  if(_isMatchSess&&_hasHalves&&(_drillSlug==='all')){
+    _drillSlug='full-match';
+    window._cmpDrillSlug='full-match';
+  }
+
+  /* Dynamic page heading */
+  var _pgQ=document.querySelector('#p34 .pg-q');
+  if(_pgQ){
+    _pgQ.textContent=_isMatchSess?
+      'Match review — how did we perform vs demand?':
+      'Training quality — did this session hit match density?';
+  }
+
+  /* Conditional duration warning */
+  var _durWarn=document.querySelector('#p34 .dur-warn');
+  if(_durWarn){
+    var _durDiff=vsMetrics?Math.abs((cur.dur||0)-(vsMetrics.dur||0)):0;
+    _durWarn.style.display=(_durDiff>20)?'flex':'none';
+  }
+
   function _buildDrillOpts(){
-    var opts='<option value="all"'+((!_drillSlug||_drillSlug==='all')?' selected':'')+'>All drills</option>';
+    var opts='<option value="all"'+((_drillSlug==='all')?' selected':'')+'>All drills (session total)</option>';
+    if(_hasHalves){
+      opts+='<option value="full-match"'+(_drillSlug==='full-match'?' selected':'')+'>⚡ Full match (1H + 2H combined)</option>';
+    }
     if(_liveDrills){
-      var DCOLS=['#5a9be8','#3dbd84','#9b77dd','#e08844','#26C6DA','#FFA726'];
-      Object.keys(_liveDrills).forEach(function(slug,i){
+      Object.keys(_liveDrills).forEach(function(slug){
         var ps=Object.values(_liveDrills[slug]);
         if(!ps.length) return;
         var nm=ps[0].name||slug;
@@ -5365,7 +5393,6 @@ function cmpSyncSession(){
   }
   var _opts=_buildDrillOpts();
   if(_subjSel) _subjSel.innerHTML=_opts;
-  if(_drillSel) _drillSel.innerHTML=_opts;
 
   /* ── Render live intensity and drill chart ── */
   _renderCmpIntensity(sessKey, _drillSlug);
@@ -5427,14 +5454,12 @@ function _cmpBmType(type){
   if(sessKey) _renderCmpIntensity(sessKey,window._cmpDrillSlug);
 }
 
-/* Called by both Subject and bottom Drill selectors */
+/* Called by Subject selector */
 function cmpDrillChange(slug){
   window._cmpDrillSlug = slug || 'all';
-  /* Sync the two selectors */
-  ['cmp-subject','cmp-drill'].forEach(function(id){
-    var el=document.getElementById(id);
-    if(el && el.value !== slug){ try{el.value=slug;}catch(e){} }
-  });
+  /* Sync subject selector */
+  var _subj=document.getElementById('cmp-subject');
+  if(_subj&&_subj.value!==slug){try{_subj.value=slug;}catch(e){}}
   var sessEl=document.getElementById('cmp-session');
   var sessKey=sessEl?sessEl.value:null;
   if(sessKey){ _renderCmpIntensity(sessKey,slug); }
@@ -5450,6 +5475,58 @@ function _renderCmpIntensity(sessKey, drillSlug){
     return;
   }
   var dpd=window.LIVE_DRILL_PLAYER_DATA[sessKey];
+
+  /* ── Full match (1H + 2H combined) mode ── */
+  if(drillSlug==='full-match'){
+    var _hd=window.LIVE_HALF_DATA&&window.LIVE_HALF_DATA[sessKey]?window.LIVE_HALF_DATA[sessKey]:null;
+    if(_hd){
+      var _bmType2=window._cmpBenchmarkType||'competition';
+      var _bm2=_computeBest28HmldMin(_bmType2);
+      var _bmFb2=false;
+      if(!_bm2&&_bmType2!=='all'){_bm2=_computeBest28HmldMin('all');_bmFb2=true;}
+      if(!_bm2){
+        /* Fall back to all-drills session avg * 1.3 */
+        var _allHmin=[];
+        Object.keys(dpd).forEach(function(sl){Object.values(dpd[sl]).forEach(function(p){if(p.hmldMin>0)_allHmin.push(p.hmldMin);});});
+        _bm2=_allHmin.length?(_allHmin.reduce(function(a,v){return a+v;},0)/_allHmin.length)*1.3:1;
+      }
+      function _colI(p){return p>=90?'var(--green)':p>=75?'var(--amber)':'var(--red)';}
+      function _bgI(p){return p>=90?'rgba(76,175,80,.45)':p>=75?'rgba(239,159,39,.45)':'rgba(226,75,74,.4)';}
+      var h1=_hd.h1||{}, h2=_hd.h2||{};
+      var _allP=Object.keys(h1).concat(Object.keys(h2).filter(function(p){return !h1[p];}));
+      var _fmHmin=[],_h1Hmin=[],_h2Hmin=[];
+      _allP.forEach(function(pn){
+        var p1=h1[pn]||{dur:0,hmld:0}, p2=h2[pn]||{dur:0,hmld:0};
+        var d1=p1.dur||0, d2=p2.dur||0, totD=d1+d2;
+        var totH=(p1.hmld||0)+(p2.hmld||0);
+        if(totD>0) _fmHmin.push(totH/totD);
+        if(d1>0) _h1Hmin.push((p1.hmld||0)/d1);
+        if(d2>0) _h2Hmin.push((p2.hmld||0)/d2);
+      });
+      var _avg=function(arr){return arr.length?arr.reduce(function(a,v){return a+v;},0)/arr.length:0;};
+      var _avgFm=_avg(_fmHmin), _avgH1=_avg(_h1Hmin), _avgH2=_avg(_h2Hmin);
+      var _fmPct=_bm2>0?Math.round(_avgFm/_bm2*100):0;
+      var _h2Δ=_avgH1>0?Math.round((_avgH2-_avgH1)/_avgH1*100):0;
+      var _h2Col=_h2Δ>=-5?'var(--green)':_h2Δ>=-15?'var(--amber)':'var(--red)';
+      var _bmFbNote=document.getElementById('cmp-bm-note');
+      if(_bmFbNote) _bmFbNote.style.display=_bmFb2?'inline':'none';
+      container.innerHTML=
+        '<div class="mc-row">'
+        +'<div class="mc-l"><div class="mc-v mc-vl" style="color:'+_colI(_fmPct)+'">'+_avgFm.toFixed(1)+' m/min<span class="mc-d" style="color:'+_colI(_fmPct)+'">'+_fmPct+'% of best</span></div>'
+        +'<div class="mc-trk"><div class="mc-fl" style="width:'+Math.min(99,_fmPct)+'%;background:'+_bgI(_fmPct)+'"></div></div></div>'
+        +'<div class="mc-lbl">HMLD/min · Full match<span style="display:block;font-size:8px;color:var(--muted)">'+(_bmFb2?'all halves fallback':(_bmType2==='competition'?'competition':'in-house'))+' best: '+_bm2.toFixed(1)+' m/min · '+_allP.length+' players</span></div>'
+        +'<div class="mc-r" style="text-align:right"><div style="font-size:10px;font-weight:700;color:var(--text)">1H: '+_avgH1.toFixed(1)+' → 2H: '+_avgH2.toFixed(1)+'</div>'
+        +'<div style="font-size:9px;color:'+_h2Col+'">2nd half '+(Math.abs(_h2Δ))+'% '+((_h2Δ>=0)?'↑ up':'↓ drop')+'</div></div></div>'
+        +'<div style="font-size:9px;color:var(--muted);margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">'
+        +'Full match HMLD/min = weighted avg of both halves per player · '
+        +(_h2Δ<-10?'<span style="color:var(--amber)">⚠ Second half intensity drop — worth reviewing</span>':'Both halves within expected range')
+        +'</div>';
+      return;
+    }
+    /* No LIVE_HALF_DATA — fall through to all-drills view */
+    drillSlug='all';
+  }
+
   var activeSlugs=(drillSlug&&drillSlug!=='all'&&dpd[drillSlug])?[drillSlug]:Object.keys(dpd);
 
   /* Session-level best: max maxSpd and best hmldMin across all drills/players this session */
@@ -5543,6 +5620,75 @@ function renderCmpDrillChart(){
   var viewEl=document.getElementById('cmp-view');
   var viewVal=viewEl?viewEl.value:'team';
   var drillSlug=window._cmpDrillSlug||'all';
+
+  /* ── Full match (1H + 2H combined) mode ── */
+  if(drillSlug==='full-match'){
+    var _fmHd=window.LIVE_HALF_DATA&&window.LIVE_HALF_DATA[sessKey]?window.LIVE_HALF_DATA[sessKey]:null;
+    if(_fmHd){
+      var _fmH1=_fmHd.h1||{}, _fmH2=_fmHd.h2||{};
+      var _fmAllP=Object.keys(_fmH1).concat(Object.keys(_fmH2).filter(function(p){return !_fmH1[p];}));
+      var _fmPlayers=[];
+      _fmAllP.forEach(function(pn){
+        var p1=_fmH1[pn]||{dur:0,td:0,hmld:0,hsr:0,sprint:0,maxSpd:0};
+        var p2=_fmH2[pn]||{dur:0,td:0,hmld:0,hsr:0,sprint:0,maxSpd:0};
+        var d=(p1.dur||0)+(p2.dur||0);
+        var h=(p1.hmld||0)+(p2.hmld||0);
+        var t=(p1.td||0)+(p2.td||0);
+        var s=(p1.hsr||0)+(p2.hsr||0);
+        var z=(p1.sprint||0)+(p2.sprint||0);
+        _fmPlayers.push({
+          player:pn, name:'Full match', dur:d,
+          hmld:h, td:t, hsr:s, sprint:z,
+          hmldMin:d>0?h/d:0, tdMin:d>0?t/d:0,
+          hsrMin:d>0?s/d:0, z6Min:d>0?z/d:0, sprintMin:d>0?z/d:0,
+          maxSpd:Math.max(p1.maxSpd||0,p2.maxSpd||0)
+        });
+      });
+
+      /* Metric config needed first — see below */
+      var _fmMetricEl=document.getElementById('cmp-metric');
+      var _fmMK=_fmMetricEl?_fmMetricEl.value:'hmld';
+      var _fmMC={
+        hmld:{f:'hmld',lbl:'HMLD',unit:'m',dp:0},hmldMin:{f:'hmldMin',lbl:'HMLD/min',unit:'m/min',dp:1},
+        td:{f:'td',lbl:'Total Dist',unit:'m',dp:0},tdMin:{f:'tdMin',lbl:'TD/min',unit:'m/min',dp:1},
+        hsr:{f:'hsr',lbl:'HSR',unit:'m',dp:0},hsrMin:{f:'hsrMin',lbl:'HSR/min',unit:'m/min',dp:2},
+        sprint:{f:'sprint',lbl:'Sprint Dist',unit:'m',dp:0},z6Min:{f:'z6Min',lbl:'Sprint/min',unit:'m/min',dp:2},
+        maxSpd:{f:'maxSpd',lbl:'Max Velocity',unit:'m/s',dp:1}
+      };
+      var _fmMc=_fmMC[_fmMK]||_fmMC.hmld;
+      function _fmFmt(v){return _fmMc.dp===0?String(Math.round(v)):v.toFixed(_fmMc.dp);}
+
+      if(!_fmPlayers.length){container.innerHTML='<div style="padding:22px 0;font-size:10px;color:var(--muted);text-align:center">No half data for Full match view.</div>';return;}
+      var _fmPosMap={};
+      (window.LIVE_SESSION_DATA[sessKey]||[]).forEach(function(r){if(r.player){var p=(r.pos||'mid').toLowerCase();_fmPosMap[_normPlayerName(r.player)]=p.indexOf('fwd')>-1||p.indexOf('forward')>-1?'FWD':p.indexOf('def')>-1||p.indexOf('back')>-1?'DEF':p.indexOf('gk')>-1||p.indexOf('goal')>-1?'GK':'MID';}});
+      var _fmAllVals=_fmPlayers.map(function(p){return p[_fmMc.f]||0;}).filter(Boolean);
+      var _fmTeamAvg=_fmAllVals.length?_fmAllVals.reduce(function(a,v){return a+v;},0)/_fmAllVals.length:0;
+      var _fmPosG={GK:[],DEF:[],MID:[],FWD:[]};
+      _fmPlayers.forEach(function(p){var v=p[_fmMc.f]||0;if(v>0){var pg=_fmPosMap[_normPlayerName(p.player)]||'MID';_fmPosG[pg].push(v);}});
+      var _fmMaxVal=_fmTeamAvg;
+      ['GK','DEF','MID','FWD'].forEach(function(pos){if(_fmPosG[pos].length){var a=_fmPosG[pos].reduce(function(x,v){return x+v;},0)/_fmPosG[pos].length;if(a>_fmMaxVal)_fmMaxVal=a;}});
+      var _fmFta=_fmFmt(_fmTeamAvg);
+      var _fmAvgDur=_fmPlayers.reduce(function(a,p){return a+(p.dur||0);},0)/_fmPlayers.length;
+      var POS_TXT_FM={GK:'var(--dim)',DEF:'var(--blue)',MID:'var(--teal)',FWD:'var(--green)'};
+      var POS_BG_FM={GK:'rgba(107,130,153,.4)',DEF:'rgba(79,195,247,.35)',MID:'rgba(159,225,203,.35)',FWD:'rgba(76,175,80,.35)'};
+      var _fmHtml='<div class="drill-detail-stats"><div class="dds-card"><div class="dds-lbl">'+_fmMc.lbl+' · Full match (1H+2H)</div><div class="dds-val" style="color:var(--blue)">'+_fmFta+' '+_fmMc.unit+'</div><div class="dds-sub">avg '+Math.round(_fmAvgDur)+' min · '+_fmPlayers.length+' players</div></div></div>';
+      _fmHtml+='<div class="hbar-chart"><div class="hbc-hdr"><div><div class="hbc-title">Full match — team average</div><div class="hbc-sub">Position split · '+_fmMc.lbl+'</div></div><div class="hbc-badge" style="background:rgba(90,155,232,.08);border-color:rgba(90,155,232,.25);color:var(--blue)">Full match</div></div>';
+      _fmHtml+='<div class="hbar-row"><div class="hbar-lbl"><span class="hbar-dot" style="background:var(--dim)"></span>Team avg</div><div class="hbar-dur">all</div><div class="hbar-track"><div class="hbar-fill" style="width:'+(_fmMaxVal>0?Math.round(_fmTeamAvg/_fmMaxVal*100):99)+'%;background:rgba(90,155,232,.4)">'+_fmFta+'</div></div><div class="hbar-val">'+_fmFta+'</div></div>';
+      ['GK','DEF','MID','FWD'].forEach(function(pos){
+        var vals=_fmPosG[pos]; if(!vals.length) return;
+        var avg=vals.reduce(function(a,v){return a+v;},0)/vals.length;
+        var fa=_fmFmt(avg);
+        var pct=_fmMaxVal>0?Math.round(avg/_fmMaxVal*100):50;
+        var diff=_fmTeamAvg>0?Math.round((avg/_fmTeamAvg-1)*100):0;
+        _fmHtml+='<div class="hbar-row"><div class="hbar-lbl"><span class="hbar-dot" style="background:'+POS_TXT_FM[pos]+'"></span>'+pos+' avg</div><div class="hbar-dur">'+pos+'</div><div class="hbar-track"><div class="hbar-fill" style="width:'+pct+'%;background:'+POS_BG_FM[pos]+'">'+fa+'</div></div><div class="hbar-val" style="color:'+POS_TXT_FM[pos]+'">'+fa+'</div><div style="font-size:8px;color:var(--dim);margin-left:4px">'+(diff>=0?'+':'')+diff+'%</div></div>';
+      });
+      _fmHtml+='<div class="team-avg-line"><span style="display:inline-block;width:24px;height:1px;border-top:2px dashed var(--dim);vertical-align:middle"></span>Team avg: <strong style="color:var(--teal);margin-left:4px">'+_fmFta+' '+_fmMc.unit+'</strong></div></div>';
+      container.innerHTML=_fmHtml;
+      return;
+    }
+    /* No LIVE_HALF_DATA — fall through to all-drills view */
+    drillSlug='all';
+  }
 
   /* Metric config */
   var MC={
@@ -8688,18 +8834,10 @@ function renderProfPerfBars(pk){
     </div>
     <div id="cmp-int-live" style="min-height:40px"><div style="font-size:9px;color:var(--muted);padding:8px 0">Loading drill intensity data…</div></div>
 
-  <!-- ─── [3] CONTROLS ─── -->
+  <!-- ─── [3] CHART CONTROLS ─── -->
   <div class="ctrl-row" style="gap:14px">
     <div class="ctrl-col">
-      <div class="ctrl-label">Drill <span style="font-size:8px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">— linked to Subject above</span></div>
-      <select id="cmp-drill" class="sc-select" onchange="cmpDrillChange(this.value)" style="min-width:170px">
-        <option value="all" selected>All drills</option>
-        <!-- populated by cmpSyncSession() -->
-      </select>
-    </div>
-    <div class="ctrl-sep"></div>
-    <div class="ctrl-col">
-      <div class="ctrl-label">Metric</div>
+      <div class="ctrl-label">Metric <span style="font-size:8px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">— drill selection via Subject above</span></div>
       <select id="cmp-metric" class="sc-select" onchange="renderCmpDrillChart()" style="min-width:160px">
         <option value="hmld" selected>HMLD</option>
         <option value="hmldMin">HMLD/min</option>
