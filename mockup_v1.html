@@ -5224,12 +5224,58 @@ function cmpSyncSession(){
             dur:Math.round(avgDur),n:n};
   }
 
-  var cur=_sessAvg(sessKey, posFilter==='all'?null:posFilter);
+  /* Lookup a single player's session row (for individual player views) */
+  function _playerRow(sk, playerKey){
+    var rows=(window.LIVE_SESSION_DATA[sk]||[]).filter(function(r){
+      return r.player&&_normPlayerName(r.player)===playerKey;
+    });
+    if(!rows.length) return null;
+    var r=rows[0]; var dur=r.dur||0;
+    var z6=Math.round(r.sprint||r.z6||0);
+    return {td:Math.round(r.td||0),hmld:Math.round(r.hmld||0),
+      hsr:Math.round(r.hsr||0),z6:z6,z5:Math.round((r.hmld||0)-z6),
+      acc:Math.round(r.acc||0),dec:Math.round(r.dec||0),
+      tdMin:r.tdMin||0,hmldMin:r.hmldMin||0,hsrMin:r.hsrMin||0,
+      accMin:dur>0?parseFloat((r.acc/dur).toFixed(2)):0,
+      decMin:dur>0?parseFloat((r.dec/dur).toFixed(2)):0,
+      dur:Math.round(dur),n:1,_pos:r.pos||''};
+  }
+
+  /* Detect player-individual view mode */
+  var vmEl=document.getElementById('cmp-view-mode');
+  var viewMode=vmEl?vmEl.value:'cv-team';
+  var isPlayerMode=viewMode==='cv-pvt'||viewMode==='cv-pvta'||viewMode==='cv-pvpa';
+
+  var cur=null, vsMetrics=null, vsLabel='—';
+
+  if(isPlayerMode){
+    /* Player A from pv-sel-a, Player B from pv-sel-b */
+    var _selA=document.getElementById('pv-sel-a');
+    var _selB=document.getElementById('pv-sel-b');
+    var _keyA=_selA?_selA.value:'';
+    var _keyB=_selB?_selB.value:'';
+    var _nameB=_selB&&_selB.options[_selB.selectedIndex]?
+      (_selB.options[_selB.selectedIndex].text||'').replace(/\s*\([A-Z]+\)\s*$/,'').trim():'Player B';
+    cur=_playerRow(sessKey,_keyA)||_sessAvg(sessKey,null);
+    if(viewMode==='cv-pvt'){
+      /* Both players from SAME session */
+      vsMetrics=_keyB?(_playerRow(sessKey,_keyB)||_sessAvg(sessKey,null)):_sessAvg(sessKey,null);
+      vsLabel=_nameB+' · '+(sess.label||sessKey);
+    } else if(viewMode==='cv-pvta'){
+      vsMetrics=_sessAvg(sessKey,null);
+      vsLabel='Team avg · '+(sess.label||sessKey);
+    } else { /* cv-pvpa */
+      var _pPos=_cmpBenchPos((cur&&cur._pos)||'');
+      vsMetrics=_sessAvg(sessKey,_pPos)||_sessAvg(sessKey,null);
+      vsLabel=_pPos+' avg · '+(sess.label||sessKey);
+    }
+  } else {
+    cur=_sessAvg(sessKey,posFilter==='all'?null:posFilter);
+  }
   if(!cur) return;
 
-  /* Find comparison data */
+  /* Find benchmark comparison data (non-player modes) */
   var allKeys=Object.keys(window.LIVE_SESSION_DATA).sort();
-  var vsMetrics=null, vsLabel='—';
 
   function _isMatch(k){
     return (window.LIVE_SESSION_DATA[k]||[]).some(function(r){
@@ -5250,29 +5296,29 @@ function cmpSyncSession(){
     return res;
   }
 
-  if(vsVal==='bm-match'){
-    var mKeys=allKeys.filter(function(k){return k!==sessKey&&_isMatch(k);}).reverse();
-    if(mKeys.length){var a=_sessAvg(mKeys[0],null);if(a){vsMetrics=a;var s=SESSION_DB[mKeys[0]]||{};vsLabel=(s.label||mKeys[0])+' — '+(s.typeLabel||'Match');}}
-  } else if(vsVal==='bm-3match'){
-    var mKeys3=allKeys.filter(function(k){return k!==sessKey&&_isMatch(k);}).reverse().slice(0,3);
-    var avgs3=mKeys3.map(function(k){return _sessAvg(k,null);}).filter(Boolean);
-    if(avgs3.length){vsMetrics=_multiAvg(avgs3);vsLabel='Last '+avgs3.length+' match avg';}
-  } else if(vsVal==='bm-champ'){
-    var cKeys=allKeys.filter(function(k){return k!==sessKey&&_isChamp(k);}).reverse();
-    var avgsCh=cKeys.map(function(k){return _sessAvg(k,null);}).filter(Boolean);
-    if(avgsCh.length){vsMetrics=_multiAvg(avgsCh);vsLabel='Championship avg ('+avgsCh.length+' games)';}
-  } else if(vsVal==='bm-md2'){
-    /* MD-2: sessions 2 days before a match (matchProx = 'MD−2') */
-    var md2Keys=allKeys.filter(function(k){
-      return k!==sessKey&&SESSION_DB[k]&&(SESSION_DB[k].matchProx||'').indexOf('MD−2')>-1;
-    });
-    var avgsMd2=md2Keys.map(function(k){return _sessAvg(k,null);}).filter(Boolean);
-    if(avgsMd2.length){vsMetrics=_multiAvg(avgsMd2);vsLabel='MD−2 avg ('+avgsMd2.length+' sessions)';}
-  }
-  if(!vsMetrics){
-    /* Fallback: previous session */
-    var prevK=allKeys.filter(function(k){return k<sessKey;}).reverse();
-    if(prevK.length){var pA=_sessAvg(prevK[0],null);if(pA){vsMetrics=pA;var ps2=SESSION_DB[prevK[0]]||{};vsLabel=(ps2.label||prevK[0])+' (previous)';}}
+  if(!isPlayerMode){
+    if(vsVal==='bm-match'){
+      var mKeys=allKeys.filter(function(k){return k!==sessKey&&_isMatch(k);}).reverse();
+      if(mKeys.length){var a=_sessAvg(mKeys[0],null);if(a){vsMetrics=a;var s=SESSION_DB[mKeys[0]]||{};vsLabel=(s.label||mKeys[0])+' — '+(s.typeLabel||'Match');}}
+    } else if(vsVal==='bm-3match'){
+      var mKeys3=allKeys.filter(function(k){return k!==sessKey&&_isMatch(k);}).reverse().slice(0,3);
+      var avgs3=mKeys3.map(function(k){return _sessAvg(k,null);}).filter(Boolean);
+      if(avgs3.length){vsMetrics=_multiAvg(avgs3);vsLabel='Last '+avgs3.length+' match avg';}
+    } else if(vsVal==='bm-champ'){
+      var cKeys=allKeys.filter(function(k){return k!==sessKey&&_isChamp(k);}).reverse();
+      var avgsCh=cKeys.map(function(k){return _sessAvg(k,null);}).filter(Boolean);
+      if(avgsCh.length){vsMetrics=_multiAvg(avgsCh);vsLabel='Championship avg ('+avgsCh.length+' games)';}
+    } else if(vsVal==='bm-md2'){
+      var md2Keys=allKeys.filter(function(k){
+        return k!==sessKey&&SESSION_DB[k]&&(SESSION_DB[k].matchProx||'').indexOf('MD−2')>-1;
+      });
+      var avgsMd2=md2Keys.map(function(k){return _sessAvg(k,null);}).filter(Boolean);
+      if(avgsMd2.length){vsMetrics=_multiAvg(avgsMd2);vsLabel='MD−2 avg ('+avgsMd2.length+' sessions)';}
+    }
+    if(!vsMetrics){
+      var prevK=allKeys.filter(function(k){return k<sessKey;}).reverse();
+      if(prevK.length){var pA=_sessAvg(prevK[0],null);if(pA){vsMetrics=pA;var ps2=SESSION_DB[prevK[0]]||{};vsLabel=(ps2.label||prevK[0])+' (previous)';}}
+    }
   }
   if(!vsMetrics) return;
 
@@ -5299,7 +5345,14 @@ function cmpSyncSession(){
 
   var sess=SESSION_DB[sessKey]||{};
   var posNote=posFilter!=='all'?' · '+posFilter+' only':'';
-  var curLabel=(sess.label||sessKey)+' ('+(sess.typeLabel||'Session')+')'+posNote;
+  /* For player mode: show player name in left column label */
+  var _selAname=isPlayerMode?(function(){var s=document.getElementById('pv-sel-a');return s&&s.options[s.selectedIndex]?(s.options[s.selectedIndex].text||'').replace(/\s*\([A-Z]+\)\s*$/,'').trim():'Player A';})():'';
+  var curLabel=isPlayerMode?
+    (_selAname+' · '+(sess.label||sessKey)):
+    ((sess.label||sessKey)+' ('+(sess.typeLabel||'Session')+')'+posNote);
+  var curDesc=isPlayerMode?
+    (_selAname+' individual · '+(sess.label||sessKey)+' · '+cur.dur+' min'):
+    (cur.n+' players · avg '+cur.dur+' min');
 
   /* Volume panel */
   var volHtml=_mkRow(cur.td,'Total Distance',vsMetrics.td,'m')
@@ -5310,8 +5363,9 @@ function cmpSyncSession(){
     +_mkRow(cur.acc,'Acc events',vsMetrics.acc,'count')
     +_mkRow(cur.dec,'Dec events',vsMetrics.dec,'count')
     +'<div style="font-size:9px;color:var(--muted);margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">'
-    +'Left = <strong>'+curLabel+'</strong> · '+cur.n+' players · avg '+cur.dur+' min &nbsp;|&nbsp; '
-    +'Right = <strong>'+vsLabel+'</strong> · absolute volume varies with duration — use Density tab for the meaningful comparison</div>';
+    +'Left = <strong>'+curLabel+'</strong> · '+curDesc+' &nbsp;|&nbsp; '
+    +'Right = <strong>'+vsLabel+'</strong>'
+    +(isPlayerMode?' · individual data from same session':' · absolute volume varies with duration — use Density tab for the meaningful comparison')+'</div>';
 
   /* Density panel */
   var denHtml=_mkRow(cur.tdMin,'Total dist /min',vsMetrics.tdMin,'m/min')
@@ -8700,10 +8754,9 @@ function renderProfPerfBars(pk){
       </div>
       <div class="cmp-ctrl-row">
         <span class="cmp-ctrl-lbl">View</span>
-        <select class="sc-select" onchange="rd(this.value)">
+        <select class="sc-select" id="cmp-view-mode" onchange="rd(this.value);cmpSyncSession()">
           <option value="cv-team" selected>Team avg</option>
           <option value="cv-pos">Position avg</option>
-          <option value="cv-player">Player…</option>
           <option value="cv-pvt">Player vs Teammate</option>
           <option value="cv-pvta">Player vs Team avg</option>
           <option value="cv-pvpa">Player vs Position avg</option>
@@ -8713,11 +8766,11 @@ function renderProfPerfBars(pk){
       <div class="pv-sub-pvt cmp-ctrl-row" style="padding-top:6px">
         <span class="cmp-ctrl-lbl">Players</span>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <select id="pv-sel-a" class="pv-sel" onchange="try{_updateCmpPlayerHeader();}catch(e){}">
+          <select id="pv-sel-a" class="pv-sel" onchange="try{_updateCmpPlayerHeader();}catch(e){};try{cmpSyncSession();}catch(e){}">
             <option>Loading…</option>
           </select>
           <span style="font-size:9px;color:var(--muted);font-weight:600">vs</span>
-          <select id="pv-sel-b" class="pv-sel" onchange="try{_updateCmpPlayerHeader();}catch(e){}">
+          <select id="pv-sel-b" class="pv-sel" onchange="try{_updateCmpPlayerHeader();}catch(e){};try{cmpSyncSession();}catch(e){}">
             <option>Loading…</option>
           </select>
           <span style="font-size:9px;color:var(--muted)">· intra-session comparison · benchmark row not applied</span>
