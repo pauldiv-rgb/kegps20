@@ -6749,6 +6749,8 @@ function loadLiveData(){
           });
         }
       }
+      /* Expose per-week EA HMLD so updateWeeklyTargetPage() can include EA in bar totals */
+      window.LIVE_EA_BY_WEEK = _eaByWeek;
 
       var badge=document.querySelector('.badge');
       if(badge) badge.textContent='Live · '+last8[7];
@@ -6882,6 +6884,24 @@ function updateWeeklyTargetPage(){
       playerMap[pk].hsr+=(r.hsr||0);
     });
   });
+  /* Inject EA HMLD for players when HMLD metric is selected */
+  if(metricKey==='hmld'&&window.LIVE_EA_BY_WEEK){
+    Object.keys(window.LIVE_EA_BY_WEEK).forEach(function(pk){
+      if(!playerMap[pk]) return; /* EA-only, no GPS in window — skip */
+      var wkMap=window.LIVE_EA_BY_WEEK[pk];
+      var eaSum=0;
+      Object.keys(wkMap).forEach(function(wkStart){
+        var wkDate=new Date(wkStart+'T00:00:00Z');
+        var wkEnd=new Date(wkDate.getTime()+6*864e5);
+        if(wkEnd>=cutoff&&wkDate<=latestDate) eaSum+=wkMap[wkStart];
+      });
+      if(eaSum>0){
+        playerMap[pk].eaHmld=(playerMap[pk].eaHmld||0)+eaSum;
+        playerMap[pk].hmld+=eaSum;
+      }
+    });
+  }
+
   var allPlayers=Object.values(playerMap);
   if(!allPlayers.length){
     /* No sessions in window — show most recent session's data as fallback */
@@ -6995,7 +7015,7 @@ function updateWeeklyTargetPage(){
         +'<div class="b-pos">'+pg+'</div>'
         +'<div class="b-track"><div class="b-fill" style="width:'+fillW+'%;background:'+_barFill(pct)+'"></div>'
         +'<div class="b-line" style="left:'+lineLeft+'%"></div></div>'
-        +'<div class="b-val '+cls+'">'+v.toLocaleString()+' '+metricUnit+'</div>'
+        +'<div class="b-val '+cls+'">'+(p.eaHmld&&metricKey==='hmld'?'<span title="Includes ~'+Math.round(p.eaHmld).toLocaleString()+'m estimated external activity HMLD" style="font-size:7px;font-weight:700;color:#81C784;background:rgba(129,199,132,.15);border:1px solid rgba(129,199,132,.4);border-radius:3px;padding:1px 3px;margin-right:3px;vertical-align:middle">+EA</span>':'')+v.toLocaleString()+' '+metricUnit+'</div>'
         +'<div class="b-pct '+cls+'">'+pct+'%</div></div>';
     });
   });
@@ -7005,7 +7025,8 @@ function updateWeeklyTargetPage(){
   var benchSL=document.querySelector('#p1 .bench-wrap .sec-label');
   if(benchSL) benchSL.textContent='[2] '+windowDays+'d '+metricLabels[metricKey]+' vs positional benchmark · sorted by % achieved'+(posFilter!=='all'?' · '+posFilter+' only':'');
   var benchNote=document.querySelector('#p1 .bench-wrap>div:last-child');
-  if(benchNote&&benchNote.style) benchNote.textContent='Benchmark = position group average ('+windowDays+'d '+metricKey.toUpperCase()+') from live GPS data · computed from current window';
+  var _eaActive=metricKey==='hmld'&&window.LIVE_EA_BY_WEEK&&Object.keys(window.LIVE_EA_BY_WEEK).length>0;
+  if(benchNote&&benchNote.style) benchNote.textContent='Benchmark = position group average ('+windowDays+'d '+metricKey.toUpperCase()+') from live GPS data · computed from current window'+(_eaActive?' · +EA: external activity HMLD estimated and included in player totals':'');
 }
 
 /* ── Page 3: Training quality — rebuild from LIVE_SESSION_DATA ── */
