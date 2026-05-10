@@ -6679,6 +6679,7 @@ function loadLiveData(){
           var diff=dow===0?-6:1-dow;
           return new Date(d.getTime()+diff*864e5).toISOString().slice(0,10);
         }
+        window.LIVE_EA_ROWS={};  /* {playerKey: [{dateStr,actType,dur,estHMLD,rpe,estLoad}]} */
         var eaLines=eaTxt.trim().split(/\r?\n/);
         for(var ei=2;ei<eaLines.length;ei++){
           var ev=_parseCSVLine(eaLines[ei]);
@@ -6696,6 +6697,16 @@ function loadLiveData(){
           /* LIVE_EA_HMLD: cumulative total (used for Match Stimulus / planning bars) */
           if(!window.LIVE_EA_HMLD[ePk]) window.LIVE_EA_HMLD[ePk]={name:ePl,pos:(_eaRates[ePk]&&_eaRates[ePk].pos)||'',estHMLD:0};
           window.LIVE_EA_HMLD[ePk].estHMLD+=eEstHMLD;
+          /* LIVE_EA_ROWS: per-event log (used for Player Profile EA log) */
+          if(!window.LIVE_EA_ROWS[ePk]) window.LIVE_EA_ROWS[ePk]=[];
+          window.LIVE_EA_ROWS[ePk].push({
+            dateStr:(ev[0]||'').trim(),
+            actType:(ev[3]||'').trim(),
+            dur:eDur,
+            estHMLD:eEstHMLD,
+            rpe:parseFloat(ev[6])||null,
+            estLoad:parseFloat(ev[11])||null
+          });
           /* _eaByWeek: per-week breakdown for ACWR correction */
           var eWs=_eaDateToWeekStart((ev[0]||'').trim());
           if(eWs){
@@ -7831,7 +7842,8 @@ function renderFlagCards(){
     var _weekAgeDays=rec.week?Math.round((new Date()-new Date(rec.week))/86400000):0;
     if(stale&&_weekAgeDays>21) return;
     flagged.push({key:key,name:rec.name,pos:_flagPosLabel(rec.pos),
-      acwr:rec.acwr,acute:rec.acute,risk:risk,arrow:arrow,peakSpd:peakSpd,stale:stale,week:rec.week||''});
+      acwr:rec.acwr,acute:rec.acute,risk:risk,arrow:arrow,peakSpd:peakSpd,stale:stale,week:rec.week||'',
+      eaCorrected:rec._eaCorrected||false});
   });
 
   /* F01: Absent player detection — last GPS session >21 days ago */
@@ -7895,17 +7907,20 @@ function renderFlagCards(){
     var vCls=p.risk==='high'?'c-red':p.risk==='caution'?'c-amber':'c-blue';
     var staleBadge=p.stale?'<span style="font-size:7px;font-weight:700;color:#FF9800;background:rgba(255,152,0,.15);border:1px solid rgba(255,152,0,.4);border-radius:3px;padding:1px 4px;margin-left:6px;letter-spacing:.04em">STALE · wk '+_escHtml(p.week)+'</span>':'';
     var staleNote=p.stale?'<div style="font-size:8px;color:#FF9800;margin-top:4px;padding:4px 6px;background:rgba(255,152,0,.08);border-radius:4px">⚠ ACWR from '+_escHtml(p.week)+' — player has not attended since. Verify current status before acting.</div>':'';
+    var eaBadge=p.eaCorrected?'<span style="font-size:7px;font-weight:700;color:#81C784;background:rgba(129,199,132,.15);border:1px solid rgba(129,199,132,.4);border-radius:3px;padding:1px 4px;margin-left:5px;letter-spacing:.04em;vertical-align:middle" title="Includes estimated external activity load">EA+</span>':'';
+    var eaNote=p.eaCorrected?'<div style="font-size:8px;color:rgba(129,199,132,.85);margin-top:4px;padding:4px 6px;background:rgba(129,199,132,.06);border-radius:4px;border:1px solid rgba(129,199,132,.2)">ⓘ ACWR includes estimated external activity load (club/county). See Player Profile for breakdown.</div>':'';
     return '<div class="flag" style="border-left-color:'+col+(p.stale?';opacity:.85':'') +'">'
       +'<div class="flag-hdr"><div><div class="flag-name">'+_escHtml(p.name)+staleBadge+'</div>'
       +'<div class="flag-pos">'+_escHtml(p.pos)+'</div></div>'
       +'<span class="pill '+pillCls+'">'+pillLbl+'</span></div>'
       +'<div class="flag-mets">'
-      +'<div class="fm"><div class="fm-lbl">HMLD ACWR</div><div class="fm-val '+vCls+'">'+p.acwr.toFixed(2)+' '+p.arrow+'</div></div>'
+      +'<div class="fm"><div class="fm-lbl">HMLD ACWR</div><div class="fm-val '+vCls+'">'+p.acwr.toFixed(2)+' '+p.arrow+eaBadge+'</div></div>'
       +'<div class="fm"><div class="fm-lbl">7d HMLD</div><div class="fm-val">'+(p.acute?Math.round(p.acute).toLocaleString()+' m':'—')+'</div></div>'
       +'<div class="fm"><div class="fm-lbl">Peak Spd</div><div class="fm-val">'+(p.peakSpd?p.peakSpd+' km/h':'—')+'</div></div>'
       +'<div class="fm"><div class="fm-lbl">Trend</div><div class="fm-val '+vCls+'">'+p.arrow+' '+_flagTrendLbl(p.acwr,p.arrow)+'</div></div>'
       +'</div>'
       +staleNote
+      +eaNote
       +'<div class="flag-action">'+_flagAction(p.risk,p.acwr,p.arrow)+'</div>'
       +'</div>';
   }
@@ -8418,6 +8433,9 @@ function renderPlayerProfile(){
 
   /* [5] Performance bars */
   renderProfPerfBars(pk);
+
+  /* [6] External activity log */
+  renderProfEALog(pk);
 }
 
 function renderProfDrillTable(pk, sessKey){
@@ -8956,6 +8974,18 @@ function renderProfPerfBars(pk){
 
   </div><!-- /grid -->
 
+  <!-- External Activity log — populated by renderProfEALog() from LIVE_EA_ROWS -->
+  <div class="cmp-wrap" style="padding:14px 18px 16px;margin-bottom:20px" id="prof-ea-wrap">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div class="sec-label" style="margin:0">External activity log <span style="font-size:8px;font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0">· estimated load · not GPS-verified</span></div>
+      <span id="prof-ea-total" style="font-size:9px;color:var(--muted)"></span>
+    </div>
+    <div id="prof-ea-body">
+      <div style="font-size:9px;color:var(--muted);padding:8px 0">No external activity logged for this player.</div>
+    </div>
+    <div style="font-size:8px;color:var(--muted);margin-top:8px;border-top:1px solid var(--border);padding-top:8px">Est. HMLD = player GPS HMLD/min rate × duration · RPE × duration = session load · values are estimates, not GPS-measured</div>
+  </div>
+
 </div><!-- /pprof -->
 
 <!-- ═══════════════════════════════════════
@@ -9135,6 +9165,90 @@ function renderProfPerfBars(pk){
 /* ═══════════════════════════════════════════════════════════
    PAGE 9 — MD SCORECARD  (live session data, match sessions only)
    ══════════════════════════════════════════════════════════ */
+
+/* ── Player Profile — External Activity log ── */
+function renderProfEALog(pk){
+  var bodyEl=document.getElementById('prof-ea-body');
+  var totalEl=document.getElementById('prof-ea-total');
+  if(!bodyEl) return;
+
+  var rows=window.LIVE_EA_ROWS&&window.LIVE_EA_ROWS[pk];
+  if(!rows||!rows.length){
+    bodyEl.innerHTML='<div style="font-size:9px;color:var(--muted);padding:8px 0">No external activity logged for this player.</div>';
+    if(totalEl) totalEl.textContent='';
+    return;
+  }
+
+  /* Sort chronologically — parse "Tue,  17, Mar" loosely */
+  var _EA_MON2={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+  function _eaRowDate(r){
+    var p=(r.dateStr||'').split(',');
+    if(p.length<3) return new Date(0);
+    var d=parseInt(p[1]),mon=_EA_MON2[(p[2]||'').trim().toLowerCase().substring(0,3)];
+    if(isNaN(d)||mon===undefined) return new Date(0);
+    var yr=(mon>=8)?2025:2026;
+    return new Date(Date.UTC(yr,mon,d));
+  }
+  function _eaFmtDate(r){
+    var p=(r.dateStr||'').split(',');
+    if(p.length<3) return r.dateStr||'—';
+    var d=parseInt(p[1]),monStr=(p[2]||'').trim();
+    return d+' '+monStr.charAt(0).toUpperCase()+monStr.slice(1,4).toLowerCase();
+  }
+  var sorted=rows.slice().sort(function(a,b){return _eaRowDate(a)-_eaRowDate(b);});
+
+  /* Activity type colour coding */
+  function _eaTypeCol(t){
+    var tl=(t||'').toLowerCase();
+    if(/county/.test(tl)) return '#9C6FE4';  /* purple — highest standard */
+    if(/match|game/.test(tl)) return '#EF9F27'; /* amber — club match */
+    return '#4FC3F7';  /* blue — training */
+  }
+  function _eaTypeLbl(t){
+    var tl=(t||'').toLowerCase();
+    if(/county.*match/.test(tl)) return 'County Match';
+    if(/club.*match/.test(tl)||/match/.test(tl)) return 'Club Match';
+    if(/club.*train/.test(tl)) return 'Club Training';
+    return t||'Activity';
+  }
+
+  var totalHMLD=sorted.reduce(function(a,r){return a+r.estHMLD;},0);
+  var totalLoad=sorted.reduce(function(a,r){return a+(r.estLoad||0);},0);
+
+  if(totalEl) totalEl.textContent=sorted.length+' entries · '+totalHMLD.toLocaleString()+' m est. HMLD · '+totalLoad.toLocaleString()+' AU est. load';
+
+  var html='<table style="width:100%;border-collapse:collapse;font-size:10px">'
+    +'<thead><tr style="border-bottom:1px solid var(--border)">'
+    +'<th style="text-align:left;padding:5px 8px;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">Date</th>'
+    +'<th style="text-align:left;padding:5px 8px;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">Activity</th>'
+    +'<th style="text-align:right;padding:5px 8px;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">Duration</th>'
+    +'<th style="text-align:right;padding:5px 8px;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">Est. HMLD</th>'
+    +'<th style="text-align:right;padding:5px 8px;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">RPE</th>'
+    +'<th style="text-align:right;padding:5px 8px;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">Load (AU)</th>'
+    +'</tr></thead><tbody>';
+
+  sorted.forEach(function(r){
+    var col=_eaTypeCol(r.actType);
+    var lbl=_eaTypeLbl(r.actType);
+    html+='<tr style="border-bottom:1px solid rgba(255,255,255,.04)">'
+      +'<td style="padding:6px 8px;color:var(--dim)">'+_eaFmtDate(r)+'</td>'
+      +'<td style="padding:6px 8px"><span style="font-size:8px;font-weight:700;color:'+col+';background:'+col.replace(')',',0.12)').replace('rgb','rgba')+';border-radius:3px;padding:1px 6px">'+lbl+'</span></td>'
+      +'<td style="padding:6px 8px;text-align:right;color:var(--text)">'+r.dur+' min</td>'
+      +'<td style="padding:6px 8px;text-align:right;font-weight:600;color:var(--accent)">'+r.estHMLD.toLocaleString()+' m</td>'
+      +'<td style="padding:6px 8px;text-align:right;color:var(--dim)">'+(r.rpe!=null?r.rpe:'—')+'</td>'
+      +'<td style="padding:6px 8px;text-align:right;color:var(--dim)">'+(r.estLoad!=null?r.estLoad.toLocaleString():'—')+'</td>'
+      +'</tr>';
+  });
+
+  html+='<tr style="border-top:1px solid var(--border)">'
+    +'<td colspan="3" style="padding:6px 8px;font-size:9px;font-weight:700;color:var(--muted)">Total</td>'
+    +'<td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--accent)">'+totalHMLD.toLocaleString()+' m</td>'
+    +'<td></td>'
+    +'<td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--dim)">'+totalLoad.toLocaleString()+' AU</td>'
+    +'</tr></tbody></table>';
+
+  bodyEl.innerHTML=html;
+}
 
 var _mdSessKey   = null; /* currently selected match session key */
 var _mdPosFilter = 'team'; /* 'team' | 'def' | 'mid' | 'fwd' — filters player table */
