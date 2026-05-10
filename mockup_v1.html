@@ -730,6 +730,7 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
 .lb-sel:focus{outline:none;border-color:var(--accent)}
 .lb-cols{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
 @media(max-width:600px){.lb-cols{grid-template-columns:1fr}}
+@media(max-width:480px){.pg-q{font-size:15px}.mc-names,.mc-row{grid-template-columns:1fr 100px 1fr}.mc-vl,.mc-vr{font-size:11px}}
 .lb-col{
   background:var(--bg);border:1px solid var(--border);
   border-radius:8px;padding:10px 12px;
@@ -5209,8 +5210,8 @@ function cmpSyncSession(){
     var avgTd=Math.round(_avg(function(r){return r.td||0;}));
     var avgHmld=Math.round(_avg(function(r){return r.hmld||0;}));
     var avgHsr=Math.round(_avg(function(r){return r.hsr||0;}));
-    var avgZ6=Math.round(_avg(function(r){return r.z6||0;}));
-    var avgZ5=Math.round(_avg(function(r){return (r.hmld||0)-(r.z6||0);}));
+    var avgZ6=Math.round(_avg(function(r){return r.sprint||r.z6||0;}));
+    var avgZ5=Math.round(_avg(function(r){return (r.hmld||0)-(r.sprint||r.z6||0);}));
     var avgAcc=Math.round(_avg(function(r){return r.acc||0;}));
     var avgDec=Math.round(_avg(function(r){return r.dec||0;}));
     var avgTdMin=parseFloat((_avg(function(r){return r.tdMin||0;})).toFixed(1));
@@ -5369,6 +5370,8 @@ function cmpSyncSession(){
   /* ── Render live intensity and drill chart ── */
   _renderCmpIntensity(sessKey, _drillSlug);
   renderCmpDrillChart();
+  /* ── Sync player header labels (name + session date) ── */
+  try{_updateCmpPlayerHeader();}catch(e){}
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -7454,6 +7457,55 @@ function updateCmpPlayerSelects(){
     if(prev&&sel.querySelector('option[value="'+_escHtml(prev)+'"]')) sel.value=prev;
     else sel.selectedIndex=Math.min(i,sel.options.length-1);
   });
+  /* Sync column header labels to reflect the now-populated selectors */
+  try{_updateCmpPlayerHeader();}catch(e){}
+}
+
+/* ── Update comparison column-header player name labels ── */
+function _updateCmpPlayerHeader(){
+  /* Extract plain name from option text (strips " (POS)" suffix) */
+  function _optName(selId){
+    var sel=document.getElementById(selId);
+    if(!sel||!sel.options[sel.selectedIndex]) return '—';
+    return (sel.options[sel.selectedIndex].text||'').replace(/\s*\([A-Z]+\)\s*$/,'').trim();
+  }
+  /* Get position from option text */
+  function _optPos(selId){
+    var sel=document.getElementById(selId);
+    if(!sel||!sel.options[sel.selectedIndex]) return '';
+    var m=(sel.options[sel.selectedIndex].text||'').match(/\(([A-Z]+)\)$/);
+    return m?m[1]:'MID';
+  }
+
+  var nameA=_optName('pv-sel-a');
+  var nameB=_optName('pv-sel-b');
+  var posA=_optPos('pv-sel-a');
+
+  /* Session label for sub-line */
+  var cs=document.getElementById('cmp-session');
+  var sessKey=cs?cs.value:'';
+  var sessLabel=SESSION_DB&&SESSION_DB[sessKey]?SESSION_DB[sessKey].label||sessKey:sessKey;
+
+  /* Update all player-name spans in the column header block */
+  ['cv-lbl-player','cv-lbl-pvt','cv-lbl-pvta','cv-lbl-pvpa'].forEach(function(cls){
+    document.querySelectorAll('#p34 .mc-names .'+cls).forEach(function(el){
+      el.textContent=nameA;
+    });
+  });
+  /* Sub-line (position · session label) */
+  ['cv-lbl-player','cv-lbl-pvt','cv-lbl-pvta','cv-lbl-pvpa'].forEach(function(cls){
+    document.querySelectorAll('#p34 .mc-names .mc-sm .'+cls).forEach(function(el){
+      el.textContent=posA+' · '+sessLabel;
+    });
+  });
+  /* Right-side comparison: player B name (pvt view only) */
+  var cvBmPvt=document.querySelector('#p34 .mc-names .cv-bm-pvt');
+  if(cvBmPvt) cvBmPvt.textContent=nameB;
+  var cvBmPvtSub=document.querySelector('#p34 .mc-names .mc-sm .cv-bm-pvt');
+  if(cvBmPvtSub){
+    var posB=_optPos('pv-sel-b');
+    cvBmPvtSub.textContent=posB+' · '+sessLabel;
+  }
 }
 
 /* ── Fixture strips on Pages 4 and 6 — rebuilt from MATCH_RECORD ── */
@@ -8505,11 +8557,11 @@ function renderProfPerfBars(pk){
       <div class="pv-sub-pvt cmp-ctrl-row" style="padding-top:6px">
         <span class="cmp-ctrl-lbl">Players</span>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <select id="pv-sel-a" class="pv-sel">
+          <select id="pv-sel-a" class="pv-sel" onchange="try{_updateCmpPlayerHeader();}catch(e){}">
             <option>Loading…</option>
           </select>
           <span style="font-size:9px;color:var(--muted);font-weight:600">vs</span>
-          <select id="pv-sel-b" class="pv-sel">
+          <select id="pv-sel-b" class="pv-sel" onchange="try{_updateCmpPlayerHeader();}catch(e){}">
             <option>Loading…</option>
           </select>
           <span style="font-size:9px;color:var(--muted)">· intra-session comparison · benchmark row not applied</span>
@@ -8518,7 +8570,7 @@ function renderProfPerfBars(pk){
       <div class="pv-sub-pvtap cmp-ctrl-row" style="padding-top:6px">
         <span class="cmp-ctrl-lbl">Player</span>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <select id="pv-sel-c" class="pv-sel">
+          <select id="pv-sel-c" class="pv-sel" onchange="try{_updateCmpPlayerHeader();}catch(e){}">
             <option>Loading…</option>
           </select>
           <span style="font-size:9px;color:var(--muted)">· intra-session comparison · benchmark row not applied</span>
