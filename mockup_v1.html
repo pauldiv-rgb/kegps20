@@ -5094,6 +5094,8 @@ function cmpSyncSession(){
   var isPlayerMode=viewMode==='cv-pvt'||viewMode==='cv-pvta'||viewMode==='cv-pvpa';
 
   var cur=null, vsMetrics=null, vsLabel='—';
+  /* Track whether each player was actually found in this session's GPS data */
+  var _playerAMissing=false, _playerBMissing=false;
 
   if(isPlayerMode){
     /* Player A from pv-sel-a, Player B from pv-sel-b */
@@ -5103,10 +5105,14 @@ function cmpSyncSession(){
     var _keyB=_selB?_selB.value:'';
     var _nameB=_selB&&_selB.options[_selB.selectedIndex]?
       (_selB.options[_selB.selectedIndex].text||'').replace(/\s*\([A-Z]+\)\s*$/,'').trim():'Player B';
-    cur=_playerRow(sessKey,_keyA)||_sessAvg(sessKey,null);
+    var _rowA=_keyA?_playerRow(sessKey,_keyA):null;
+    _playerAMissing=!!(_keyA&&!_rowA);
+    cur=_rowA||_sessAvg(sessKey,null);
     if(viewMode==='cv-pvt'){
       /* Both players from SAME session */
-      vsMetrics=_keyB?(_playerRow(sessKey,_keyB)||_sessAvg(sessKey,null)):_sessAvg(sessKey,null);
+      var _rowB=_keyB?_playerRow(sessKey,_keyB):null;
+      _playerBMissing=!!(_keyB&&!_rowB);
+      vsMetrics=_rowB||_sessAvg(sessKey,null);
       vsLabel=_nameB+' · '+(sess.label||sessKey);
     } else if(viewMode==='cv-pvta'){
       vsMetrics=_sessAvg(sessKey,null);
@@ -5194,33 +5200,42 @@ function cmpSyncSession(){
   /* For player mode: show player name in left column label */
   var _selAname=isPlayerMode?(function(){var s=document.getElementById('pv-sel-a');return s&&s.options[s.selectedIndex]?(s.options[s.selectedIndex].text||'').replace(/\s*\([A-Z]+\)\s*$/,'').trim():'Player A';})():'';
   var curLabel=isPlayerMode?
-    (_selAname+' · '+(sess.label||sessKey)):
+    (_playerAMissing
+      ?('⚠ No GPS data · '+(sess.label||sessKey))
+      :(_selAname+' · '+(sess.label||sessKey))):
     ((sess.label||sessKey)+' ('+(sess.typeLabel||'Session')+')'+posNote);
   var curDesc=isPlayerMode?
-    (_selAname+' individual · '+(sess.label||sessKey)+' · '+cur.dur+' min'):
+    (_playerAMissing
+      ?'Player not tracked in GPS for this session'
+      :(_selAname+' individual · '+(sess.label||sessKey)+' · '+cur.dur+' min')):
     (cur.n+' players · avg '+cur.dur+' min');
 
+  /* Null-value wrappers: pass null to _mkRow so it renders "—" when a player has no GPS data */
+  function _lv(v){return _playerAMissing?null:v;}
+  function _rv(v){return _playerBMissing?null:v;}
+
   /* Volume panel */
-  var volHtml=_mkRow(cur.td,'Total Distance',vsMetrics.td,'m')
-    +_mkRow(cur.hmld,'HMLD (Z5+Z6)',vsMetrics.hmld,'≥25 W/kg')
-    +_mkRow(cur.z6,'Z6 distance',vsMetrics.z6,'≥30 W/kg')
-    +_mkRow(cur.z5,'Z5 distance',vsMetrics.z5,'25–30 W/kg')
-    +_mkRow(cur.hsr,'HSR',vsMetrics.hsr,'high speed running')
-    +_mkRow(cur.acc,'Acc events',vsMetrics.acc,'count')
-    +_mkRow(cur.dec,'Dec events',vsMetrics.dec,'count')
+  var volHtml=_mkRow(_lv(cur.td),'Total Distance',_rv(vsMetrics.td),'m')
+    +_mkRow(_lv(cur.hmld),'HMLD (Z5+Z6)',_rv(vsMetrics.hmld),'≥25 W/kg')
+    +_mkRow(_lv(cur.z6),'Z6 distance',_rv(vsMetrics.z6),'≥30 W/kg')
+    +_mkRow(_lv(cur.z5),'Z5 distance',_rv(vsMetrics.z5),'25–30 W/kg')
+    +_mkRow(_lv(cur.hsr),'HSR',_rv(vsMetrics.hsr),'high speed running')
+    +_mkRow(_lv(cur.acc),'Acc events',_rv(vsMetrics.acc),'count')
+    +_mkRow(_lv(cur.dec),'Dec events',_rv(vsMetrics.dec),'count')
     +'<div style="font-size:9px;color:var(--muted);margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">'
     +'Left = <strong>'+curLabel+'</strong> · '+curDesc+' &nbsp;|&nbsp; '
     +'Right = <strong>'+vsLabel+'</strong>'
     +(isPlayerMode?' · individual data from same session':' · absolute volume varies with duration — use Density tab for the meaningful comparison')+'</div>';
 
   /* Density panel */
-  var denHtml=_mkRow(cur.tdMin,'Total dist /min',vsMetrics.tdMin,'m/min')
-    +_mkRow(cur.hmldMin,'HMLD /min',vsMetrics.hmldMin,'m/min · Z5+Z6')
-    +_mkRow(cur.hsrMin,'HSR /min',vsMetrics.hsrMin,'m/min')
-    +_mkRow(cur.accMin,'Acc events /min',vsMetrics.accMin,null)
-    +_mkRow(cur.decMin,'Dec events /min',vsMetrics.decMin,null)
+  var denHtml=_mkRow(_lv(cur.tdMin),'Total dist /min',_rv(vsMetrics.tdMin),'m/min')
+    +_mkRow(_lv(cur.hmldMin),'HMLD /min',_rv(vsMetrics.hmldMin),'m/min · Z5+Z6')
+    +_mkRow(_lv(cur.hsrMin),'HSR /min',_rv(vsMetrics.hsrMin),'m/min')
+    +_mkRow(_lv(cur.accMin),'Acc events /min',_rv(vsMetrics.accMin),null)
+    +_mkRow(_lv(cur.decMin),'Dec events /min',_rv(vsMetrics.decMin),null)
     +'<div style="font-size:9px;color:var(--muted);margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">'
-    +'Density comparison removes duration bias · HMLD/min target: ≥12 for championship match · HMLD/min this session: '+cur.hmldMin+' vs '+vsMetrics.hmldMin+' ('+vsLabel+')</div>';
+    +'Density comparison removes duration bias · HMLD/min target: ≥12 for championship match · HMLD/min this session: '
+    +(_playerAMissing?'—':cur.hmldMin)+' vs '+(_playerBMissing?'—':vsMetrics.hmldMin)+' ('+vsLabel+')</div>';
 
   var vp=document.querySelector('#p34 .cat-vol-panel'); if(vp) vp.innerHTML=volHtml;
   var dp=document.querySelector('#p34 .cat-den-panel'); if(dp) dp.innerHTML=denHtml;
@@ -5234,6 +5249,12 @@ function cmpSyncSession(){
   ['bm-lbl-3match','bm-lbl-champ','bm-lbl-md2'].forEach(function(cls){
     document.querySelectorAll('#p34 .mc-names .'+cls).forEach(function(el){el.textContent=vsLabel;});
   });
+
+  /* ── Show/hide "no GPS data" warnings in player column headers ── */
+  var _warnA=document.getElementById('cmp-no-gps-a');
+  if(_warnA) _warnA.style.display=(_playerAMissing&&isPlayerMode)?'block':'none';
+  var _warnB=document.getElementById('cmp-no-gps-b');
+  if(_warnB) _warnB.style.display=(_playerBMissing&&viewMode==='cv-pvt')?'block':'none';
 
   /* ── Rebuild drill dropdowns from live data ── */
   var _subjSel=document.getElementById('cmp-subject');
@@ -6638,6 +6659,26 @@ function loadLiveData(){
         var _sqTrAvg=_sqTrN>0?_sqTrSum/_sqTrN:15;
         var _sqMxAvg=_sqMxN>0?_sqMxSum/_sqMxN:20;
         /* Parse EA CSV: row 0 = instructions, row 1 = header, rows 2+ = data */
+        /* Also accumulate per-player per-week EA HMLD for ACWR correction */
+        var _eaByWeek={};  /* {playerKey: {weekStart(yyyy-mm-dd): estHMLD}} */
+        var _EA_MON={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+        function _eaDateToWeekStart(dateStr){
+          /* Parse "Tue,  17, Mar" → Monday of that week, yyyy-mm-dd
+             All arithmetic in UTC to avoid timezone offset shifting dates by ±1 day */
+          var parts=(dateStr||'').replace(/"/g,'').split(',');
+          if(parts.length<3) return null;
+          var dayNum=parseInt(parts[1]);
+          var monStr=parts[2].trim().toLowerCase().substring(0,3);
+          var mon=_EA_MON[monStr];
+          if(isNaN(dayNum)||mon===undefined) return null;
+          /* Heuristic: Sep-Dec = 2025 pre-season, Jan-Aug = 2026 season */
+          var yr=(mon>=8)?2025:2026;
+          /* Use Date.UTC to stay in UTC — prevents BST/IST offset shifting dates back by one day */
+          var d=new Date(Date.UTC(yr,mon,dayNum));
+          var dow=d.getUTCDay(); /* 0=Sun */
+          var diff=dow===0?-6:1-dow;
+          return new Date(d.getTime()+diff*864e5).toISOString().slice(0,10);
+        }
         var eaLines=eaTxt.trim().split(/\r?\n/);
         for(var ei=2;ei<eaLines.length;ei++){
           var ev=_parseCSVLine(eaLines[ei]);
@@ -6652,8 +6693,49 @@ function loadLiveData(){
             ?(_eaRates[ePk]&&_eaRates[ePk].mxRate?_eaRates[ePk].mxRate:_sqMxAvg)
             :(_eaRates[ePk]&&_eaRates[ePk].trRate?_eaRates[ePk].trRate:_sqTrAvg);
           var eEstHMLD=Math.round(eDur*eRate);
+          /* LIVE_EA_HMLD: cumulative total (used for Match Stimulus / planning bars) */
           if(!window.LIVE_EA_HMLD[ePk]) window.LIVE_EA_HMLD[ePk]={name:ePl,pos:(_eaRates[ePk]&&_eaRates[ePk].pos)||'',estHMLD:0};
           window.LIVE_EA_HMLD[ePk].estHMLD+=eEstHMLD;
+          /* _eaByWeek: per-week breakdown for ACWR correction */
+          var eWs=_eaDateToWeekStart((ev[0]||'').trim());
+          if(eWs){
+            if(!_eaByWeek[ePk]) _eaByWeek[ePk]={};
+            _eaByWeek[ePk][eWs]=(_eaByWeek[ePk][eWs]||0)+eEstHMLD;
+          }
+        }
+        /* ── Apply EA correction to LIVE_ACWR ── *
+         * GPS-only weekly HMLD is confirmed to NOT include EA estimated HMLD.
+         * For each player with EA data, add EA contribution to their acute and
+         * chronic (4-week rolling avg) so ACWR reflects total load. */
+        if(Object.keys(LIVE_ACWR).length&&Object.keys(_eaByWeek).length){
+          Object.keys(LIVE_ACWR).forEach(function(pk){
+            var playerEA=_eaByWeek[pk];
+            if(!playerEA) return;
+            var rec=LIVE_ACWR[pk];
+            /* Parse as UTC (rec.week = "yyyy-mm-dd" from Sheets — timezone-neutral string) */
+            var wDate=new Date(rec.week+'T00:00:00Z');
+            if(isNaN(wDate.getTime())) return;
+            /* Acute = EA in same week as most recent GPS week */
+            var eaAcute=playerEA[rec.week]||0;
+            /* Chronic = EA spread across 4-week window ending on rec.week */
+            var eaWindowSum=0,eaWindowN=0;
+            for(var wi=0;wi<4;wi++){
+              /* Subtract wi weeks using milliseconds — stays in UTC */
+              var cDate=new Date(wDate.getTime()-wi*7*864e5);
+              var cWs=cDate.toISOString().slice(0,10);
+              eaWindowSum+=(playerEA[cWs]||0);
+              eaWindowN++;
+            }
+            var eaChronicAdj=eaWindowSum/Math.max(eaWindowN,1);
+            var newAcute=rec.acute+eaAcute;
+            var newChronic=rec.chronic+eaChronicAdj;
+            if(newChronic>0){
+              rec.acute=Math.round(newAcute);
+              rec.chronic=Math.round(newChronic);
+              rec.acwr=parseFloat((newAcute/newChronic).toFixed(2));
+              rec._eaCorrected=true;
+            }
+          });
         }
       }
 
@@ -8647,6 +8729,7 @@ function renderProfPerfBars(pk){
           <span class="cv-lbl cv-lbl-pvta">MID · 24 Apr 2026</span>
           <span class="cv-lbl cv-lbl-pvpa">MID · 24 Apr 2026</span>
         </div>
+        <div id="cmp-no-gps-a" style="display:none;font-size:8px;font-weight:600;color:#ef4444;margin-top:5px;padding:3px 7px;background:rgba(239,68,68,.1);border-radius:4px;border:1px solid rgba(239,68,68,.3)">⚠ No GPS data for this session — all values shown as —</div>
       </div>
       <div class="mc-cn"></div>
       <div style="text-align:right">
@@ -8672,6 +8755,7 @@ function renderProfPerfBars(pk){
           <span class="cv-bm cv-bm-pvta">22 players · 24 Apr 2026</span>
           <span class="cv-bm cv-bm-pvpa">MID group · 24 Apr 2026</span>
         </div>
+        <div id="cmp-no-gps-b" style="display:none;font-size:8px;font-weight:600;color:#ef4444;margin-top:5px;padding:3px 7px;background:rgba(239,68,68,.1);border-radius:4px;border:1px solid rgba(239,68,68,.3);text-align:right">⚠ No GPS data for this session — all values shown as —</div>
       </div>
     </div>
 
