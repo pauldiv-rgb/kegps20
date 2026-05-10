@@ -7669,6 +7669,8 @@ function updateCmpPlayerSelects(){
   });
   /* Sync column header labels to reflect the now-populated selectors */
   try{_updateCmpPlayerHeader();}catch(e){}
+  /* Re-render comparison panels now that player selectors have real values */
+  try{cmpSyncSession();}catch(e){}
 }
 
 /* ── Update comparison column-header player name labels ── */
