@@ -5872,9 +5872,15 @@ function _rebuildSessionDropdowns(allDates, sessionMeta, drillMeta){
     var key=_dateKey(ds);
     var liveDrills=(drillMeta&&drillMeta[key]&&Object.keys(drillMeta[key]).length)?drillMeta[key]:null;
     if(SESSION_DB[key]){
-      /* Fully refresh all fields from live data — never display baked values */
+      /* Refresh fields from live data; typeLabel only upgrades, never downgrades
+         (e.g. baked 'Championship' is preserved if live misclassifies as 'Challenge Match') */
       var lm=sessionMeta[ds]||{};
-      if(lm.typeLabel) SESSION_DB[key].typeLabel=lm.typeLabel;
+      if(lm.typeLabel){
+        var _tlRank={Championship:3,'Challenge Match':2,'Field Training':1};
+        var _bakedRank=_tlRank[SESSION_DB[key].typeLabel]||0;
+        var _liveRank=_tlRank[lm.typeLabel]||0;
+        if(_liveRank>=_bakedRank) SESSION_DB[key].typeLabel=lm.typeLabel;
+      }
       if(lm.duration)  SESSION_DB[key].duration=lm.duration;
       if(lm.playerCount) SESSION_DB[key].attendance=lm.playerCount+' / 26';
       /* Always replace drills from live — null means no drill data in sheet for this session */
@@ -6477,15 +6483,19 @@ function loadLiveData(){
       // Build session-level metadata from parsed rows
       var sessionMeta={};
       all.forEach(function(s){
-        if(!sessionMeta[s.dateStr]) sessionMeta[s.dateStr]={type:s.matchType||'',sessionType:s.sessionType||'',totalDur:0,count:0};
+        if(!sessionMeta[s.dateStr]) sessionMeta[s.dateStr]={type:s.matchType||'',sessionType:s.sessionType||'',totalDur:0,count:0,_mRows:0,_tRows:0};
         if(s.sessionType&&!sessionMeta[s.dateStr].sessionType) sessionMeta[s.dateStr].sessionType=s.sessionType;
         sessionMeta[s.dateStr].totalDur+=s.dur;
         sessionMeta[s.dateStr].count++;
+        sessionMeta[s.dateStr]._tRows++;
+        if((s.matchType||'').toLowerCase().indexOf('match')>=0) sessionMeta[s.dateStr]._mRows++;
       });
       Object.keys(sessionMeta).forEach(function(ds){
         var m=sessionMeta[ds];
         m.duration=Math.round(m.totalDur/m.count);
-        m.isMatch=m.type.toLowerCase().indexOf('match')>=0;
+        /* Majority vote — prevents warmup/partial "Training" rows from misclassifying a match
+           session as "Field Training". Also catches sessionType "Official Match" explicitly. */
+        m.isMatch=(m._mRows>0&&m._mRows*2>=m._tRows)||(m.sessionType||'').toLowerCase().indexOf('match')>=0;
         var stLow=(m.sessionType||'').toLowerCase();
         /* Cross-reference match record championship dates — fixes sessions where STATSports
            Session Category doesn't contain 'championship' (e.g. 'LEINSTER FINAL', 'MATCH') */
