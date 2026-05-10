@@ -3031,162 +3031,6 @@ document.addEventListener('DOMContentLoaded',function(){
   });
 });
 
-/* ══════════════════════════════════════════════════════════════
-   STANDOUT PERFORMERS — data + render
-   ══════════════════════════════════════════════════════════════ */
-
-/* ══════════════════════════════════════════════════════════════
-   GLOBAL FILTER SYSTEM + SESSION DATA MODEL
-   ══════════════════════════════════════════════════════════════ */
-
-
-/* ── Session database ─────────────────────────────────────────── */
-/* DATE_ACT removed — activity class derived from SESSION_DB.typeLabel via _getActClass() */
-
-/* ── Main filter function ────────────────────────────────────── */
-function applyFilters(){
-  /* In trend mode, just redraw the trend chart */
-  if(typeof _SC_MODE!=='undefined'&&_SC_MODE==='trend'){ try{renderTrendChart();}catch(e){} return; }
-  /* Scatter dots are rendered dynamically by _renderScatterDots() which already applies
-     all filters (personnel, activity, drill, status, dates) during entry collection.
-     Re-render the scatter to pick up any filter state changes. */
-  try{ if(typeof updateScatterAxes==='function') updateScatterAxes(); }catch(e){}
-  /* Keep drill bar avg in sync with drill filter */
-  renderDrillBars();
-}
-
-/* ── GPS drill key → readable label ─────────────────────────── */
-var _DRILL_LABEL_MAP={
-  'session':'Full session','wu':'Warm-Up','ssg':'Small-Sided Game','poss':'Possession','cg':'Conditioned Game',
-  's_c_warm_up':'S&C Warm-Up','s_c_warm_up_max_v':'S&C Warm-Up (Max V)',
-  's_c_warm_up_accel':'S&C Warm-Up (Accel)','s_c_warm_up_linear':'S&C Warm-Up (Linear)',
-  's_c_warm_up_cod':'S&C Warm-Up (CoD)',
-  'football_warm_up':'Football Warm-Up','football_warm_up_warm_up':'Football Warm-Up','swu':'Speed Warm-Up',
-  '11v11':'11v11','11v11_half_pitch':'11v11 Half Pitch','11v11_half_pitch_reps':'11v11 Half Pitch Reps',
-  '11_v_11_half_pitch':'11v11 Half Pitch','11_v_11_half_pitch_reps':'11v11 Half Pitch Reps',
-  '11v_11_half_pitch_reps':'11v11 Half Pitch Reps','11v11_kickouts_half_pitc':'11v11 Kickouts Half Pitch',
-  '11v11_half_pitch_reps':'11v11 Half Pitch Reps',
-  'match_1st_half':'Match 1st Half','match_2nd_half':'Match 2nd Half','match_3rd_half':'Match 3rd Half',
-  '1st_half':'1st Half','2nd_half':'2nd Half','1st_half_match':'1st Half','2nd_half_match':'2nd Half',
-  'h1':'1st Half','h2':'2nd Half',
-  'in_house_match_1st_half':'In-House 1st Half','in_house_match_2nd_half':'In-House 2nd Half',
-  'in_house_match_1st_qtr':'In-House 1st Qtr','in_house_match_2nd_qtr':'In-House 2nd Qtr',
-  'in_house_match_3rd_qtr':'In-House 3rd Qtr','in_house_match_4th_qtr':'In-House 4th Qtr',
-  'inhouse_match_1st_half':'In-House 1st Half','inhouse_match_2nd_half':'In-House 2nd Half',
-  'inhouse_match_3rd_half':'In-House 3rd Half','inhouse_match':'In-House Match',
-  'ssg_small':'SSG Small','ssg_small_continuous':'SSG Small Continuous',
-  'ssg_large':'SSG Large','ssg_large_continuous':'SSG Large Continuous',
-  '3v3_medium_reps':'3v3 Medium','3v3_large_reps':'3v3 Large',
-  '4v4_large_reps':'4v4 Large','4v4s_large':'4v4 Large',
-  'kickpassing_diamond':'Kickpassing Diamond','kickpassing_diamond_dril':'Kickpassing Diamond',
-  'hand_passing_linear':'Handpassing Linear','hand_passing_drill':'Handpassing Drill',
-  'kicking_in_3s_drill':'Kicking in 3s',
-  'shooting_1v1_drill':'Shooting 1v1','shooting_1v1_drill_reps':'Shooting 1v1',
-  'shooting_1v1_reps':'Shooting 1v1','shooting_3v3_reps':'Shooting 3v3','shooting_drill':'Shooting Drill',
-  'our_kickout_full_pitch':'Kickout (Our)','our_kickout_full_pitch_r':'Kickout (Our)',
-  'kickout_full_pitch':'Kickout Full Pitch','kickouts_full_pitch_reps':'Kickout Full Pitch',
-  'kickout_transition_d_a_f':'Kickout Transition','opposition_kickout_full_':'Opposition Kickout',
-  'transition_play_full_pit':'Transition Full Pitch','transition_a_d_full_pitc':'Transition A/D',
-  'tackling_1v1_drill':'Tackling 1v1','tackling_grid_drill':'Tackling Grid',
-  '3_man_weave_drill':'3-Man Weave','pre_individual_skills':'Individual Skills',
-  'pos':'Possession','ov1':'Overlap 1','hup':'Hook-Up'
-};
-function _drillLabel(k){
-  if(_DRILL_LABEL_MAP[k]) return _DRILL_LABEL_MAP[k];
-  return k.replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();});
-}
-
-/* ── Build drill filter panel — live drill names from current session ─ */
-function _buildDrillPanel(){
-  var panel=document.getElementById('ms-drill-panel');
-  if(!panel) return;
-  var sessKey=G&&G.session;
-  var html='<label class="ms-opt ms-note-row"><span style="font-size:9px;color:var(--muted);padding:2px 0">Drills from selected session</span></label>'
-    +'<label class="ms-opt"><input type="checkbox" value="session" checked onchange="msOpt(this,\'ms-drill-panel\')"><span>Full session</span></label>';
-
-  /* ── Live data path: use actual drill names from LIVE_DRILL_PLAYER_DATA ── */
-  if(sessKey&&window.LIVE_DRILL_PLAYER_DATA&&window.LIVE_DRILL_PLAYER_DATA[sessKey]){
-    var dpd=window.LIVE_DRILL_PLAYER_DATA[sessKey];
-    var slugs=Object.keys(dpd);
-    /* Identify match halves by slug pattern */
-    function _isHalf(s){return /(_1st_half|_2nd_half|_3rd_half|_4th_half|match.*half|half.*match)/i.test(s);}
-    var drills=slugs.filter(function(s){return !_isHalf(s);});
-    var halves=slugs.filter(function(s){return _isHalf(s);}).sort();
-    /* Get display name from first player's entry */
-    function _getName(slug){
-      var pls=Object.keys(dpd[slug]);
-      return pls.length?(dpd[slug][pls[0]].name||slug):slug;
-    }
-    if(drills.length){
-      html+='<div class="ms-sep">Session drills</div>';
-      drills.forEach(function(slug){
-        html+='<label class="ms-opt"><input type="checkbox" value="'+slug+'" onchange="msOpt(this,\'ms-drill-panel\')"><span>'+_getName(slug)+'</span></label>';
-      });
-    }
-    if(halves.length){
-      html+='<div class="ms-sep">Match halves</div>';
-      halves.forEach(function(slug){
-        html+='<label class="ms-opt"><input type="checkbox" value="'+slug+'" onchange="msOpt(this,\'ms-drill-panel\')"><span>'+_getName(slug)+'</span></label>';
-      });
-    }
-  } else {
-    /* ── Fallback: SESSION_DB aggregate categories ── */
-    var drillSet={};
-    Object.keys(SESSION_DB).forEach(function(dk){
-      var s=SESSION_DB[dk];if(s&&s.drills)Object.keys(s.drills).forEach(function(k){drillSet[k]=true;});
-    });
-    var PRIORITY=['wu','ssg','poss','cg'];
-    var priority=PRIORITY.filter(function(k){return drillSet[k];});
-    if(priority.length){
-      html+='<div class="ms-sep">Training drills</div>';
-      priority.forEach(function(k){
-        html+='<label class="ms-opt"><input type="checkbox" value="'+k+'" onchange="msOpt(this,\'ms-drill-panel\')"><span>'+_drillLabel(k)+'</span></label>';
-      });
-    }
-    html+='<div class="ms-sep">Match halves</div>'
-      +'<label class="ms-opt"><input type="checkbox" value="h1" onchange="msOpt(this,\'ms-drill-panel\')"><span>1st Half</span></label>'
-      +'<label class="ms-opt"><input type="checkbox" value="h2" onchange="msOpt(this,\'ms-drill-panel\')"><span>2nd Half</span></label>';
-  }
-  panel.innerHTML=html;
-}
-
-/* ── Build player filter dropdown from PLAYER_META ───────────── */
-function _buildPlayerDropdown(){
-  var sel = document.getElementById('gf-player');
-  if(!sel) return;
-  var cur = sel.value;
-  /* Keep only the "All" option, rebuild rest */
-  while(sel.options.length > 1) sel.remove(1);
-  /* Sort alphabetically by abbreviated name */
-  var sorted = Object.keys(PLAYER_META).sort(function(a,b){
-    var na = PLAYER_META[a].n || PLAYER_META[a].fullName;
-    var nb = PLAYER_META[b].n || PLAYER_META[b].fullName;
-    return na.localeCompare(nb);
-  });
-  sorted.forEach(function(pk){
-    var pm = PLAYER_META[pk];
-    var opt = document.createElement('option');
-    opt.value = pk;
-    opt.textContent = pm.n || pm.fullName;
-    sel.appendChild(opt);
-  });
-  /* Restore previous selection if still valid */
-  if(cur && cur !== 'all'){
-    var found = false;
-    for(var i=0;i<sel.options.length;i++){ if(sel.options[i].value===cur){found=true;break;} }
-    if(found) sel.value = cur;
-  }
-}
-
-/* ══════════════════════════════════════════════════════════════
-   STANDOUT PERFORMERS — data + render
-   ══════════════════════════════════════════════════════════════ */
-
-/* ══════════════════════════════════════════════════════════════
-   GLOBAL FILTER SYSTEM + SESSION DATA MODEL
-   ══════════════════════════════════════════════════════════════ */
-
-
 /* ── Session database ─────────────────────────────────────────── */
 var SESSION_DB = {
   d20260424: {
@@ -3331,12 +3175,11 @@ var DRILL_COLORS = {wu:'#5a9be8',ssg:'#3dbd84',poss:'#9b77dd',cg:'#e08844'};
 /* ── SPARK_DATA2 — initialised with zeros; replaced fully by loadLiveData() from LS_Session_Review ── */
 var SPARK_DATA2 = {"squad":{"label":"Squad avg","peakSpd":[0,0,0,0,0,0,0,0],"peak28":0,"maxAcc":[0,0,0,0,0,0,0,0],"maxAcc28":0,"maxDec":[0,0,0,0,0,0,0,0],"maxDec28":0,"acwr":[0,0,0,0,0,0,0,0],"weekly":[0,0,0,0,0,0,0,0],"session":[0,0,0,0,0,0,0,0],"decAcc":[0,0,0,0,0,0,0,0],"mono":[0,0,0,0,0,0,0,0],"strain":[0,0,0,0,0,0,0,0]}};
 
-var _sparkMetric = 'mono';
+var _sparkMetric = 'mono';    // BUG-6: duplicate removed below
 var _sparkPlayer = 'squad';   // primary (kept for compat)
 var _players    = ['squad'];  // up to 3: [primary, cmp37, cmp1]
 var _metric     = 'hmld';     // 'hmld' | 'td' | 'hsr'
 var _density    = false;      // false=volume, true=density (per 85min)
-var _sparkMetric = 'mono';    // retired, kept for compat
 
 // Metric config: scale factors relative to HMLD, left-axis max
 var METRIC_CFG = {
@@ -3951,7 +3794,8 @@ function p0PdpToggle(mode){
     if(allCb) allCb.checked=false;
     opts.forEach(function(o){ o.checked=(o.value!=='session'); });
   }
-  updateLabel('ms-drill-panel');
+  /* BUG-5 fix: updateLabel() appends '-panel' internally; pass wrapper ID not panel ID */
+  updateLabel('ms-drill');
   try{updateScatterAxes();}catch(e){}
   renderP0PlayerPanel(); /* re-sync toggle highlight */
 }
@@ -3990,11 +3834,11 @@ function renderDrillCards(){
       +'<div class="d-stat"><span class="d-stat-lbl">HMLD (team avg)</span>'
         +'<span class="d-stat-val" style="color:'+txt+'">'+d.hmld+' m</span></div>'
       +'<div class="d-stat"><span class="d-stat-lbl">HMLD/min</span>'
-        +'<span class="d-stat-val">'+(d.hmldMin.toFixed(1))+'</span></div>'
+        +'<span class="d-stat-val">'+(d.hmldMin!=null?d.hmldMin.toFixed(1):'—')+'</span></div>'
       +'<div class="d-stat"><span class="d-stat-lbl">HMLD%</span>'
-        +'<span class="d-stat-val '+hmldPctCol+'">'+(d.hmldPct.toFixed(1))+'%</span></div>'
+        +'<span class="d-stat-val '+hmldPctCol+'">'+(d.hmldPct!=null?d.hmldPct.toFixed(1):'—')+'%</span></div>'
       +'<div class="d-stat"><span class="d-stat-lbl">TD/min</span>'
-        +'<span class="d-stat-val">'+(d.tdMin.toFixed(1))+'</span></div>'
+        +'<span class="d-stat-val">'+(d.tdMin!=null?d.tdMin.toFixed(1):'—')+'</span></div>'
       +'<div class="d-stat"><span class="d-stat-lbl">HSR/min</span>'
         +'<span class="d-stat-val">'+(d.hsrMin?d.hsrMin.toFixed(1):'—')+'</span></div>'
       +'<div class="d-stat"><span class="d-stat-lbl">Z6 Dist</span>'
@@ -5241,6 +5085,9 @@ function cmpSyncSession(){
       dur:Math.round(dur),n:1,_pos:r.pos||''};
   }
 
+  /* Hoist sess here so player-mode branches can reference it safely */
+  var sess=SESSION_DB[sessKey]||{};
+
   /* Detect player-individual view mode */
   var vmEl=document.getElementById('cmp-view-mode');
   var viewMode=vmEl?vmEl.value:'cv-team';
@@ -5343,7 +5190,6 @@ function cmpSyncSession(){
       +'<div class="mc-v mc-vr">'+(rv!=null?fmtV(rv):'—')+'</div></div></div>';
   }
 
-  var sess=SESSION_DB[sessKey]||{};
   var posNote=posFilter!=='all'?' · '+posFilter+' only':'';
   /* For player mode: show player name in left column label */
   var _selAname=isPlayerMode?(function(){var s=document.getElementById('pv-sel-a');return s&&s.options[s.selectedIndex]?(s.options[s.selectedIndex].text||'').replace(/\s*\([A-Z]+\)\s*$/,'').trim():'Player A';})():'';
@@ -5400,11 +5246,16 @@ function cmpSyncSession(){
   var _isMatchSess=_sessDB.typeLabel==='Championship'||_sessDB.typeLabel==='Challenge Match'||
     (window.LIVE_SESSION_DATA[sessKey]||[]).some(function(r){return (r.matchType||'').toLowerCase().indexOf('match')>-1;});
 
-  /* Auto-select full-match for match sessions with half data on first load */
+  /* Auto-select full-match for match sessions with half data on first load.
+     BUG-4 fix: also reset to 'all' when switching TO a training session (prevents
+     "Full match" persisting in the dropdown for a session with no half data) */
   var _drillSlug=window._cmpDrillSlug||'all';
   if(_isMatchSess&&_hasHalves&&(_drillSlug==='all')){
     _drillSlug='full-match';
     window._cmpDrillSlug='full-match';
+  } else if(!_isMatchSess&&_drillSlug==='full-match'){
+    _drillSlug='all';
+    window._cmpDrillSlug='all';
   }
 
   /* Dynamic page heading */
@@ -5713,12 +5564,24 @@ function renderCmpDrillChart(){
       function _fmFmt(v){return _fmMc.dp===0?String(Math.round(v)):v.toFixed(_fmMc.dp);}
 
       if(!_fmPlayers.length){container.innerHTML='<div style="padding:22px 0;font-size:10px;color:var(--muted);text-align:center">No half data for Full match view.</div>';return;}
+      /* BUG-10 fix: build position map from LIVE_SESSION_DATA (LS_Session_Review) then fall
+         back to PLAYER_META for any half-data player whose name differs between CSVs */
       var _fmPosMap={};
       (window.LIVE_SESSION_DATA[sessKey]||[]).forEach(function(r){if(r.player){var p=(r.pos||'mid').toLowerCase();_fmPosMap[_normPlayerName(r.player)]=p.indexOf('fwd')>-1||p.indexOf('forward')>-1?'FWD':p.indexOf('def')>-1||p.indexOf('back')>-1?'DEF':p.indexOf('gk')>-1||p.indexOf('goal')>-1?'GK':'MID';}});
+      function _fmGetPos(pName){
+        var nk=_normPlayerName(pName);
+        if(_fmPosMap[nk]) return _fmPosMap[nk];
+        /* Fallback: resolve via _PM_NAME_MAP → PLAYER_META */
+        if(window._PM_NAME_MAP&&window._PM_NAME_MAP[nk]){
+          var pmk=window._PM_NAME_MAP[nk]; var pmd=PLAYER_META[pmk];
+          if(pmd){var pp=(pmd.pos||'mid').toLowerCase();return pp.indexOf('fwd')>-1||pp.indexOf('forward')>-1?'FWD':pp.indexOf('def')>-1||pp.indexOf('back')>-1?'DEF':'MID';}
+        }
+        return 'MID';
+      }
       var _fmAllVals=_fmPlayers.map(function(p){return p[_fmMc.f]||0;}).filter(Boolean);
       var _fmTeamAvg=_fmAllVals.length?_fmAllVals.reduce(function(a,v){return a+v;},0)/_fmAllVals.length:0;
       var _fmPosG={GK:[],DEF:[],MID:[],FWD:[]};
-      _fmPlayers.forEach(function(p){var v=p[_fmMc.f]||0;if(v>0){var pg=_fmPosMap[_normPlayerName(p.player)]||'MID';_fmPosG[pg].push(v);}});
+      _fmPlayers.forEach(function(p){var v=p[_fmMc.f]||0;if(v>0){var pg=_fmGetPos(p.player);_fmPosG[pg].push(v);}});
       var _fmMaxVal=_fmTeamAvg;
       ['GK','DEF','MID','FWD'].forEach(function(pos){if(_fmPosG[pos].length){var a=_fmPosG[pos].reduce(function(x,v){return x+v;},0)/_fmPosG[pos].length;if(a>_fmMaxVal)_fmMaxVal=a;}});
       var _fmFta=_fmFmt(_fmTeamAvg);
@@ -6143,8 +6006,11 @@ function _rebuildSessionDropdowns(allDates, sessionMeta, drillMeta){
   if(cs){
     cs.innerHTML=allOpts;
     /* Default: most recent training session (skip matches so comparison is meaningful) */
+    /* BUG-3 fix: sorted[] contains raw date strings e.g. "29-Apr-2026"; convert via _dateKey()
+       before looking up LIVE_SESSION_DATA which is keyed by d20260429 format */
     var _cmpTrainKeys=sorted.filter(function(k){
-      return window.LIVE_SESSION_DATA[k]&&window.LIVE_SESSION_DATA[k].some(function(r){return r.matchType!=='Match';});
+      var dk=_dateKey(k);
+      return window.LIVE_SESSION_DATA[dk]&&window.LIVE_SESSION_DATA[dk].some(function(r){return r.matchType!=='Match';});
     });
     if(_cmpTrainKeys.length) cs.value=_dateKey(_cmpTrainKeys[0]);
     try{cmpSyncSession();}catch(e){}
@@ -6196,7 +6062,11 @@ function _parseDate(s){
   var p=s.split('-'); if(p.length===3&&M[p[1]]!==undefined) return new Date(+p[2],M[p[1]],+p[0]);
   return new Date(s);
 }
-function _slug(n){return n.toLowerCase().replace(/'/g,'').replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'');}
+/* BUG-7 fix: _slug() must produce the same keys as _normPlayerName() so that
+   SPARK_DATA2 (keyed by _slug) and LIVE_ACWR/_PM_NAME_MAP (keyed by _normPlayerName)
+   are cross-compatible. Old version stripped apostrophes entirely; _normPlayerName()
+   converts them to '_'. Align both to: lowercase, all non-alphanumeric → '_', trim. */
+function _slug(n){return (n||'').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'');}
 function _acwrSeries(sess,end,wks){
   var r=[];
   for(var w=wks-1;w>=0;w--){
@@ -6877,7 +6747,8 @@ function updateAcwrSummaryCards(){
 /* ── Page 2: Weekly targets — rebuild from LIVE_SESSION_DATA ── */
 function updateWeeklyTargetPage(){
   /* Use full-history data source if available, otherwise fall back to LIVE_SESSION_DATA */
-  var _histSrc=window.LIVE_HISTORY_DATA&&Object.keys(window.LIVE_HISTORY_DATA).length>1?window.LIVE_HISTORY_DATA:window.LIVE_SESSION_DATA;
+  /* BUG-9 fix: was >1 — with exactly 1 date in history it fell back to LIVE_SESSION_DATA */
+  var _histSrc=window.LIVE_HISTORY_DATA&&Object.keys(window.LIVE_HISTORY_DATA).length>0?window.LIVE_HISTORY_DATA:window.LIVE_SESSION_DATA;
   if(!_histSrc) return;
   var allKeys=Object.keys(_histSrc).sort();
   if(!allKeys.length) return;
@@ -8321,16 +8192,16 @@ function renderFullTable(){
         +'<td style="color:'+col+'">'+r.pos.toUpperCase()+'</td>'
         +'<td class="'+acwrCls+'" style="font-size:9px">'+acwrStr+'</td>'
         +'<td class="'+hmldCls+'"><strong>'+r.hmld.toLocaleString()+'</strong></td>'
-        +'<td>'+r.hmldMin.toFixed(1)+'</td>'
+        +'<td>'+(r.hmldMin!=null?r.hmldMin.toFixed(1):'—')+'</td>'
         +'<td class="'+hmldPctCls+'">'+hmldPct.toFixed(1)+'%</td>'
         +'<td>'+r.sprint.toLocaleString()+'</td>'
         +'<td>'+r.td.toLocaleString()+'</td>'
-        +'<td>'+r.tdMin.toFixed(1)+'</td>'
+        +'<td>'+(r.tdMin!=null?r.tdMin.toFixed(1):'—')+'</td>'
         +'<td>'+r.hsr.toLocaleString()+'</td>'
         +'<td>'+r.acc+'</td>'
         +'<td>'+r.dec+'</td>'
         +'<td class="'+decAccCls+'">'+decAcc+'</td>'
-        +'<td>'+r.maxSpd.toFixed(2)+'</td>'
+        +'<td>'+(r.maxSpd!=null?r.maxSpd.toFixed(2):'—')+'</td>'
         +'<td><span class="pill '+pillCls+'">'+dSign+delta.toFixed(0)+'%</span></td>'
         +'</tr>';
     });
@@ -8575,43 +8446,10 @@ function renderProfDrillTable(pk, sessKey){
     return;
   }
 
-  /* ── Drill contexts — per-player rows from LIVE_DRILL_PLAYER_DATA (rendered above if available) ── */
-  var html = '';
-  /* If we have a liveRow, add full session as first row */
-  if(liveRow){
-    var posAvg0 = _livePosAvg('hmldMin');
-    var delta0 = posAvg0&&posAvg0>0?((liveRow.hmldMin-posAvg0)/posAvg0*100):0;
-    var dCls0 = delta0>5?'c-green':delta0<-5?'c-red':'c-amber';
-    html += '<tr>'
-      +'<td><span style="display:inline-block;width:3px;height:14px;border-radius:2px;background:#888;margin-right:8px;vertical-align:middle"></span>Full Session <span style="color:var(--muted);font-size:9px">(live)</span></td>'
-      +'<td style="font-weight:700">'+liveRow.hmldMin.toFixed(1)+'</td>'
-      +'<td>'+(posAvg0!==null?posAvg0.toFixed(1):'—')+'</td>'
-      +'<td class="'+dCls0+'">'+(delta0>=0?'+':'')+delta0.toFixed(1)+'%</td>'
-      +'<td>'+(liveRow.tdMin||0).toFixed(1)+'</td>'
-      +'<td>'+(liveRow.hsrMin||0).toFixed(1)+'</td>'
-      +'<td>'+(liveRow.maxSpd||0).toFixed(1)+'</td>'
-      +'<td>'+(liveRow.hmld&&liveRow.td?(liveRow.hmld/liveRow.td*100):0).toFixed(1)+'%</td>'
-      +'</tr>';
-  }
-  contexts.forEach(function(ctx){
-    var ds = ds_fallback; /* drill context: live LIVE_DRILL_PLAYER_DATA rows shown above */
-    var p  = ds[pk]; if(!p) return;
-    var posPls = Object.values(ds).filter(function(x){return x.pos===pm.pos;});
-    var pa = function(key){return posPls.reduce(function(a,b){return a+b[key];},0)/posPls.length;};
-    var delta = ((p.hmldMin - pa('hmldMin'))/pa('hmldMin')*100);
-    var dCls = delta>5?'c-green':delta<-5?'c-red':'c-amber';
-    html += '<tr>'
-      +'<td><span style="display:inline-block;width:3px;height:14px;border-radius:2px;background:'+ctx.bdr+';margin-right:8px;vertical-align:middle"></span>'+ctx.name+' <span style="color:var(--muted);font-size:9px">('+ctx.dur+' min)</span></td>'
-      +'<td style="font-weight:700">'+p.hmldMin.toFixed(1)+'</td>'
-      +'<td>'+pa('hmldMin').toFixed(1)+'</td>'
-      +'<td class="'+dCls+'">'+(delta>=0?'+':'')+delta.toFixed(1)+'%</td>'
-      +'<td>'+p.tdMin.toFixed(1)+'</td>'
-      +'<td>'+p.hsrMin.toFixed(1)+'</td>'
-      +'<td>'+p.maxSpd.toFixed(1)+'</td>'
-      +'<td>'+p.hmldPct.toFixed(1)+'%</td>'
-      +'</tr>';
-  });
-  tbody.innerHTML = html || '<tr><td colspan="8" style="color:var(--muted);padding:12px">No drill data</td></tr>';
+  /* BUG-12: Dead code removed. The contexts branch above is unreachable because
+     PROF_DRILL_CONTEXTS is always {}, so if(!contexts) at line above is always true
+     and the function returns early. Per-drill rows are now served entirely by the
+     LIVE_DRILL_PLAYER_DATA path inside the if(!contexts) block. */
 }
 
 function renderProfScatter(pk){
@@ -9224,12 +9062,13 @@ function renderMDScorecard(){
   /* ── Collect all match sessions ── */
   var matchKeys = [];
 
-  /* From SESSION_DB */
+  /* From SESSION_DB — BUG-13 fix: use explicit typeLabel values, not fragile
+     string heuristic (old: indexOf('match')>-1 && indexOf('field')===-1 would
+     incorrectly exclude e.g. "Midfield Challenge Match") */
+  var _MD_MATCH_TYPES={'Championship':true,'Challenge Match':true,'League Match':true,'Match':true};
   Object.keys(SESSION_DB).forEach(function(k){
     var s = SESSION_DB[k];
-    var tl = (s.typeLabel||'').toLowerCase();
-    if(tl.indexOf('championship')>-1 || tl.indexOf('challenge')>-1 ||
-       (tl.indexOf('match')>-1 && tl.indexOf('field')===-1)){
+    if(_MD_MATCH_TYPES[s.typeLabel]){
       matchKeys.push({key:k, label:(s.label||k)+' · '+s.typeLabel});
     }
   });
