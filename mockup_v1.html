@@ -4245,6 +4245,22 @@ function _renderScatterDots(){
   /* No baked fallback — scatter shows live data only; empty when no session selected */
   if(!entries.length) return;
 
+  /* Auto-set benchmark toggle: on for match/championship sessions, off for training.
+     Drives both the button label and the showBm axis-scaling flag. */
+  /* Any game context (match, championship, challenge) = show benchmarks; pure training = hide */
+  var _hasMatch=entries.some(function(e){return e.actType!=='training';});
+  var _bmBtn=document.getElementById('ms-bm-btn');
+  if(_bmBtn){
+    var _bmCurrentlyOn=_bmBtn.classList.contains('ms-bm-on');
+    if(_hasMatch!==_bmCurrentlyOn){
+      _bmBtn.classList.toggle('ms-bm-on',_hasMatch);
+      _bmBtn.textContent=_hasMatch?'Benchmarks ✓':'Benchmarks';
+      document.querySelectorAll('.sc-bm-zone,.sc-bm-line,.sc-bm-lbl').forEach(function(el){
+        el.style.display=_hasMatch?'':'none';
+      });
+    }
+  }
+
   /* Axis range */
   var xVals=entries.map(function(e){return e.x;}),yVals=entries.map(function(e){return e.y;});
   var xMin=Math.min.apply(null,xVals),xMax=Math.max.apply(null,xVals);
@@ -4252,13 +4268,13 @@ function _renderScatterDots(){
   var xPad=(xMax-xMin)*0.15||5, yPad=(yMax-yMin)*0.15||1;
   xMin-=xPad; xMax+=xPad; yMin-=yPad; yMax+=yPad;
   if(yMin<0) yMin=0;
-  /* When benchmarks are visible (tdMin × hmldMin), ensure the axis range
-     always includes the U20 zone corner (125, 25) so the zone rect is never clipped */
-  var showBm=(xKey==='tdMin'&&yKey==='hmldMin');
+  /* When benchmarks are visible (tdMin × hmldMin) AND session contains match data,
+     ensure the axis range always includes the U20 zone corner (125, 25).
+     For training sessions benchmarks are off so axis scales to the data only. */
+  var showBm=(xKey==='tdMin'&&yKey==='hmldMin'&&_hasMatch);
   if(showBm){
-    if(xMax<130) xMax=130;  /* U20 threshold 125 + breathing room */
-    if(yMax<27)  yMax=27;   /* U20 threshold 25 + breathing room  */
-    /* Fixed axis maxima for consistent cross-session reference */
+    if(xMax<130) xMax=130;
+    if(yMax<27)  yMax=27;
     xMax=175; yMax=45;
     xMin=Math.max(xMin,0); yMin=Math.max(yMin,0);
   }
