@@ -5377,8 +5377,9 @@ function cmpSyncSession(){
       vsLabel='Team avg · '+(sess.label||sessKey)+(_pvtaIsMatch?' (full-session players only)':'');
     } else { /* cv-pvpa */
       var _pPos=_cmpBenchPos((cur&&cur._pos)||'');
-      vsMetrics=_sessAvg(sessKey,_pPos)||_sessAvg(sessKey,null);
-      vsLabel=_pPos+' avg · '+(sess.label||sessKey);
+      var _pvpaIsMatch=_isMatch(sessKey);
+      vsMetrics=_sessAvg(sessKey,_pPos,_pvpaIsMatch)||_sessAvg(sessKey,null,_pvpaIsMatch);
+      vsLabel=_pPos+' avg · '+(sess.label||sessKey)+(_pvpaIsMatch?' (full-session players only)':'');
     }
   } else {
     cur=_sessAvg(sessKey,posFilter==='all'?null:posFilter);
