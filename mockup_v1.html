@@ -6768,7 +6768,11 @@ function loadLiveData(){
       for(var i=1;i<lines.length;i++){
         if(!lines[i].trim()) continue;
         var v=_parseCSVLine(lines[i]);
-        var dur=parseFloat(v[7])||0, hmld=parseFloat(v[13])||0;
+        /* LS_Session_Review exports Duration as decimal hours (Google Sheets time cell).
+           Convert to minutes immediately so all downstream uses (display, 90% filter,
+           per-min calcs) work correctly. e.g. 68 min session → v[7]=1.133 → dur=68 */
+        var durRaw=parseFloat(v[7])||0, dur=parseFloat((durRaw*60).toFixed(1));
+        var hmld=parseFloat(v[13])||0;
         var spd=parseFloat(v[12])||0, ms=parseFloat(v[14])||0;
         var hsr=parseFloat(v[10])||0;
         all.push({dateStr:v[0],date:_parseDate(v[0]),player:v[1],pos:v[3],sessionType:v[4],matchType:v[6],
@@ -7560,11 +7564,14 @@ function updateTrainingQualityPage(){
 
     /* FIX #9: Compute axis range from live data */
     var _tdVals=trainRows.map(function(r){return r.tdMin||0;}).filter(function(v){return v>0;});
-    var _hmldVals=trainRows.map(function(r){return r.hmld||0;}).filter(function(v){return v>0;});
+    var _hmldVals=trainRows.map(function(r){return r.hmldMin||0;}).filter(function(v){return v>0;});
     var _tdMin=_tdVals.length?Math.max(40,Math.floor(Math.min.apply(null,_tdVals)*0.85/5)*5):55;
     var _tdMax=_tdVals.length?Math.min(120,Math.ceil(Math.max.apply(null,_tdVals)*1.15/5)*5):85;
-    var _hmldMin=_hmldVals.length?Math.max(0,Math.floor(Math.min.apply(null,_hmldVals)*0.80/50)*50):200;
-    var _hmldMax=_hmldVals.length?Math.min(1500,Math.ceil(Math.max.apply(null,_hmldVals)*1.20/50)*50):600;
+    /* Y axis: HMLD/min (m/min). Typical training values 8–25 m/min — use /5 step */
+    var _hmldMin=_hmldVals.length?Math.max(0,Math.floor(Math.min.apply(null,_hmldVals)*0.80/5)*5):5;
+    var _hmldMax=_hmldVals.length?Math.max(30,Math.ceil(Math.max.apply(null,_hmldVals)*1.20/5)*5):30;
+    /* Ensure HMLD threshold (25 m/min) is always visible */
+    if(_hmldMax<28) _hmldMax=30;
     /* Ensure TD threshold (70) is always visible */
     if(_tdMax<75) _tdMax=Math.ceil(75/5)*5;
     if(_tdMin>65) _tdMin=Math.floor(65/5)*5;
@@ -7579,13 +7586,13 @@ function updateTrainingQualityPage(){
     _el=document.getElementById('p15-ya-min'); if(_el) _el.textContent=_hmldMin;
     _el=document.getElementById('p15-ya-mid'); if(_el) _el.textContent=Math.round((_hmldMin+_hmldMax)/2);
     _el=document.getElementById('p15-ya-max'); if(_el) _el.textContent=_hmldMax;
-    /* Update threshold lines to TD=70 and HMLD midpoint */
+    /* Update threshold lines to TD=70 and HMLD=25 m/min (U20 intensity benchmark) */
     var _txX=Math.round(_scX(70));
-    var _txY=Math.round(_scY((_hmldMin+_hmldMax)/2));
+    var _txY=Math.round(_scY(25));
     _el=document.getElementById('p15-thresh-x');
     if(_el){_el.setAttribute('x1',_txX);_el.setAttribute('x2',_txX);}
     _el=document.getElementById('p15-thresh-y');
-    if(_el){_el.setAttribute('x2','680');}  /* keep full width */
+    if(_el){_el.setAttribute('x2','680');_el.setAttribute('y1',_txY);_el.setAttribute('y2',_txY);}
     /* Update quadrant label x-positions to stay in quadrant */
     _el=document.getElementById('p15-ql-tr');
     if(_el) _el.setAttribute('x',String(_txX+10));
@@ -7603,7 +7610,7 @@ function updateTrainingQualityPage(){
       if(_tdm<=0) return; /* F07: skip rows with no valid tdMin — would cluster at left edge */
       var pkey=_normPlayerName(r.player);
       var acwr=((typeof LIVE_ACWR!=='undefined'?LIVE_ACWR:{})[pkey]||{}).acwr||0;
-      var cx=_scX(_tdm), cy=_scY(parseFloat(r.hmld)||0);
+      var cx=_scX(_tdm), cy=_scY(parseFloat(r.hmldMin)||0);
       var tries=0;
       while(usedPos.some(function(p){return Math.abs(p.x-cx)<14&&Math.abs(p.y-cy)<14;})&&tries<6){cx+=12;tries++;}
       usedPos.push({x:cx,y:cy});
