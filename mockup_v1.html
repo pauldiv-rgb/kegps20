@@ -1363,8 +1363,8 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
       <line x1="389.8" y1="20" x2="389.8" y2="286" stroke="rgba(239,159,39,.3)" stroke-width="1" stroke-dasharray="4,3" class="sc-bm-line"/>
       <line x1="62" y1="165.1" x2="642" y2="165.1" stroke="rgba(239,159,39,.3)" stroke-width="1" stroke-dasharray="4,3" class="sc-bm-line"/>
       <!-- Senior threshold lines -->
-      <line x1="515.9" y1="20" x2="515.9" y2="286" stroke="rgba(226,75,74,.25)" stroke-width="1" stroke-dasharray="4,3"/>
-      <line x1="62" y1="87.7" x2="642" y2="87.7" stroke="rgba(226,75,74,.25)" stroke-width="1" stroke-dasharray="4,3"/>
+      <line x1="515.9" y1="20" x2="515.9" y2="286" stroke="rgba(226,75,74,.25)" stroke-width="1" stroke-dasharray="4,3" class="sc-bm-line"/>
+      <line x1="62" y1="87.7" x2="642" y2="87.7" stroke="rgba(226,75,74,.25)" stroke-width="1" stroke-dasharray="4,3" class="sc-bm-line"/>
       <!-- ── GRID ── -->
 <line x1="62.0" y1="20" x2="62.0" y2="286" stroke="rgba(107,130,153,.15)" stroke-width="1"/>
 <line x1="137.7" y1="20" x2="137.7" y2="286" stroke="rgba(107,130,153,.07)" stroke-width="1" stroke-dasharray="2,3"/>
@@ -1388,9 +1388,9 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
 <line x1="62" y1="44.2" x2="642" y2="44.2" stroke="rgba(107,130,153,.07)" stroke-width="1" stroke-dasharray="2,3"/>
 <line x1="62" y1="20.0" x2="642" y2="20.0" stroke="rgba(107,130,153,.15)" stroke-width="1"/>
       <!-- ── ZONE LABELS ── -->
-      <text x="392.8" y="32" font-size="8" fill="rgba(239,159,39,.75)" font-weight="700" letter-spacing=".06em">U20 MATCH ZONE</text>
-      <text x="392.8" y="41" font-size="7.5" fill="rgba(239,159,39,.5)">≥125 TD/min · ≥25 HMLD/min</text>
-      <text x="518.9" y="29" font-size="7.5" fill="rgba(226,75,74,.85)" font-weight="700">SNR ≥150·≥41</text>
+      <text x="392.8" y="32" font-size="8" fill="rgba(239,159,39,.75)" font-weight="700" letter-spacing=".06em" class="sc-bm-lbl">U20 MATCH ZONE</text>
+      <text x="392.8" y="41" font-size="7.5" fill="rgba(239,159,39,.5)" class="sc-bm-lbl">≥125 TD/min · ≥25 HMLD/min</text>
+      <text x="518.9" y="29" font-size="7.5" fill="rgba(226,75,74,.85)" font-weight="700" class="sc-bm-lbl">SNR ≥150·≥41</text>
       <!-- ── AXIS LABELS ── -->
 <text x="62.0" y="300" font-size="8.5" fill="rgba(107,130,153,.7)" text-anchor="middle">60</text>
 <text x="137.7" y="300" font-size="8.5" fill="rgba(107,130,153,.7)" text-anchor="middle">75</text>
@@ -4317,7 +4317,7 @@ function _renderScatterDots(){
   }
 
   /* Benchmark zones — only valid for tdMin × hmldMin */
-  document.querySelectorAll('.sc-bm-zone,.sc-bm-line').forEach(function(el){
+  document.querySelectorAll('.sc-bm-zone,.sc-bm-line,.sc-bm-lbl').forEach(function(el){
     el.style.display=showBm?'':'none';
   });
   if(showBm){
@@ -4328,6 +4328,8 @@ function _renderScatterDots(){
     var bmLines=document.querySelectorAll('.sc-bm-line');
     if(bmLines[0]){bmLines[0].setAttribute('x1',bx125.toFixed(1));bmLines[0].setAttribute('x2',bx125.toFixed(1));}
     if(bmLines[1]){bmLines[1].setAttribute('y1',by25.toFixed(1));bmLines[1].setAttribute('y2',by25.toFixed(1));}
+    if(bmLines[2]){bmLines[2].setAttribute('x1',bx150.toFixed(1));bmLines[2].setAttribute('x2',bx150.toFixed(1));}
+    if(bmLines[3]){bmLines[3].setAttribute('y1',by41.toFixed(1));bmLines[3].setAttribute('y2',by41.toFixed(1));}
   }
 
   /* Render dots */
@@ -6702,8 +6704,10 @@ function loadLiveData(){
         var dv=_parseCSVLine(ddLines[di]);
         var rawDate=(dv[0]||'').trim(), player=(dv[1]||'').trim(), drillName=(dv[4]||'').trim();
         var dtd=parseFloat(dv[5])||0, dhmld=parseFloat(dv[6])||0;
-        /* LS_Drill_Data also exports Duration as decimal hours — convert to minutes */
-        var ddur=parseFloat((( parseFloat(dv[7])||0)*60).toFixed(1));
+        /* LS_Drill_Data: training drills export Duration as decimal hours (→ ×60),
+           match-day drills export as plain minutes. Same heuristic: raw>5 = already minutes. */
+        var _ddurRaw=parseFloat(dv[7])||0;
+        var ddur=parseFloat((_ddurRaw>5?_ddurRaw:_ddurRaw*60).toFixed(1));
         var dhsr=parseFloat(dv[9])||0, dz6=parseFloat(dv[10])||0, dmaxSpd=parseFloat(dv[11])||0;
         if(!rawDate||!drillName||!player) continue;
         var dpd=_parseDate(rawDate);
@@ -6786,10 +6790,12 @@ function loadLiveData(){
       for(var i=1;i<lines.length;i++){
         if(!lines[i].trim()) continue;
         var v=_parseCSVLine(lines[i]);
-        /* LS_Session_Review exports Duration as decimal hours (Google Sheets time cell).
-           Convert to minutes immediately so all downstream uses (display, 90% filter,
-           per-min calcs) work correctly. e.g. 68 min session → v[7]=1.133 → dur=68 */
-        var durRaw=parseFloat(v[7])||0, dur=parseFloat((durRaw*60).toFixed(1));
+        /* LS_Session_Review exports Duration as:
+           - decimal hours for training sessions (Google Sheets time cell): e.g. 1.133 → 68 min → × 60
+           - plain minutes for match sessions (plain number cell): e.g. 70 → 70 min → use as-is
+           Heuristic: if raw > 5, already in minutes; if ≤ 5, convert hours → minutes. */
+        var durRaw=parseFloat(v[7])||0;
+        var dur=parseFloat((durRaw>5?durRaw:durRaw*60).toFixed(1));
         var hmld=parseFloat(v[13])||0;
         var spd=parseFloat(v[12])||0, ms=parseFloat(v[14])||0;
         var hsr=parseFloat(v[10])||0;
