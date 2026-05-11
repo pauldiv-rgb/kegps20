@@ -1501,12 +1501,31 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
         </select>
       </div>
     </div>
-    <div class="tbl-wrap" style="max-height:360px;overflow-y:auto;margin-bottom:0">
+    <div class="tbl-wrap" style="margin-bottom:0">
       <table>
-        <thead style="position:sticky;top:0;background:var(--s1);z-index:2"><tr><th>Player</th><th>Pos</th><th>Status</th><th>HMLD</th><th>HMLD/min</th><th>HMLD%</th><th>Sprint</th><th>TD</th><th>TD/min</th><th>HSR</th><th>Acc</th><th>Dec</th><th>Dec:Acc</th><th>Max V</th><th>vs Pos avg</th></tr></thead>
+        <thead style="background:var(--s1);z-index:2">
+          <tr id="ft-thead-row">
+            <th onclick="ftSort('player')" style="cursor:pointer;user-select:none;white-space:nowrap">Player <span id="fts-player" class="ft-si"></span></th>
+            <th onclick="ftSort('pos')" style="cursor:pointer;user-select:none">Pos <span id="fts-pos" class="ft-si"></span></th>
+            <th onclick="ftSort('acwr')" style="cursor:pointer;user-select:none">ACWR <span id="fts-acwr" class="ft-si"></span></th>
+            <th onclick="ftSort('hmld')" style="cursor:pointer;user-select:none">HMLD <span id="fts-hmld" class="ft-si">↓</span></th>
+            <th onclick="ftSort('hmldMin')" style="cursor:pointer;user-select:none">HMLD/min <span id="fts-hmldMin" class="ft-si"></span></th>
+            <th onclick="ftSort('hmldPct')" style="cursor:pointer;user-select:none">HMLD% <span id="fts-hmldPct" class="ft-si"></span></th>
+            <th onclick="ftSort('sprint')" style="cursor:pointer;user-select:none">Sprint <span id="fts-sprint" class="ft-si"></span></th>
+            <th onclick="ftSort('td')" style="cursor:pointer;user-select:none">TD <span id="fts-td" class="ft-si"></span></th>
+            <th onclick="ftSort('tdMin')" style="cursor:pointer;user-select:none">TD/min <span id="fts-tdMin" class="ft-si"></span></th>
+            <th onclick="ftSort('hsr')" style="cursor:pointer;user-select:none">HSR <span id="fts-hsr" class="ft-si"></span></th>
+            <th onclick="ftSort('acc')" style="cursor:pointer;user-select:none">Acc <span id="fts-acc" class="ft-si"></span></th>
+            <th onclick="ftSort('dec')" style="cursor:pointer;user-select:none">Dec <span id="fts-dec" class="ft-si"></span></th>
+            <th onclick="ftSort('decAcc')" style="cursor:pointer;user-select:none">Dec:Acc <span id="fts-decAcc" class="ft-si"></span></th>
+            <th onclick="ftSort('maxSpd')" style="cursor:pointer;user-select:none">Max V <span id="fts-maxSpd" class="ft-si"></span></th>
+            <th onclick="ftSort('delta')" style="cursor:pointer;user-select:none">vs Pos avg <span id="fts-delta" class="ft-si"></span></th>
+          </tr>
+        </thead>
         <tbody id="full-table-body"></tbody>
       </table>
     </div>
+    <style>.ft-si{font-size:8px;opacity:.7;margin-left:2px;font-style:normal}#ft-thead-row th:hover{color:var(--accent)}</style>
     <div style="font-size:9px;color:var(--muted);margin-top:6px;padding:0 2px" id="full-table-note"></div>
   </div>
 
@@ -8580,6 +8599,18 @@ var PROF_DEFAULT_OBS = {};
 var PROF_DRILL_CONTEXTS = {};
 
 /* ── Full squad table renderer ───────────────────────────────── */
+var _ftSortCol='hmld', _ftSortDir=-1; /* -1=desc, 1=asc */
+function ftSort(col){
+  if(_ftSortCol===col){ _ftSortDir*=-1; }
+  else { _ftSortCol=col; _ftSortDir=col==='player'||col==='pos'?1:-1; }
+  /* Update header indicators */
+  var cols=['player','pos','acwr','hmld','hmldMin','hmldPct','sprint','td','tdMin','hsr','acc','dec','decAcc','maxSpd','delta'];
+  cols.forEach(function(c){
+    var el=document.getElementById('fts-'+c);
+    if(el) el.textContent=(c===_ftSortCol?(_ftSortDir===-1?'↓':'↑'):'');
+  });
+  renderFullTable();
+}
 function renderFullTable(){
   var tbody = document.getElementById('full-table-body');
   var note  = document.getElementById('full-table-note');
@@ -8623,8 +8654,38 @@ function renderFullTable(){
     rows.forEach(function(r){if(!posG[r.pos])posG[r.pos]=[];posG[r.pos].push(r);});
     function posAvgL(p,k){var g=posG[p];if(!g||!g.length)return 0;return g.reduce(function(a,r){return a+r[k];},0)/g.length;}
 
-    /* Sort by HMLD descending */
-    rows.sort(function(a,b){return b.hmld-a.hmld;});
+    /* Enrich rows with computed sort keys */
+    rows.forEach(function(r){
+      r._hmldPct=r.hmld/totalHmld*100;
+      r._pAvgHmld=posAvgL(r.pos,'hmld');
+      r._delta=r._pAvgHmld?((r.hmld-r._pAvgHmld)/r._pAvgHmld*100):0;
+      r._decAcc=r.acc?(r.dec/r.acc):0;
+      var acwrKey=_normPlayerName(r.player);
+      r._acwr=(typeof LIVE_ACWR!=='undefined'&&LIVE_ACWR[acwrKey])?LIVE_ACWR[acwrKey].acwr:0;
+    });
+
+    /* Sort by selected column */
+    rows.sort(function(a,b){
+      var av,bv;
+      switch(_ftSortCol){
+        case 'player': av=a.player.toLowerCase();bv=b.player.toLowerCase();return _ftSortDir*(av<bv?-1:av>bv?1:0);
+        case 'pos':    av=a.pos;bv=b.pos;return _ftSortDir*(av<bv?-1:av>bv?1:0);
+        case 'acwr':   av=a._acwr;bv=b._acwr;break;
+        case 'hmldMin':av=a.hmldMin||0;bv=b.hmldMin||0;break;
+        case 'hmldPct':av=a._hmldPct;bv=b._hmldPct;break;
+        case 'sprint': av=a.sprint;bv=b.sprint;break;
+        case 'td':     av=a.td;bv=b.td;break;
+        case 'tdMin':  av=a.tdMin||0;bv=b.tdMin||0;break;
+        case 'hsr':    av=a.hsr;bv=b.hsr;break;
+        case 'acc':    av=a.acc;bv=b.acc;break;
+        case 'dec':    av=a.dec;bv=b.dec;break;
+        case 'decAcc': av=a._decAcc;bv=b._decAcc;break;
+        case 'maxSpd': av=a.maxSpd||0;bv=b.maxSpd||0;break;
+        case 'delta':  av=a._delta;bv=b._delta;break;
+        default:       av=a.hmld;bv=b.hmld;
+      }
+      return _ftSortDir*(bv-av);
+    });
 
     var html='';
     rows.forEach(function(r){
@@ -8633,20 +8694,17 @@ function renderFullTable(){
       var pm=pmKey?PLAYER_META[pmKey]:null;
       var stCls=pm?(pm.status==='rtp'?'c-blue':pm.status==='mod'?'c-amber':''):'';
       var stLbl=pm?(pm.status==='rtp'?' ⊕':pm.status==='mod'?' ◐':''):'';
-      var pAvgHmld=posAvgL(r.pos,'hmld');
-      var delta=pAvgHmld?((r.hmld-pAvgHmld)/pAvgHmld*100):0;
+      var delta=r._delta, pAvgHmld=r._pAvgHmld;
       var dSign=delta>=0?'+':'';
       var pillCls=delta>5?'p-green':delta<-5?'p-red':'p-amber';
       var hmldCls=r.hmld>pAvgHmld*1.1?'c-green':r.hmld<pAvgHmld*0.9?'c-red':'';
-      var hmldPct=(r.hmld/totalHmld*100);
+      var hmldPct=r._hmldPct;
       var hmldPctCls=hmldPct>=15?'c-green':hmldPct>=12?'c-amber':'c-red';
       var decAcc=r.acc?(r.dec/r.acc).toFixed(2):'—';
       var decAccCls=parseFloat(decAcc)>1.1?'c-amber':'c-green';
-      /* ACWR from LIVE_ACWR */
-      var acwrKey=_normPlayerName(r.player);
-      var acwrVal=typeof LIVE_ACWR!=='undefined'&&LIVE_ACWR[acwrKey]?LIVE_ACWR[acwrKey].acwr:null;
-      var acwrStr=acwrVal!==null?acwrVal.toFixed(2):'—';
-      var acwrCls=acwrVal!==null?(acwrVal>1.5?'c-red':acwrVal>1.3?'c-amber':acwrVal<0.8?'c-blue':'c-green'):'';
+      var acwrVal=r._acwr||null;
+      var acwrStr=acwrVal?acwrVal.toFixed(2):'—';
+      var acwrCls=acwrVal?(acwrVal>1.5?'c-red':acwrVal>1.3?'c-amber':acwrVal<0.8?'c-blue':'c-green'):'';
       html+='<tr>'
         +'<td style="font-weight:600"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+col+';margin-right:6px;vertical-align:middle"></span>'+r.player+'<span class="'+stCls+'">'+stLbl+'</span></td>'
         +'<td style="color:'+col+'">'+r.pos.toUpperCase()+'</td>'
