@@ -5353,8 +5353,10 @@ function cmpSyncSession(){
   var _playerAMissing=false, _playerBMissing=false;
 
   if(isPlayerMode){
-    /* Player A from pv-sel-a, Player B from pv-sel-b */
-    var _selA=document.getElementById('pv-sel-a');
+    /* cv-pvt: Player A = pv-sel-a, Player B = pv-sel-b
+       cv-pvta / cv-pvpa: single player = pv-sel-c (visible PLAYER dropdown) */
+    var _isSinglePMode=(viewMode==='cv-pvta'||viewMode==='cv-pvpa');
+    var _selA=document.getElementById(_isSinglePMode?'pv-sel-c':'pv-sel-a');
     var _selB=document.getElementById('pv-sel-b');
     var _keyA=_selA?_selA.value:'';
     var _keyB=_selB?_selB.value:'';
@@ -5453,7 +5455,7 @@ function cmpSyncSession(){
 
   var posNote=posFilter!=='all'?' · '+posFilter+' only':'';
   /* For player mode: show player name in left column label */
-  var _selAname=isPlayerMode?(function(){var s=document.getElementById('pv-sel-a');return s&&s.options[s.selectedIndex]?(s.options[s.selectedIndex].text||'').replace(/\s*\([A-Z]+\)\s*$/,'').trim():'Player A';})():'';
+  var _selAname=isPlayerMode?(function(){var s=document.getElementById(_isSinglePMode?'pv-sel-c':'pv-sel-a');return s&&s.options[s.selectedIndex]?(s.options[s.selectedIndex].text||'').replace(/\s*\([A-Z]+\)\s*$/,'').trim():'Player A';})():'';
   var curLabel=isPlayerMode?
     (_playerAMissing
       ?('⚠ No GPS data · '+(sess.label||sessKey))
@@ -8049,9 +8051,13 @@ function _updateCmpPlayerHeader(){
     return m?m[1]:'MID';
   }
 
-  var nameA=_optName('pv-sel-a');
+  /* cv-pvta / cv-pvpa use pv-sel-c as the visible single-player dropdown */
+  var _vmEl=document.getElementById('cmp-view-mode');
+  var _vm=_vmEl?_vmEl.value:'cv-team';
+  var _selAId=(_vm==='cv-pvta'||_vm==='cv-pvpa')?'pv-sel-c':'pv-sel-a';
+  var nameA=_optName(_selAId);
   var nameB=_optName('pv-sel-b');
-  var posA=_optPos('pv-sel-a');
+  var posA=_optPos(_selAId);
 
   /* Session label for sub-line */
   var cs=document.getElementById('cmp-session');
@@ -9283,7 +9289,7 @@ function renderProfPerfBars(pk){
       <div class="pv-sub-pvtap cmp-ctrl-row" style="padding-top:6px">
         <span class="cmp-ctrl-lbl">Player</span>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <select id="pv-sel-c" class="pv-sel" onchange="try{_updateCmpPlayerHeader();}catch(e){}">
+          <select id="pv-sel-c" class="pv-sel" onchange="try{_updateCmpPlayerHeader();}catch(e){};try{cmpSyncSession();}catch(e){}">
             <option>Loading…</option>
           </select>
           <span style="font-size:9px;color:var(--muted)">· intra-session comparison · benchmark row not applied</span>
