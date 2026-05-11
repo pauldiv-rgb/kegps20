@@ -8024,7 +8024,7 @@ function updatePlayerProfileDropdown(){
     var opt=document.createElement('option');
     opt.value=_normPlayerName(p.name);
     var daysSince=Math.round((_today.getTime()-p.lastMs)/864e5);
-    var inactiveSuffix=daysSince>30?' ⚠ Inactive ('+daysSince+'d)':'';
+    var inactiveSuffix=daysSince>=21?' ⚠ Inactive ('+daysSince+'d)':'';
     opt.textContent=p.name+' — '+_posShortDD(p.pos)+inactiveSuffix;
     if(inactiveSuffix) opt.style.color='var(--muted)';
     sel.appendChild(opt);
@@ -9016,6 +9016,27 @@ function renderPlayerProfile(){
     pm = PLAYER_META[pk];
   }
   if(!pm) return;
+
+  /* BUG-A fix: auto-jump to player's most recent attended session if current has no data */
+  if(window.LIVE_SESSION_DATA){
+    var _curRows=(window.LIVE_SESSION_DATA[sessKey]||[]);
+    var _playerInSess=_curRows.some(function(r){ return r.player&&_normPlayerName(r.player)===pk; });
+    if(!_playerInSess){
+      /* Find the most recent session where this player has a row */
+      var _allSessKeys=Object.keys(window.LIVE_SESSION_DATA).sort().reverse();
+      var _bestKey=_allSessKeys.find(function(k){
+        return (window.LIVE_SESSION_DATA[k]||[]).some(function(r){ return r.player&&_normPlayerName(r.player)===pk; });
+      });
+      if(_bestKey&&_bestKey!==sessKey){
+        var _sessSel=document.getElementById('prof-session');
+        if(_sessSel&&_sessSel.querySelector('option[value="'+_bestKey+'"]')){
+          _sessSel.value=_bestKey;
+          sessKey=_bestKey;
+        }
+      }
+    }
+  }
+
   var sessData = SESSION_DB[sessKey]||{};
   var statusCol = pm.status==='full'?'var(--green)':pm.status==='mod'?'var(--amber)':'var(--blue)';
 
