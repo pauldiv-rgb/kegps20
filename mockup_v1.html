@@ -1312,10 +1312,6 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
 
     <!-- Axis selectors -->
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">
-      <span style="font-size:9px;color:var(--muted);font-weight:600">View:</span>
-      <button id="sc-mode-snapshot" class="ms-btn" style="font-size:9px;padding:3px 9px;font-weight:700;border:1px solid rgba(79,195,247,.6);color:#4FC3F7" onclick="setScatterMode('snapshot')">Snapshot</button>
-      <button id="sc-mode-trend" class="ms-btn" style="font-size:9px;padding:3px 9px;font-weight:600;opacity:.45" onclick="setScatterMode('trend')">Season Trend</button>
-      <span style="width:1px;height:14px;background:var(--border2);display:inline-block;margin:0 2px"></span>
       <label style="font-size:9px;color:var(--muted);font-weight:600" id="sc-x-axis-label">X axis:</label>
       <select id="sc-x-axis" class="lb-sel" onchange="updateScatterAxes()">
         <option value="tdMin" selected>TD/min</option>
@@ -1352,11 +1348,6 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
       </select>
       <button class="ms-btn" style="font-size:9px;padding:3px 8px" onclick="resetScatterAxes()">Reset</button>
     </div>
-
-    <!-- Season Trend SVG (hidden until trend mode active) -->
-    <svg id="sc-trend-svg" viewBox="0 0 660 330" xmlns="http://www.w3.org/2000/svg" style="display:none;width:100%;font-family:var(--inter)">
-      <g id="sc-trend-layer"></g>
-    </svg>
 
     <!-- Hover tooltip -->
     <div id="sc-tip"><div class="sct-name" id="sct-name"></div><div class="sct-row" id="sct-sess-row" style="display:none"><span>Session</span><span class="sct-val" id="sct-sess"></span></div><div class="sct-row" id="sct-dur-row" style="display:none"><span>Duration</span><span class="sct-val" id="sct-dur"></span></div><div class="sct-row"><span>HMLD/min</span><span class="sct-val" id="sct-hmld"></span></div><div class="sct-row"><span>TD/min</span><span class="sct-val" id="sct-td"></span></div><div class="sct-row"><span>Position</span><span class="sct-val" id="sct-pos"></span></div></div>
@@ -2862,8 +2853,6 @@ function toggleBm(btn){
 
 /* ── Main filter function ────────────────────────────────────── */
 function applyFilters(){
-  /* In trend mode, just redraw the trend chart */
-  if(typeof _SC_MODE!=='undefined'&&_SC_MODE==='trend'){ try{renderTrendChart();}catch(e){} return; }
   /* Scatter dots are rendered dynamically by _renderScatterDots() which already applies
      all filters (personnel, activity, drill, status, dates) during entry collection.
      Re-render the scatter to pick up any filter state changes. */
@@ -4620,10 +4609,213 @@ function renderTrendChart(){
   });
 }
 
+/* ── Player Profile: Season Trend Chart ──────────────────────────────────
+ * Dedicated per-player trend view. Shows:
+ *   · Player line (prominent, with match/training dot shapes)
+ *   · Position group average (dashed, dimmed)
+ *   · U20 benchmark target (dashed amber)
+ * X = session date (chronological). Y = selected metric.
+ * Renders into #prof-trend-layer.
+ * ─────────────────────────────────────────────────────────────────────── */
+function renderProfTrendChart(playerKey){
+  var svgNS='http://www.w3.org/2000/svg';
+  var layer=document.getElementById('prof-trend-layer');
+  if(!layer) return;
+  layer.innerHTML='';
+
+  var lsd=window.LIVE_SESSION_DATA;
+  if(!lsd||!playerKey){
+    var ph=document.createElementNS(svgNS,'text');
+    ph.setAttribute('x','330');ph.setAttribute('y','130');ph.setAttribute('text-anchor','middle');
+    ph.setAttribute('font-size','11');ph.setAttribute('fill','rgba(160,180,200,.4)');
+    ph.textContent='Select a player to view season trend';
+    layer.appendChild(ph); return;
+  }
+
+  var pm=PLAYER_META[playerKey];
+  var playerPos=pm?pm.pos:'mid';
+  var yKey=(document.getElementById('prof-trend-y')||{value:'hmldMin'}).value||'hmldMin';
+  var inclMatches=!!(document.getElementById('prof-trend-matches')||{}).checked;
+  var BM_VALS={hmldMin:25,tdMin:125,hsrMin:18,maxSpd:8};
+  var bmV=BM_VALS[yKey]||null;
+  var yLabel=(window.METRIC_LABELS&&window.METRIC_LABELS[yKey])||yKey;
+  var yUnit=(window.METRIC_UNITS&&window.METRIC_UNITS[yKey])||'';
+
+  /* Collect per-session values for player + position peers */
+  var sessKeys=Object.keys(lsd).filter(function(dk){return lsd[dk]&&lsd[dk].length;}).sort();
+  if(sessKeys.length>40) sessKeys=sessKeys.slice(sessKeys.length-40);
+  var N=sessKeys.length;
+  if(!N) return;
+
+  var PT=20,PB=230,PL=52,PR=640,W=PR-PL,H=PB-PT;
+
+  var sessData=[];
+  sessKeys.forEach(function(dk){
+    var rows=lsd[dk]; if(!rows||!rows.length) return;
+    /* Check if session contains match rows */
+    var isMatch=rows.some(function(r){return r.matchType==='Match'||_isMatchType(r.matchType);});
+    if(isMatch&&!inclMatches) return;
+
+    /* Player value */
+    var pRows=rows.filter(function(r){
+      var pk=window._PM_NAME_MAP&&window._PM_NAME_MAP[_normPlayerName(r.player||'')];
+      return pk===playerKey;
+    });
+    var pVal=null;
+    if(pRows.length){
+      if(yKey==='hmldMin'||yKey==='tdMin'||yKey==='hsrMin'||yKey==='maxSpd'||yKey==='hmldPct'){
+        var sum=pRows.reduce(function(a,r){return a+(_liveMetricVal(r,yKey)||0);},0);
+        pVal=sum/pRows.length;
+      } else {
+        pVal=pRows.reduce(function(a,r){return a+(_liveMetricVal(r,yKey)||0);},0);
+      }
+    }
+
+    /* Position group average */
+    var posRows=rows.filter(function(r){return r.pos===playerPos;});
+    var posVals=posRows.map(function(r){return _liveMetricVal(r,yKey)||0;}).filter(Boolean);
+    var posAvg=posVals.length?posVals.reduce(function(a,b){return a+b;},0)/posVals.length:null;
+
+    /* Date label */
+    var lbl=dk;
+    try{var y=parseInt(dk.slice(1,5)),m=parseInt(dk.slice(5,7))-1,d=parseInt(dk.slice(7,9));
+      lbl=d+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m];}catch(e){}
+
+    sessData.push({dk:dk,label:lbl,pVal:pVal,posAvg:posAvg,isMatch:isMatch});
+  });
+  if(!sessData.length){ layer.innerHTML='<text x="330" y="130" text-anchor="middle" font-size="10" fill="rgba(160,180,200,.4)">No data for selected player</text>'; return; }
+  var N2=sessData.length;
+
+  /* Y range */
+  var allY=[];
+  sessData.forEach(function(s){if(s.pVal!=null) allY.push(s.pVal); if(s.posAvg!=null) allY.push(s.posAvg);});
+  if(bmV) allY.push(bmV);
+  if(!allY.length) return;
+  var yMin=Math.max(0,Math.min.apply(null,allY)*0.8);
+  var yMax=Math.max.apply(null,allY)*1.15;
+
+  function toX(i){return PL+(i/(Math.max(N2-1,1)))*W;}
+  function toY(v){return PB-((v-yMin)/(yMax-yMin))*H;}
+
+  /* Y grid + ticks */
+  for(var ti=0;ti<=4;ti++){
+    var yv=yMin+(yMax-yMin)*ti/4, yp=toY(yv).toFixed(1);
+    var lg=document.createElementNS(svgNS,'line');
+    lg.setAttribute('x1',PL);lg.setAttribute('x2',PR);lg.setAttribute('y1',yp);lg.setAttribute('y2',yp);
+    lg.setAttribute('stroke','rgba(107,130,153,'+(ti===0||ti===4?'.18':'.07')+')');lg.setAttribute('stroke-width','1');
+    if(ti>0&&ti<4) lg.setAttribute('stroke-dasharray','2,3');
+    layer.appendChild(lg);
+    var yt=document.createElementNS(svgNS,'text');
+    yt.setAttribute('x',(PL-4).toString());yt.setAttribute('y',(parseFloat(yp)+3).toString());
+    yt.setAttribute('font-size','7');yt.setAttribute('fill','rgba(160,180,200,.55)');yt.setAttribute('text-anchor','end');
+    yt.textContent=(yMax-yMin<5?yv.toFixed(1):Math.round(yv));
+    layer.appendChild(yt);
+  }
+
+  /* X baseline */
+  var xb=document.createElementNS(svgNS,'line');
+  xb.setAttribute('x1',PL);xb.setAttribute('x2',PR);xb.setAttribute('y1',PB);xb.setAttribute('y2',PB);
+  xb.setAttribute('stroke','rgba(107,130,153,.18)');xb.setAttribute('stroke-width','1');
+  layer.appendChild(xb);
+
+  /* X labels (show max 10) */
+  var labelEvery=Math.ceil(N2/10);
+  sessData.forEach(function(s,i){
+    var xp=toX(i).toFixed(1);
+    if(i%labelEvery===0||i===N2-1){
+      var xt=document.createElementNS(svgNS,'text');
+      xt.setAttribute('x',xp);xt.setAttribute('y',(PB+13).toString());
+      xt.setAttribute('font-size','6.5');xt.setAttribute('fill','rgba(160,180,200,.55)');xt.setAttribute('text-anchor','middle');
+      xt.textContent=s.label;
+      layer.appendChild(xt);
+    }
+  });
+
+  /* Y axis label */
+  var yT=document.createElementNS(svgNS,'text');
+  yT.setAttribute('x','9');yT.setAttribute('y',((PT+PB)/2).toFixed(1));
+  yT.setAttribute('font-size','7');yT.setAttribute('fill','rgba(160,180,200,.55)');yT.setAttribute('text-anchor','middle');
+  yT.setAttribute('transform','rotate(-90,9,'+((PT+PB)/2).toFixed(1)+')');
+  yT.textContent=yLabel+(yUnit?' ('+yUnit+')':'');
+  layer.appendChild(yT);
+
+  /* U20 benchmark line */
+  if(bmV&&bmV>yMin&&bmV<yMax){
+    var bmY=toY(bmV).toFixed(1);
+    var bmL=document.createElementNS(svgNS,'line');
+    bmL.setAttribute('x1',PL);bmL.setAttribute('x2',PR);bmL.setAttribute('y1',bmY);bmL.setAttribute('y2',bmY);
+    bmL.setAttribute('stroke','rgba(239,159,39,.4)');bmL.setAttribute('stroke-width','1');bmL.setAttribute('stroke-dasharray','5,3');
+    layer.appendChild(bmL);
+    var bmT=document.createElementNS(svgNS,'text');
+    bmT.setAttribute('x',(PR-2).toString());bmT.setAttribute('y',(parseFloat(bmY)-3).toString());
+    bmT.setAttribute('font-size','6.5');bmT.setAttribute('fill','rgba(239,159,39,.55)');bmT.setAttribute('text-anchor','end');
+    bmT.textContent='U20 target: '+bmV;
+    layer.appendChild(bmT);
+  }
+
+  /* Position average — dashed dim line */
+  var posPath='',posPen=false;
+  sessData.forEach(function(s,i){
+    var xp=toX(i),yp=s.posAvg!=null?toY(s.posAvg):null;
+    if(yp==null){posPen=false;return;}
+    posPath+=(posPen?'L':'M')+xp.toFixed(1)+','+yp.toFixed(1);posPen=true;
+  });
+  if(posPath){
+    var pp=document.createElementNS(svgNS,'path');
+    pp.setAttribute('d',posPath);pp.setAttribute('fill','none');
+    pp.setAttribute('stroke','rgba(200,210,225,0.30)');pp.setAttribute('stroke-width','1.2');pp.setAttribute('stroke-dasharray','4,3');
+    layer.appendChild(pp);
+  }
+
+  /* Player line */
+  var plPath='',plPen=false;
+  sessData.forEach(function(s,i){
+    var xp=toX(i),yp=s.pVal!=null?toY(s.pVal):null;
+    if(yp==null){plPen=false;return;}
+    plPath+=(plPen?'L':'M')+xp.toFixed(1)+','+yp.toFixed(1);plPen=true;
+  });
+  if(plPath){
+    var lp=document.createElementNS(svgNS,'path');
+    lp.setAttribute('d',plPath);lp.setAttribute('fill','none');
+    lp.setAttribute('stroke','#4FC3F7');lp.setAttribute('stroke-width','2');lp.setAttribute('stroke-opacity','0.85');
+    layer.appendChild(lp);
+  }
+
+  /* Dots: circles = training, diamonds = match */
+  var POS_COL={mid:'#4FC3F7',fwd:'#81C784',def:'#FFB74D'};
+  var dotCol=POS_COL[playerPos]||'#4FC3F7';
+  sessData.forEach(function(s,i){
+    if(s.pVal==null) return;
+    var xp=toX(i),yp=toY(s.pVal);
+    if(s.isMatch){
+      /* Diamond for matches */
+      var sz=5;
+      var d2=['M',xp,',',yp-sz,' L',xp+sz,',',yp,' L',xp,',',yp+sz,' L',xp-sz,',',yp,' Z'].join('');
+      var dm=document.createElementNS(svgNS,'path');
+      dm.setAttribute('d',d2);dm.setAttribute('fill',dotCol);dm.setAttribute('fill-opacity','0.95');
+      dm.setAttribute('stroke','var(--s1)');dm.setAttribute('stroke-width','1');
+      layer.appendChild(dm);
+    } else {
+      var c=document.createElementNS(svgNS,'circle');
+      c.setAttribute('cx',xp.toFixed(1));c.setAttribute('cy',yp.toFixed(1));c.setAttribute('r','3.5');
+      c.setAttribute('fill',dotCol);c.setAttribute('fill-opacity','0.9');
+      c.setAttribute('stroke','var(--s1)');c.setAttribute('stroke-width','1');
+      layer.appendChild(c);
+    }
+    /* Value label on last point */
+    if(i===sessData.length-1||sessData[i+1]==null||sessData[i+1].pVal==null){
+      var vt=document.createElementNS(svgNS,'text');
+      vt.setAttribute('x',(xp+5).toFixed(1));vt.setAttribute('y',(yp+3).toFixed(1));
+      vt.setAttribute('font-size','7');vt.setAttribute('fill',dotCol);vt.setAttribute('font-weight','700');
+      vt.textContent=s.pVal<10?s.pVal.toFixed(1):Math.round(s.pVal);
+      layer.appendChild(vt);
+    }
+  });
+}
+
 /* Keep updateScatterAxes as alias so existing call sites still work */
 function updateScatterAxes(){
-  if(typeof _SC_MODE!=='undefined'&&_SC_MODE==='trend') renderTrendChart();
-  else _renderScatterDots();
+  _renderScatterDots();
 }
 
 function updateScatterAxes_LEGACY(){
@@ -8605,7 +8797,10 @@ function renderPlayerProfile(){
   /* [5] Performance bars */
   renderProfPerfBars(pk);
 
-  /* [6] External activity log */
+  /* [6] Season trend */
+  try{ renderProfTrendChart(pk); }catch(e){ console.warn('renderProfTrendChart:',e); }
+
+  /* [7] External activity log */
   renderProfEALog(pk);
 }
 
@@ -9144,6 +9339,39 @@ function renderProfPerfBars(pk){
     </div>
 
   </div><!-- /grid -->
+
+  <!-- Season Trend — output over time -->
+  <div class="cmp-wrap" style="padding:14px 18px 16px;margin-bottom:20px" id="prof-trend-wrap">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+      <div>
+        <div class="sec-label" style="margin:0">Season trend — output over time</div>
+        <div style="font-size:9px;color:var(--muted);margin-top:2px">Selected player · position group average · U20 target · all GPS sessions</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="font-size:9px;color:var(--muted);font-weight:600">Metric:</span>
+        <select id="prof-trend-y" class="lb-sel" style="font-size:9px" onchange="try{renderProfTrendChart(document.getElementById('prof-player').value);}catch(e){}">
+          <option value="hmldMin" selected>HMLD/min</option>
+          <option value="tdMin">TD/min</option>
+          <option value="hsrMin">HSR/min</option>
+          <option value="maxSpd">Max Speed (m/s)</option>
+          <option value="hmld">HMLD (total)</option>
+          <option value="td">Total Distance</option>
+        </select>
+        <label style="display:flex;align-items:center;gap:4px;font-size:9px;color:var(--muted);cursor:pointer">
+          <input type="checkbox" id="prof-trend-matches" style="cursor:pointer" onchange="try{renderProfTrendChart(document.getElementById('prof-player').value);}catch(e){}"> Include matches
+        </label>
+      </div>
+    </div>
+    <svg id="prof-trend-svg" viewBox="0 0 660 260" xmlns="http://www.w3.org/2000/svg" style="width:100%;font-family:var(--inter)">
+      <g id="prof-trend-layer"><text x="330" y="130" text-anchor="middle" font-size="11" fill="rgba(160,180,200,.4)">Select a player to view season trend</text></g>
+    </svg>
+    <div style="font-size:9px;color:var(--muted);margin-top:6px;display:flex;gap:16px;flex-wrap:wrap">
+      <span><span style="display:inline-block;width:20px;height:2px;background:#4FC3F7;vertical-align:middle;margin-right:4px"></span>Selected player</span>
+      <span><span style="display:inline-block;width:20px;height:2px;background:rgba(200,210,225,0.4);vertical-align:middle;margin-right:4px;border-top:2px dashed rgba(200,210,225,0.4)"></span>Position avg</span>
+      <span><span style="display:inline-block;width:20px;height:1px;border-top:1px dashed rgba(239,159,39,.5);vertical-align:middle;margin-right:4px"></span>U20 target</span>
+      <span style="margin-left:auto;font-style:italic">Dots = training · diamonds = match</span>
+    </div>
+  </div>
 
   <!-- External Activity log — populated by renderProfEALog() from LIVE_EA_ROWS -->
   <div class="cmp-wrap" style="padding:14px 18px 16px;margin-bottom:20px" id="prof-ea-wrap">
