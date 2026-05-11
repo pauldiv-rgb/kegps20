@@ -5372,8 +5372,9 @@ function cmpSyncSession(){
       vsMetrics=_rowB||_sessAvg(sessKey,null);
       vsLabel=_nameB+' · '+(sess.label||sessKey);
     } else if(viewMode==='cv-pvta'){
-      vsMetrics=_sessAvg(sessKey,null);
-      vsLabel='Team avg · '+(sess.label||sessKey);
+      var _pvtaIsMatch=_isMatch(sessKey);
+      vsMetrics=_sessAvg(sessKey,null,_pvtaIsMatch);
+      vsLabel='Team avg · '+(sess.label||sessKey)+(_pvtaIsMatch?' (full-session players only)':'');
     } else { /* cv-pvpa */
       var _pPos=_cmpBenchPos((cur&&cur._pos)||'');
       vsMetrics=_sessAvg(sessKey,_pPos)||_sessAvg(sessKey,null);
@@ -5544,11 +5545,13 @@ function cmpSyncSession(){
       'Training quality — did this session hit match density?';
   }
 
-  /* Conditional duration warning */
+  /* Conditional duration warning — suppress for intra-session player modes (cv-pvta/cv-pvpa)
+     since both sides are the same session; warning only meaningful for cross-session benchmarks */
   var _durWarn=document.querySelector('#p34 .dur-warn');
   if(_durWarn){
+    var _suppressDurWarn=(viewMode==='cv-pvta'||viewMode==='cv-pvpa');
     var _durDiff=vsMetrics?Math.abs((cur.dur||0)-(vsMetrics.dur||0)):0;
-    _durWarn.style.display=(_durDiff>20)?'flex':'none';
+    _durWarn.style.display=(!_suppressDurWarn&&_durDiff>20)?'flex':'none';
   }
 
   function _buildDrillOpts(){
