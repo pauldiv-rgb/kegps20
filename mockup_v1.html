@@ -966,6 +966,8 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
     <div class="si-sep"></div>
     <div><div class="si-lbl">Next Fixture</div><div class="si-val" id="si-fixture">v Meath · 26 Apr</div></div>
     <div class="si-sep"></div>
+    <div><div class="si-lbl">Days to Match</div><div class="si-val" id="si-countdown" style="font-family:var(--syne);font-weight:800;font-size:18px;letter-spacing:-.01em">—</div></div>
+    <div class="si-sep"></div>
     <div><div class="si-lbl">GPS Present / Panel</div><div class="si-val" id="si-att">22 / 26</div></div>
     <div class="si-sep"></div>
     <div>
@@ -3612,6 +3614,24 @@ function gfChange(){
   var siProx=document.getElementById('si-prox'); if(siProx){var _prox=sess.matchProx;if(!_prox||_prox==='MD'){var _fx=sess.nextFixture||'';var _mMatch=_fx.match(/(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i);if(_mMatch){var _MONTHS={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};var _mMo=_MONTHS[_mMatch[2].toLowerCase()];var _mDay=parseInt(_mMatch[1]);var _sk=G.session.replace(/^d/,'');var _sessYr=parseInt(_sk.substring(0,4));var _sessMo=parseInt(_sk.substring(4,6))-1;var _sessDy=parseInt(_sk.substring(6,8));var _matchDate=new Date(_sessYr,_mMo,_mDay);var _sessDate=new Date(_sessYr,_sessMo,_sessDy);var _diff=Math.round((_matchDate-_sessDate)/86400000);if(_diff===0)_prox='MD';else if(_diff>0)_prox='MD−'+_diff;else _prox='MD+'+Math.abs(_diff);}}siProx.textContent=_prox||'—';}
   var siFixture=document.getElementById('si-fixture'); if(siFixture) siFixture.textContent=sess.nextFixture||'—';
   var siAtt=document.getElementById('si-att'); if(siAtt) siAtt.textContent=sess.attendance||'—';
+  /* Countdown to next match — calculated fresh from today each render */
+  (function(){
+    var el=document.getElementById('si-countdown'); if(!el) return;
+    var nf=window._LIVE_NEXT_FIXTURES;
+    if(!nf||!nf.length){el.textContent='—';el.className='si-val';return;}
+    var today=new Date(); today.setHours(0,0,0,0);
+    var next=nf[0].date; next=new Date(next); next.setHours(0,0,0,0);
+    var diff=Math.round((next-today)/864e5);
+    if(diff<0){el.textContent='Played';el.className='si-val c-green';}
+    else if(diff===0){el.textContent='TODAY';el.className='si-val c-red';el.style.animation='pulse 1s infinite';}
+    else if(diff===1){el.textContent='TOMORROW';el.className='si-val c-amber';}
+    else{
+      var cls=diff<=3?'c-amber':diff<=7?'c-teal':'c-green';
+      el.textContent=diff+'d';
+      el.className='si-val '+cls;
+    }
+    el.title='v '+(nf[0].opp||'')+(nf[0].dlbl?' · '+nf[0].dlbl:'');
+  })();
   /* Update global header fixture */
   var hdrFix=document.querySelector('.hdr-match');
   if(hdrFix) hdrFix.innerHTML='Next fixture: <strong>'+(sess.nextFixture||'TBC')+'</strong>';
