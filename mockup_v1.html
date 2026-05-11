@@ -1487,6 +1487,9 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
       <div class="sec-label" style="margin-bottom:0">[6] Full squad data</div>
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
         <input type="text" id="ft-search" placeholder="Search name…" oninput="renderFullTable()" style="background:var(--s2);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--inter);font-size:10px;padding:4px 8px;width:120px;outline:none">
+        <select id="ft-drill" onchange="renderFullTable()" class="lb-sel" style="min-width:130px">
+          <option value="sess">Full session</option>
+        </select>
         <select id="ft-pos" onchange="renderFullTable()" class="lb-sel">
           <option value="all">All positions</option>
           <option value="mid">Middle 8</option>
@@ -3031,7 +3034,11 @@ document.addEventListener('DOMContentLoaded',function(){
   var badge=document.querySelector('.badge');
   if(badge) badge.textContent='Baked · 1-May-2026';
   function _runLive(){ return loadLiveData()
-    .then(function(){ applyFilters(); refreshAll(); renderSessionVerdict(); renderACWRFlags(); renderFullTable(); try{renderMDScorecard();}catch(e){console.warn('renderMDScorecard:',e);} }); }
+    .then(function(){
+      var _sk=typeof G!=='undefined'?G.session:null;
+      try{_rebuildFtDrillDropdown(_sk);}catch(e){}
+      applyFilters(); refreshAll(); renderSessionVerdict(); renderACWRFlags(); renderFullTable();
+      try{renderMDScorecard();}catch(e){console.warn('renderMDScorecard:',e);} }); }
   _runLive().catch(function(e){
     console.warn('Live data load failed (will retry in 8s):',e);
     applyFilters(); refreshAll(); renderSessionVerdict(); renderACWRFlags(); renderFullTable();
@@ -3611,8 +3618,9 @@ function gfChange(){
   G.session = document.getElementById('gf-session').value;
   G.pos     = document.getElementById('gf-pos').value;
   G.player  = document.getElementById('gf-player').value;
-  /* Rebuild drill panel with live names for the selected session */
+  /* Rebuild drill panel and full-table drill dropdown for new session */
   _buildDrillPanel();
+  try{ _rebuildFtDrillDropdown(G.session); }catch(e){}
   var sess = SESSION_DB[G.session];
   /* Update session bar static info */
   /* Update session bar */
@@ -8599,6 +8607,44 @@ var PROF_DEFAULT_OBS = {};
 var PROF_DRILL_CONTEXTS = {};
 
 /* ── Full squad table renderer ───────────────────────────────── */
+/* Rebuild ft-drill dropdown from live drill data for current session */
+function _rebuildFtDrillDropdown(sessKey){
+  var sel=document.getElementById('ft-drill');
+  if(!sel) return;
+  var prev=sel.value;
+  sel.innerHTML='<option value="sess">Full session</option>';
+  if(!sessKey||!window.LIVE_DRILL_PLAYER_DATA||!window.LIVE_DRILL_PLAYER_DATA[sessKey]) return;
+  var dpd=window.LIVE_DRILL_PLAYER_DATA[sessKey];
+  var slugs=Object.keys(dpd).sort(function(a,b){
+    var aH=/half|^h[12]$/.test(a), bH=/half|^h[12]$/.test(b);
+    return aH===bH?a.localeCompare(b):(aH?1:-1); /* drills first, halves last */
+  });
+  var hasTraining=slugs.some(function(s){return !/half|^h[12]$/.test(s);});
+  var hasMatch=slugs.some(function(s){return /half|^h[12]$/.test(s);});
+  if(hasTraining){
+    var og=document.createElement('optgroup'); og.label='Drills';
+    slugs.filter(function(s){return !/half|^h[12]$/.test(s);}).forEach(function(slug){
+      var pls=Object.keys(dpd[slug]);
+      var name=pls.length?(dpd[slug][pls[0]].name||slug):slug;
+      var o=document.createElement('option'); o.value=slug; o.textContent=name;
+      og.appendChild(o);
+    });
+    sel.appendChild(og);
+  }
+  if(hasMatch){
+    var og2=document.createElement('optgroup'); og2.label='Match halves';
+    slugs.filter(function(s){return /half|^h[12]$/.test(s);}).forEach(function(slug){
+      var pls=Object.keys(dpd[slug]);
+      var name=pls.length?(dpd[slug][pls[0]].name||slug):slug;
+      var o=document.createElement('option'); o.value=slug; o.textContent=name;
+      og2.appendChild(o);
+    });
+    sel.appendChild(og2);
+  }
+  /* Restore previous selection if still valid, else default to full session */
+  if(prev&&prev!=='sess'&&dpd[prev]) sel.value=prev; else sel.value='sess';
+}
+
 var _ftSortCol='hmld', _ftSortDir=-1; /* -1=desc, 1=asc */
 function ftSort(col){
   if(_ftSortCol===col){ _ftSortDir*=-1; }
@@ -8615,16 +8661,104 @@ function renderFullTable(){
   var tbody = document.getElementById('full-table-body');
   var note  = document.getElementById('full-table-note');
   if(!tbody) return;
-  var drill  = (document.getElementById('lb-drill')||{value:'sess'}).value||'sess';
+  var ftDrill= (document.getElementById('ft-drill')||{value:'sess'}).value||'sess';
   var posF   = (document.getElementById('ft-pos')||{value:'all'}).value||'all';
   var statusF= (document.getElementById('ft-status')||{value:'all'}).value||'all';
   var search = ((document.getElementById('ft-search')||{value:''}).value||'').toLowerCase().trim();
-
-  /* ── Use LIVE_SESSION_DATA for session-level view ── */
-  var useLive = drill==='sess' && window.LIVE_SESSION_DATA;
   var sessKey = typeof G!=='undefined' ? G.session : ((document.getElementById('gf-session')||{}).value||'');
   var sessDb  = (typeof SESSION_DB!=='undefined'&&sessKey) ? SESSION_DB[sessKey]:{};
   var isMatch = sessDb&&sessDb.typeLabel&&sessDb.typeLabel.indexOf('Match')>-1;
+
+  /* ── DRILL CONTEXT: show per-player data for a specific drill ── */
+  if(ftDrill!=='sess' && sessKey && window.LIVE_DRILL_PLAYER_DATA && window.LIVE_DRILL_PLAYER_DATA[sessKey] && window.LIVE_DRILL_PLAYER_DATA[sessKey][ftDrill]){
+    var dpd=window.LIVE_DRILL_PLAYER_DATA[sessKey][ftDrill];
+    /* Build rows from drill player map */
+    var rows=[];
+    Object.keys(dpd).forEach(function(pName){
+      var d=dpd[pName];
+      var pmKey=window._PM_NAME_MAP&&window._PM_NAME_MAP[_normPlayerName(pName)];
+      var pm=pmKey?PLAYER_META[pmKey]:null;
+      var pos=(pm?pm.pos:null)||'mid';
+      if(posF!=='all'&&pos!==posF) return;
+      if(search&&pName.toLowerCase().indexOf(search)===-1) return;
+      if(statusF!=='all'){var st=pm?pm.status:'full'; if(st!==statusF) return;}
+      rows.push({player:pName,pos:pos,pm:pm,pmKey:pmKey,
+        hmld:d.hmld||0, hmldMin:d.hmldMin||0,
+        td:d.td||0, tdMin:d.tdMin||0,
+        hsr:d.hsr||0, sprint:d.sprint||0, maxSpd:d.maxSpd||0,
+        acc:null, dec:null, /* not available at drill level */
+        dur:d.dur||0
+      });
+    });
+    /* Total HMLD for this drill (hmldPct = share of drill total) */
+    var totalDrillHmld=rows.reduce(function(a,r){return a+r.hmld;},0)||1;
+    /* Position averages for this drill */
+    var drillPosG={};
+    rows.forEach(function(r){if(!drillPosG[r.pos])drillPosG[r.pos]=[];drillPosG[r.pos].push(r);});
+    function drillPosAvg(p,k){var g=drillPosG[p];if(!g||!g.length)return 0;return g.reduce(function(a,r){return a+r[k];},0)/g.length;}
+    rows.forEach(function(r){
+      r._hmldPct=r.hmld/totalDrillHmld*100;
+      r._pAvgHmld=drillPosAvg(r.pos,'hmld');
+      r._delta=r._pAvgHmld?((r.hmld-r._pAvgHmld)/r._pAvgHmld*100):0;
+      r._decAcc=0;
+      var acwrKey=_normPlayerName(r.player);
+      r._acwr=(typeof LIVE_ACWR!=='undefined'&&LIVE_ACWR[acwrKey])?LIVE_ACWR[acwrKey].acwr:0;
+    });
+    /* Sort */
+    rows.sort(function(a,b){
+      var av,bv;
+      switch(_ftSortCol){
+        case 'player': av=a.player.toLowerCase();bv=b.player.toLowerCase();return _ftSortDir*(av<bv?-1:av>bv?1:0);
+        case 'pos':    av=a.pos;bv=b.pos;return _ftSortDir*(av<bv?-1:av>bv?1:0);
+        case 'acwr':   av=a._acwr;bv=b._acwr;break;
+        case 'hmldMin':av=a.hmldMin;bv=b.hmldMin;break;
+        case 'hmldPct':av=a._hmldPct;bv=b._hmldPct;break;
+        case 'sprint': av=a.sprint;bv=b.sprint;break;
+        case 'td':     av=a.td;bv=b.td;break;
+        case 'tdMin':  av=a.tdMin;bv=b.tdMin;break;
+        case 'hsr':    av=a.hsr;bv=b.hsr;break;
+        case 'delta':  av=a._delta;bv=b._delta;break;
+        default:       av=a.hmld;bv=b.hmld;
+      }
+      return _ftSortDir*(bv-av);
+    });
+    var drillName=rows.length?(dpd[Object.keys(dpd)[0]].name||ftDrill):ftDrill;
+    var html='';
+    rows.forEach(function(r){
+      var col=POS_COL[r.pos]||'#aaa';
+      var stCls=r.pm?(r.pm.status==='rtp'?'c-blue':r.pm.status==='mod'?'c-amber':''):'';
+      var stLbl=r.pm?(r.pm.status==='rtp'?' ⊕':r.pm.status==='mod'?' ◐':''):'';
+      var delta=r._delta, dSign=delta>=0?'+':'';
+      var pillCls=delta>5?'p-green':delta<-5?'p-red':'p-amber';
+      var hmldCls=r.hmld>r._pAvgHmld*1.1?'c-green':r.hmld<r._pAvgHmld*0.9?'c-red':'';
+      var hmldPctCls=r._hmldPct>=15?'c-green':r._hmldPct>=12?'c-amber':'c-red';
+      var acwrStr=r._acwr?r._acwr.toFixed(2):'—';
+      var acwrCls=r._acwr?(r._acwr>1.5?'c-red':r._acwr>1.3?'c-amber':r._acwr<0.8?'c-blue':'c-green'):'';
+      html+='<tr>'
+        +'<td style="font-weight:600"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+col+';margin-right:6px;vertical-align:middle"></span>'+r.player+'<span class="'+stCls+'">'+stLbl+'</span></td>'
+        +'<td style="color:'+col+'">'+r.pos.toUpperCase()+'</td>'
+        +'<td class="'+acwrCls+'" style="font-size:9px">'+acwrStr+'</td>'
+        +'<td class="'+hmldCls+'"><strong>'+r.hmld.toLocaleString()+'</strong></td>'
+        +'<td>'+(r.hmldMin!=null?r.hmldMin.toFixed(1):'—')+'</td>'
+        +'<td class="'+hmldPctCls+'">'+r._hmldPct.toFixed(1)+'%</td>'
+        +'<td>'+r.sprint.toLocaleString()+'</td>'
+        +'<td>'+r.td.toLocaleString()+'</td>'
+        +'<td>'+(r.tdMin!=null?r.tdMin.toFixed(1):'—')+'</td>'
+        +'<td>'+r.hsr.toLocaleString()+'</td>'
+        +'<td style="color:var(--muted)">—</td>'
+        +'<td style="color:var(--muted)">—</td>'
+        +'<td style="color:var(--muted)">—</td>'
+        +'<td>'+(r.maxSpd!=null?r.maxSpd.toFixed(2):'—')+'</td>'
+        +'<td><span class="pill '+pillCls+'">'+dSign+delta.toFixed(0)+'%</span></td>'
+        +'</tr>';
+    });
+    tbody.innerHTML=html||'<tr><td colspan="15" style="color:var(--muted);padding:12px;text-align:center">No players match filter</td></tr>';
+    if(note) note.textContent='Drill: '+drillName+' · '+rows.length+' players · Acc/Dec not available at drill level';
+    return;
+  }
+
+  /* ── Use LIVE_SESSION_DATA for session-level view ── */
+  var useLive = window.LIVE_SESSION_DATA;
 
   if(useLive && sessKey && window.LIVE_SESSION_DATA[sessKey]){
     var rawRows = window.LIVE_SESSION_DATA[sessKey];
