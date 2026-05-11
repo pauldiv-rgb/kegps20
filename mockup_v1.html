@@ -6241,6 +6241,82 @@ function _fetchCSV(url, optional, csvName){
     throw e;
   });
 }
+/* ── Daily ACWR recomputation ──────────────────────────────────────────────
+ * Rebuilds LIVE_ACWR from calendar-day resolution using LIVE_SESSION_DATA.
+ * Days with no GPS session contribute 0 HMLD (rest days).
+ * Acute  = sum of last 7 calendar days.
+ * Chronic = sum of last 28 calendar days ÷ 4.
+ * Called after LIVE_SESSION_DATA is fully built, before EA correction.
+ * EA correction is then applied on top by the existing block.
+ * ─────────────────────────────────────────────────────────────────────── */
+function _recomputeDailyACWR(){
+  if(!window.LIVE_SESSION_DATA) return;
+  var today=new Date(); today.setHours(0,0,0,0);
+  var todayMs=today.getTime();
+  /* Convert ms timestamp → 'dYYYYMMDD' key matching LIVE_SESSION_DATA keys */
+  function _dk(ms){
+    var d=new Date(ms);
+    return 'd'+d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');
+  }
+  /* Build per-player daily HMLD from LIVE_SESSION_DATA */
+  var playerDaily={}, playerMeta={};
+  Object.keys(window.LIVE_SESSION_DATA).forEach(function(sk){
+    window.LIVE_SESSION_DATA[sk].forEach(function(r){
+      if(!r.player) return;
+      var pk=_normPlayerName(r.player);
+      if(!playerDaily[pk]) playerDaily[pk]={};
+      if(!playerMeta[pk]) playerMeta[pk]={name:r.player,pos:r.pos||''};
+      /* Accumulate — multiple rows per player per session (drill splits) */
+      playerDaily[pk][sk]=(playerDaily[pk][sk]||0)+(r.hmld||0);
+    });
+  });
+  /* Compute acute, chronic, ACWR, arrow for each player */
+  Object.keys(playerDaily).forEach(function(pk){
+    var dayMap=playerDaily[pk];
+    /* Build 35-day series (day 0 = today, index 34; day 34 = 34 days ago, index 0) */
+    var series=[];
+    for(var i=34;i>=0;i--){
+      series.push(dayMap[_dk(todayMs-i*864e5)]||0);
+    }
+    /* acute = sum of indices 28–34 (last 7 days incl. today) */
+    var acute=0;
+    for(var j=28;j<=34;j++) acute+=series[j];
+    /* chronic = sum of indices 7–34 (last 28 days) ÷ 4 */
+    var sum28=0;
+    for(var j=7;j<=34;j++) sum28+=series[j];
+    var chronic=sum28/4;
+    /* Skip players with zero chronic — no meaningful ACWR */
+    if(chronic<=0) return;
+    var acwr=parseFloat((acute/chronic).toFixed(2));
+    /* Arrow: compare current week acute vs prev week acute/chronic */
+    var prevAcute=0;
+    for(var j=21;j<=27;j++) prevAcute+=series[j];
+    var prevSum28=0;
+    for(var j=0;j<=27;j++) prevSum28+=series[j];
+    var prevChronic=prevSum28/4;
+    var prevAcwr=prevChronic>0?prevAcute/prevChronic:acwr;
+    var arrow=acwr>prevAcwr*1.05?'↑':acwr<prevAcwr*0.95?'↓':'→';
+    /* week = most recent Monday (matches _eaByWeek Monday-keyed dates) */
+    var _todayDow=today.getDay(); /* 0=Sun,1=Mon..6=Sat */
+    var _daysToMon=_todayDow===0?6:_todayDow-1;
+    var _mon=new Date(todayMs-_daysToMon*864e5);
+    var _weekStr=_mon.getFullYear()+'-'+String(_mon.getMonth()+1).padStart(2,'0')+'-'+String(_mon.getDate()).padStart(2,'0');
+    var existing=window.LIVE_ACWR[pk]||{};
+    window.LIVE_ACWR[pk]={
+      acwr:acwr,
+      acute:Math.round(acute),
+      chronic:Math.round(chronic),
+      week:_weekStr,
+      pos:existing.pos||playerMeta[pk].pos,
+      name:existing.name||playerMeta[pk].name,
+      arrow:arrow,
+      _eaCorrected:false,
+      _dailyComputed:true
+    };
+  });
+  console.log('[Daily ACWR] recomputed for',Object.keys(playerDaily).length,'players');
+}
+
 function loadLiveData(){
   return Promise.all([
     _fetchCSV(CFG_LIVE.SESSION_REVIEW_URL, false, 'LS_Squad_Load'),
@@ -6681,6 +6757,10 @@ function loadLiveData(){
           }
         }
       }
+      /* ── Recompute ACWR from calendar-day resolution ── */
+      /* Must run after LIVE_SESSION_DATA is fully built, before EA correction */
+      _recomputeDailyACWR();
+
       /* ── Parse External Activity → per-player estimated HMLD ── */
       window.LIVE_EA_HMLD={};
       if(eaTxt&&window.LIVE_SESSION_DATA){
