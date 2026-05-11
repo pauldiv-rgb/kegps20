@@ -5292,10 +5292,16 @@ function cmpSyncSession(){
     return 'MID';
   }
 
-  /* Compute team avg metrics for a session key */
-  function _sessAvg(key, pf){
+  /* Compute team avg metrics for a session key.
+   * fullOnly=true → match sessions only include players who completed the
+   * full session (dur ≥ 75% of the session maximum). Excludes late subs. */
+  function _sessAvg(key, pf, fullOnly){
     var rows=(window.LIVE_SESSION_DATA[key]||[]).filter(function(r){return !!r.player;});
     if(pf&&pf!=='all') rows=rows.filter(function(r){return _cmpBenchPos(r.pos||'')===pf;});
+    if(fullOnly&&rows.length){
+      var maxDur=Math.max.apply(null,rows.map(function(r){return r.dur||0;}));
+      if(maxDur>0) rows=rows.filter(function(r){return (r.dur||0)>=maxDur*0.75;});
+    }
     if(!rows.length) return null;
     var n=rows.length;
     function _avg(fn){return rows.reduce(function(a,r){return a+fn(r);},0)/n;}
@@ -5401,15 +5407,15 @@ function cmpSyncSession(){
   if(!isPlayerMode){
     if(vsVal==='bm-match'){
       var mKeys=allKeys.filter(function(k){return k!==sessKey&&_isMatch(k);}).reverse();
-      if(mKeys.length){var a=_sessAvg(mKeys[0],null);if(a){vsMetrics=a;var s=SESSION_DB[mKeys[0]]||{};vsLabel=(s.label||mKeys[0])+' — '+(s.typeLabel||'Match');}}
+      if(mKeys.length){var a=_sessAvg(mKeys[0],null,true);if(a){vsMetrics=a;var s=SESSION_DB[mKeys[0]]||{};vsLabel=(s.label||mKeys[0])+' — '+(s.typeLabel||'Match')+' (full-session players · n='+a.n+')';}}
     } else if(vsVal==='bm-3match'){
       var mKeys3=allKeys.filter(function(k){return k!==sessKey&&_isMatch(k);}).reverse().slice(0,3);
-      var avgs3=mKeys3.map(function(k){return _sessAvg(k,null);}).filter(Boolean);
-      if(avgs3.length){vsMetrics=_multiAvg(avgs3);vsLabel='Last '+avgs3.length+' match avg';}
+      var avgs3=mKeys3.map(function(k){return _sessAvg(k,null,true);}).filter(Boolean);
+      if(avgs3.length){vsMetrics=_multiAvg(avgs3);vsLabel='Last '+avgs3.length+' match avg (full-session players only)';}
     } else if(vsVal==='bm-champ'){
       var cKeys=allKeys.filter(function(k){return k!==sessKey&&_isChamp(k);}).reverse();
-      var avgsCh=cKeys.map(function(k){return _sessAvg(k,null);}).filter(Boolean);
-      if(avgsCh.length){vsMetrics=_multiAvg(avgsCh);vsLabel='Championship avg ('+avgsCh.length+' games)';}
+      var avgsCh=cKeys.map(function(k){return _sessAvg(k,null,true);}).filter(Boolean);
+      if(avgsCh.length){vsMetrics=_multiAvg(avgsCh);vsLabel='Championship avg ('+avgsCh.length+' games · full-session players)';}
     } else if(vsVal==='bm-md2'){
       var md2Keys=allKeys.filter(function(k){
         return k!==sessKey&&SESSION_DB[k]&&(SESSION_DB[k].matchProx||'').indexOf('MD−2')>-1;
