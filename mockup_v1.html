@@ -5300,7 +5300,7 @@ function cmpSyncSession(){
     if(pf&&pf!=='all') rows=rows.filter(function(r){return _cmpBenchPos(r.pos||'')===pf;});
     if(fullOnly&&rows.length){
       var maxDur=Math.max.apply(null,rows.map(function(r){return r.dur||0;}));
-      if(maxDur>0) rows=rows.filter(function(r){return (r.dur||0)>=maxDur*1.0;});
+      if(maxDur>0) rows=rows.filter(function(r){return (r.dur||0)>=maxDur*0.90;});
     }
     if(!rows.length) return null;
     var n=rows.length;
