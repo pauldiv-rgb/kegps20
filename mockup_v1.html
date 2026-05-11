@@ -6685,7 +6685,9 @@ function loadLiveData(){
         if(!ddLines[di].trim()) continue;
         var dv=_parseCSVLine(ddLines[di]);
         var rawDate=(dv[0]||'').trim(), player=(dv[1]||'').trim(), drillName=(dv[4]||'').trim();
-        var dtd=parseFloat(dv[5])||0, dhmld=parseFloat(dv[6])||0, ddur=parseFloat(dv[7])||0;
+        var dtd=parseFloat(dv[5])||0, dhmld=parseFloat(dv[6])||0;
+        /* LS_Drill_Data also exports Duration as decimal hours — convert to minutes */
+        var ddur=parseFloat((( parseFloat(dv[7])||0)*60).toFixed(1));
         var dhsr=parseFloat(dv[9])||0, dz6=parseFloat(dv[10])||0, dmaxSpd=parseFloat(dv[11])||0;
         if(!rawDate||!drillName||!player) continue;
         var dpd=_parseDate(rawDate);
