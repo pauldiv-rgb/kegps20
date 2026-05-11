@@ -39,7 +39,6 @@ input[name="page"]{position:absolute;opacity:0;width:0;height:0;pointer-events:n
 #rp15:checked~.nav .nb[for="rp15"],
 #rp27:checked~.nav .nb[for="rp27"],
 #rp14:checked~.nav .nb[for="rp14"],
-#rp8:checked~.nav .nb[for="rp8"],
 #rp34:checked~.nav .nb[for="rp34"],
 #rp13:checked~.nav .nb[for="rp13"],
 #rp50:checked~.nav .nb[for="rp50"]{color:var(--teal);border-bottom-color:var(--teal)}
@@ -47,7 +46,7 @@ input[name="page"]{position:absolute;opacity:0;width:0;height:0;pointer-events:n
 /* PAGES */
 .pg{display:none;padding:24px;max-width:1400px;margin:0 auto}
 #rp0:checked~.pg#p0,#rp37:checked~.pg#p34,#rp1:checked~.pg#p37,#rp15:checked~.pg#p1,
-#rp27:checked~.pg#p15,#rp14:checked~.pg#p27,#rp8:checked~.pg#p14,#rp34:checked~.pg#p8,
+#rp27:checked~.pg#p15,#rp14:checked~.pg#p27,#rp34:checked~.pg#p8,
 #rp13:checked~.pg#pprof,#rp50:checked~.pg#pmd{display:block}
 
 /* PLAYER PROFILE PAGE */
@@ -811,7 +810,6 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
 <input type="radio" name="page" id="rp15">
 <input type="radio" name="page" id="rp27">
 <input type="radio" name="page" id="rp14">
-<input type="radio" name="page" id="rp8">
 <input type="radio" name="page" id="rp34">
 <input type="radio" name="page" id="rp13">
 <input type="radio" name="page" id="rp50">
@@ -837,10 +835,9 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
   <label class="nb" for="rp15">3 · Weekly targets</label>
   <label class="nb" for="rp27">4 · Training quality</label>
   <label class="nb" for="rp14">5 · Match stimulus</label>
-  <label class="nb" for="rp8">6 · RTP readiness</label>
-  <label class="nb" for="rp34">7 · Planning summary</label>
-  <label class="nb" for="rp13">8 · Player profile</label>
-  <label class="nb" for="rp50">9 · MD Scorecard</label>
+  <label class="nb" for="rp34">6 · Planning summary</label>
+  <label class="nb" for="rp13">7 · Player profile</label>
+  <label class="nb" for="rp50">8 · MD Scorecard</label>
 </div>
 
 <!-- ═══════════════════════════════════════
@@ -2515,10 +2512,10 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
       <div class="card-ind c-green" id="p27-above30-ind">Loading…</div>
     </div>
     <div class="card">
-      <div class="card-lbl">External Fixture Flags</div>
-      <div class="card-val c-dim" id="p27-ext-flags-val">—</div>
-      <div class="card-sub" id="p27-ext-flags-sub">Not yet integrated</div>
-      <div class="card-ind c-dim">⊕ Requires fixture calendar source</div>
+      <div class="card-lbl">External Activity Logged</div>
+      <div class="card-val c-teal" id="p27-ext-flags-val">—</div>
+      <div class="card-sub" id="p27-ext-flags-sub">players with club/college activity logged</div>
+      <div class="card-ind c-dim" id="p27-ext-flags-ind">Loading…</div>
     </div>
   </div>
 
@@ -2591,6 +2588,11 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
     <div class="avail-tile"><div class="avail-n c-amber">—</div><div class="avail-lbl">Restricted — RTP</div></div>
     <div class="avail-tile"><div class="avail-n c-dim">—</div><div class="avail-lbl">Absent this week</div><div style="font-size:8px;color:var(--muted);margin-top:2px">Manual input required</div></div>
   </div>
+
+  <!-- [4] UNDER-LOADED PLAYERS (ACWR PROXY) -->
+  <div class="sec-label" style="margin-top:24px">[4] Under-loaded players — ACWR proxy (≤ 0.60)</div>
+  <div id="p14-acwr-proxy" style="font-size:9px;color:var(--muted);padding:8px 0">Loading from live ACWR data…</div>
+  <div style="font-size:8px;color:var(--muted);margin-top:4px">ACWR proxy only — not a medical RTP list. Full RTP module requires LS_RTP data source (not yet configured).</div>
 </div>
 
 
@@ -3025,7 +3027,15 @@ document.addEventListener('DOMContentLoaded',function(){
     applyFilters(); refreshAll(); renderSessionVerdict(); renderACWRFlags(); renderFullTable();
     setTimeout(function(){
       if(!Object.keys(window.LIVE_SESSION_DATA||{}).length){
-        _runLive().catch(function(e2){ console.error('Live data load failed (final):',e2); var eb=document.getElementById('fetch-error-banner');if(eb) eb.style.display='block'; });
+        _runLive().catch(function(e2){
+          console.error('Live data load failed (final):',e2);
+          var eb=document.getElementById('fetch-error-banner');
+          if(eb){
+            var _csvName=window._LAST_FETCH_ERROR_CSV||'Google Sheets';
+            eb.innerHTML='⚠ '+_csvName+' fetch failed — dashboard showing cached values. Check connection and reload. <button onclick="document.getElementById(\'fetch-error-banner\').style.display=\'none\'" style="margin-left:12px;background:transparent;border:1px solid rgba(255,150,150,.5);color:#ffcccc;border-radius:3px;padding:1px 8px;cursor:pointer;font-size:9px">Dismiss</button>';
+            eb.style.display='block';
+          }
+        });
       }
     }, 8000);
   });
@@ -6193,7 +6203,7 @@ function _parseAttendCSV(txt){
 }
 
 /* Fetch with one automatic retry on non-200/400 responses (Google Sheets cold-start) */
-function _fetchCSV(url, optional){
+function _fetchCSV(url, optional, csvName){
   function _get(){ return fetch(url).then(function(r){
     if(!r.ok) throw new Error('HTTP '+r.status);
     return r.text().then(function(t){
@@ -6203,22 +6213,23 @@ function _fetchCSV(url, optional){
     });
   }); }
   return _get().catch(function(){
-    /* Retry once after 1.2s */
+    /* Retry once after 4s */
     return new Promise(function(res){ setTimeout(res,4000); }).then(_get);
   }).catch(function(e){
-    if(optional) return '';
+    if(optional){ console.warn('Optional CSV unavailable:',(csvName||url)); return ''; }
+    window._LAST_FETCH_ERROR_CSV=csvName||'unknown CSV';
     throw e;
   });
 }
 function loadLiveData(){
   return Promise.all([
-    _fetchCSV(CFG_LIVE.SESSION_REVIEW_URL, false),
-    _fetchCSV(CFG_LIVE.DRILL_DATA_URL, true),
-    _fetchCSV(CFG_LIVE.LOAD_TREND_URL, true),
-    _fetchCSV(CFG_LIVE.MATCH_RECORD_URL, true),
-    _fetchCSV(CFG_LIVE.EXTERNAL_ACTIVITY_URL, true),
-    _fetchCSV(CFG_LIVE.SESSION_ATTEND_URL, true),
-    _fetchCSV(CFG_LIVE.HISTORY_URL, true)
+    _fetchCSV(CFG_LIVE.SESSION_REVIEW_URL, false, 'LS_Squad_Load'),
+    _fetchCSV(CFG_LIVE.DRILL_DATA_URL, true,    'LS_Drill_Data'),
+    _fetchCSV(CFG_LIVE.LOAD_TREND_URL, true,    'LS_Load_Trend_Export'),
+    _fetchCSV(CFG_LIVE.MATCH_RECORD_URL, true,  'LS_Match_Record'),
+    _fetchCSV(CFG_LIVE.EXTERNAL_ACTIVITY_URL, true, 'LS_External_Activity'),
+    _fetchCSV(CFG_LIVE.SESSION_ATTEND_URL, true, 'LS_Session_Attendance'),
+    _fetchCSV(CFG_LIVE.HISTORY_URL, true,        'LS_Load_History')
   ]).then(function(results){
     var txt=results[0], ddTxt=results[1], ltTxt=results[2], mrTxt=results[3], eaTxt=results[4], atTxt=results[5], histTxt=results[6];
 
@@ -7035,7 +7046,10 @@ function updateWeeklyTargetPage(){
         +'<div class="b-pct '+cls+'">'+pct+'%</div></div>';
     });
   });
-  benchRows.innerHTML=html||'<div style="font-size:9px;color:var(--muted);padding:8px">No player data in '+windowDays+'d window</div>';
+  var _emptyMsg=posFilter!=='all'
+    ?'No '+posFilter+' players in the '+windowDays+'-day window — change position filter or extend window'
+    :'No player data in '+windowDays+'d window — check GPS export';
+  benchRows.innerHTML=html||'<div style="font-size:9px;color:var(--muted);padding:8px">'+_emptyMsg+'</div>';
 
   /* Update sec-label to reflect active filters */
   var benchSL=document.querySelector('#p1 .bench-wrap .sec-label');
@@ -7182,9 +7196,13 @@ function updateTrainingQualityPage(){
   if(scSvg){
     scSvg.querySelectorAll('.p15-dot').forEach(function(el){el.remove();});
 
-    /* Show no-data overlay if match session */
+    /* Show no-data overlay if match session or no training rows to plot */
     var _ndEl=document.getElementById('p15-scatter-nodata');
-    if(_ndEl) _ndEl.style.display=_sessIsMatch?'block':'none';
+    var _noDataState=_sessIsMatch||!trainRows.length;
+    if(_ndEl){
+      _ndEl.style.display=_noDataState?'block':'none';
+      _ndEl.textContent=_sessIsMatch?'No drill-level data for match sessions':'No training GPS data for this session';
+    }
 
     var ns='http://www.w3.org/2000/svg';
 
@@ -7386,6 +7404,15 @@ function updateMatchStimulusPage(){
   if(_el){_el.textContent=_above30;_el.className='card-val '+(_above30>=Math.round(_total*0.6)?'c-green':'c-amber');}
   _el=document.getElementById('p27-above30-ind');
   if(_el) _el.textContent=_total>0?(_above30+' of '+_total+' players ≥30% match TD'):'—';
+
+  /* Wire External Activity Logged card from LIVE_EA_HMLD */
+  var _eaCount=window.LIVE_EA_HMLD?Object.keys(window.LIVE_EA_HMLD).length:0;
+  _el=document.getElementById('p27-ext-flags-val');
+  if(_el){_el.textContent=_eaCount;_el.className='card-val '+(_eaCount>0?'c-teal':'c-dim');}
+  _el=document.getElementById('p27-ext-flags-sub');
+  if(_el) _el.textContent='players with club/college activity logged';
+  _el=document.getElementById('p27-ext-flags-ind');
+  if(_el) _el.textContent=_eaCount>0?'Est. HMLD included in load calculations · see Player Profile for breakdown':'No external activity data — check LS_External_Activity tab';
 }
 
 /* ── Page 6: Decision flags — rebuilt from LIVE_ACWR + LIVE_SESSION_DATA ── */
@@ -7575,13 +7602,17 @@ function updatePlayerProfileDropdown(){
   var sel=document.getElementById('prof-player');
   if(!sel) return;
 
-  /* Collect unique players with their most recent position */
+  /* Collect unique players with their most recent session date and position */
   var playerMap={};
+  var _today=new Date(); _today.setHours(0,0,0,0);
+  function _keyToMs(k){var y=parseInt(k.substring(1,5)),m=parseInt(k.substring(5,7))-1,d=parseInt(k.substring(7,9));return new Date(y,m,d).getTime();}
   Object.keys(window.LIVE_SESSION_DATA).sort().forEach(function(k){
+    var kMs=_keyToMs(k);
     window.LIVE_SESSION_DATA[k].forEach(function(r){
       if(!r.player) return;
       var pk=_normPlayerName(r.player);
-      playerMap[pk]={name:r.player,pos:r.pos||''};
+      if(!playerMap[pk]||kMs>playerMap[pk].lastMs)
+        playerMap[pk]={name:r.player,pos:r.pos||'',lastMs:kMs};
     });
   });
 
@@ -7608,7 +7639,10 @@ function updatePlayerProfileDropdown(){
   players.forEach(function(p){
     var opt=document.createElement('option');
     opt.value=_normPlayerName(p.name);
-    opt.textContent=p.name+' — '+_posShortDD(p.pos);
+    var daysSince=Math.round((_today.getTime()-p.lastMs)/864e5);
+    var inactiveSuffix=daysSince>30?' ⚠ Inactive ('+daysSince+'d)':'';
+    opt.textContent=p.name+' — '+_posShortDD(p.pos)+inactiveSuffix;
+    if(inactiveSuffix) opt.style.color='var(--muted)';
     sel.appendChild(opt);
   });
 
