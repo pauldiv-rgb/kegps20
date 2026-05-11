@@ -5871,17 +5871,38 @@ function renderCmpDrillChart(){
       var POS_TXT_FM={GK:'var(--dim)',DEF:'var(--blue)',MID:'var(--teal)',FWD:'var(--green)'};
       var POS_BG_FM={GK:'rgba(107,130,153,.4)',DEF:'rgba(79,195,247,.35)',MID:'rgba(159,225,203,.35)',FWD:'rgba(76,175,80,.35)'};
       var _fmHtml='<div class="drill-detail-stats"><div class="dds-card"><div class="dds-lbl">'+_fmMc.lbl+' · Full match (1H+2H)</div><div class="dds-val" style="color:var(--blue)">'+_fmFta+' '+_fmMc.unit+'</div><div class="dds-sub">avg '+Math.round(_fmAvgDur)+' min · '+_fmPlayers.length+' players</div></div></div>';
-      _fmHtml+='<div class="hbar-chart"><div class="hbc-hdr"><div><div class="hbc-title">Full match — team average</div><div class="hbc-sub">Position split · '+_fmMc.lbl+'</div></div><div class="hbc-badge" style="background:rgba(90,155,232,.08);border-color:rgba(90,155,232,.25);color:var(--blue)">Full match</div></div>';
-      _fmHtml+='<div class="hbar-row"><div class="hbar-lbl"><span class="hbar-dot" style="background:var(--dim)"></span>Team avg</div><div class="hbar-dur">all</div><div class="hbar-track"><div class="hbar-fill" style="width:'+(_fmMaxVal>0?Math.round(_fmTeamAvg/_fmMaxVal*100):99)+'%;background:rgba(90,155,232,.4)">'+_fmFta+'</div></div><div class="hbar-val">'+_fmFta+'</div></div>';
-      ['GK','DEF','MID','FWD'].forEach(function(pos){
-        var vals=_fmPosG[pos]; if(!vals.length) return;
-        var avg=vals.reduce(function(a,v){return a+v;},0)/vals.length;
-        var fa=_fmFmt(avg);
-        var pct=_fmMaxVal>0?Math.round(avg/_fmMaxVal*100):50;
-        var diff=_fmTeamAvg>0?Math.round((avg/_fmTeamAvg-1)*100):0;
-        _fmHtml+='<div class="hbar-row"><div class="hbar-lbl"><span class="hbar-dot" style="background:'+POS_TXT_FM[pos]+'"></span>'+pos+' avg</div><div class="hbar-dur">'+pos+'</div><div class="hbar-track"><div class="hbar-fill" style="width:'+pct+'%;background:'+POS_BG_FM[pos]+'">'+fa+'</div></div><div class="hbar-val" style="color:'+POS_TXT_FM[pos]+'">'+fa+'</div><div style="font-size:8px;color:var(--dim);margin-left:4px">'+(diff>=0?'+':'')+diff+'%</div></div>';
-      });
-      _fmHtml+='<div class="team-avg-line"><span style="display:inline-block;width:24px;height:1px;border-top:2px dashed var(--dim);vertical-align:middle"></span>Team avg: <strong style="color:var(--teal);margin-left:4px">'+_fmFta+' '+_fmMc.unit+'</strong></div></div>';
+
+      if(viewVal==='ind'){
+        /* ── Individual player bars — sorted desc by metric ── */
+        var _fmSorted=_fmPlayers.filter(function(p){return (p[_fmMc.f]||0)>0;}).sort(function(a,b){return (b[_fmMc.f]||0)-(a[_fmMc.f]||0);});
+        var _fmIndMax=_fmSorted.length?(_fmSorted[0][_fmMc.f]||1):1;
+        _fmHtml+='<div class="hbar-chart"><div class="hbc-hdr"><div><div class="hbc-title">Individual — '+_fmMc.lbl+'</div><div class="hbc-sub">Full match (1H+2H combined) · sorted highest first</div></div><div class="hbc-badge" style="background:rgba(90,155,232,.08);border-color:rgba(90,155,232,.25);color:var(--blue)">Full match</div></div>';
+        _fmSorted.forEach(function(p){
+          var v=p[_fmMc.f]||0;
+          var pct=Math.round(v/_fmIndMax*100);
+          var pos=_fmGetPos(p.player);
+          var col=POS_TXT_FM[pos]||'var(--dim)';
+          var bg=POS_BG_FM[pos]||'rgba(107,130,153,.4)';
+          var parts=p.player.split(' ');
+          var shortN=parts.length>1?(parts[0][0]+'. '+parts.slice(1).join(' ')):p.player;
+          var diff=_fmTeamAvg>0?Math.round((v/_fmTeamAvg-1)*100):0;
+          _fmHtml+='<div class="hbar-row"><div class="hbar-lbl" style="color:'+col+'"><span class="hbar-dot" style="background:'+col+'"></span>'+_escHtml(shortN)+'</div><div class="hbar-dur" style="color:'+col+'">'+pos+'</div><div class="hbar-track"><div class="hbar-fill" style="width:'+pct+'%;background:'+bg+'">'+_fmFmt(v)+'</div></div><div class="hbar-val" style="color:'+col+'">'+_fmFmt(v)+'</div><div style="font-size:8px;color:var(--dim);margin-left:4px">'+(diff>=0?'+':'')+diff+'%</div></div>';
+        });
+        _fmHtml+='<div class="team-avg-line"><span style="display:inline-block;width:24px;height:1px;border-top:2px dashed var(--dim);vertical-align:middle"></span>Team avg: <strong style="color:var(--teal);margin-left:4px">'+_fmFta+' '+_fmMc.unit+'</strong></div></div>';
+      } else {
+        /* ── Team / position split view ── */
+        _fmHtml+='<div class="hbar-chart"><div class="hbc-hdr"><div><div class="hbc-title">Full match — '+(viewVal==='pos'?'position':'team')+' average</div><div class="hbc-sub">Position split · '+_fmMc.lbl+'</div></div><div class="hbc-badge" style="background:rgba(90,155,232,.08);border-color:rgba(90,155,232,.25);color:var(--blue)">Full match</div></div>';
+        _fmHtml+='<div class="hbar-row"><div class="hbar-lbl"><span class="hbar-dot" style="background:var(--dim)"></span>Team avg</div><div class="hbar-dur">all</div><div class="hbar-track"><div class="hbar-fill" style="width:'+(_fmMaxVal>0?Math.round(_fmTeamAvg/_fmMaxVal*100):99)+'%;background:rgba(90,155,232,.4)">'+_fmFta+'</div></div><div class="hbar-val">'+_fmFta+'</div></div>';
+        ['GK','DEF','MID','FWD'].forEach(function(pos){
+          var vals=_fmPosG[pos]; if(!vals.length) return;
+          var avg=vals.reduce(function(a,v){return a+v;},0)/vals.length;
+          var fa=_fmFmt(avg);
+          var pct=_fmMaxVal>0?Math.round(avg/_fmMaxVal*100):50;
+          var diff=_fmTeamAvg>0?Math.round((avg/_fmTeamAvg-1)*100):0;
+          _fmHtml+='<div class="hbar-row"><div class="hbar-lbl"><span class="hbar-dot" style="background:'+POS_TXT_FM[pos]+'"></span>'+pos+' avg</div><div class="hbar-dur">'+pos+'</div><div class="hbar-track"><div class="hbar-fill" style="width:'+pct+'%;background:'+POS_BG_FM[pos]+'">'+fa+'</div></div><div class="hbar-val" style="color:'+POS_TXT_FM[pos]+'">'+fa+'</div><div style="font-size:8px;color:var(--dim);margin-left:4px">'+(diff>=0?'+':'')+diff+'%</div></div>';
+        });
+        _fmHtml+='<div class="team-avg-line"><span style="display:inline-block;width:24px;height:1px;border-top:2px dashed var(--dim);vertical-align:middle"></span>Team avg: <strong style="color:var(--teal);margin-left:4px">'+_fmFta+' '+_fmMc.unit+'</strong></div></div>';
+      }
       container.innerHTML=_fmHtml;
       return;
     }
