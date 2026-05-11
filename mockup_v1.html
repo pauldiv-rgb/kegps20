@@ -6031,9 +6031,25 @@ function _rebuildSessionDropdowns(allDates, sessionMeta, drillMeta){
        before looking up LIVE_SESSION_DATA which is keyed by d20260429 format */
     var _cmpTrainKeys=sorted.filter(function(k){
       var dk=_dateKey(k);
-      return window.LIVE_SESSION_DATA[dk]&&window.LIVE_SESSION_DATA[dk].some(function(r){return r.matchType!=='Match';});
+      /* Exclude sessions where ALL rows are match-type — want training sessions only */
+      return window.LIVE_SESSION_DATA[dk]&&!window.LIVE_SESSION_DATA[dk].every(function(r){return (r.matchType||'').toLowerCase()==='match';});
     });
-    if(_cmpTrainKeys.length) cs.value=_dateKey(_cmpTrainKeys[0]);
+    if(_cmpTrainKeys.length){
+      cs.value=_dateKey(_cmpTrainKeys[0]);
+    } else {
+      /* All recent sessions are matches — keep newest as default but add a header note */
+      var _cmpNotice=document.getElementById('cmp-match-notice');
+      if(!_cmpNotice){
+        var _cmpWrap=document.querySelector('#p34 .cmp-ctrl-row')&&document.querySelector('#p34 .cmp-ctrl-row').parentElement;
+        if(_cmpWrap){
+          var _n=document.createElement('div');
+          _n.id='cmp-match-notice';
+          _n.style.cssText='font-size:9px;color:var(--amber);background:rgba(239,159,39,.1);border:1px solid rgba(239,159,39,.3);border-radius:4px;padding:5px 10px;margin-bottom:10px';
+          _n.textContent='ⓘ No training session found in data — defaulting to most recent match. Export training session GPS to compare training vs match.';
+          _cmpWrap.insertBefore(_n,_cmpWrap.firstChild);
+        }
+      }
+    }
     try{cmpSyncSession();}catch(e){}
   }
 
