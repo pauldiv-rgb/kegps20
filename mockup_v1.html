@@ -9010,22 +9010,28 @@ function renderPlayerProfile(){
   var sessKey = (document.getElementById('prof-session')||{value:'d20260424'}).value||'d20260424';
   var pk      = (document.getElementById('prof-player')||{value:'p37'}).value||'p37';
   var pm      = PLAYER_META[pk];
-  /* If pk is a normalised name key (from dropdown), resolve via _PM_NAME_MAP */
+  /* If pk is a normalised name key (from dropdown), resolve via _PM_NAME_MAP.
+     BUG-A root-cause fix: save the normalised name BEFORE remapping so the
+     LIVE_SESSION_DATA comparisons (which use _normPlayerName) still work after pk
+     is rewritten to e.g. "p15". */
+  var _normPk = pk;
   if(!pm && window._PM_NAME_MAP && window._PM_NAME_MAP[pk]){
     pk = window._PM_NAME_MAP[pk];
     pm = PLAYER_META[pk];
   }
   if(!pm) return;
 
-  /* BUG-A fix: auto-jump to player's most recent attended session if current has no data */
+  /* BUG-A fix: auto-jump to player's most recent attended session if current has no data.
+     Uses _normPk (normalised name, e.g. "philip_halinan") for row matching — pk at this
+     point may already be the PLAYER_META key ("p15") which never matches _normPlayerName(). */
   if(window.LIVE_SESSION_DATA){
     var _curRows=(window.LIVE_SESSION_DATA[sessKey]||[]);
-    var _playerInSess=_curRows.some(function(r){ return r.player&&_normPlayerName(r.player)===pk; });
+    var _playerInSess=_curRows.some(function(r){ return r.player&&_normPlayerName(r.player)===_normPk; });
     if(!_playerInSess){
       /* Find the most recent session where this player has a row */
       var _allSessKeys=Object.keys(window.LIVE_SESSION_DATA).sort().reverse();
       var _bestKey=_allSessKeys.find(function(k){
-        return (window.LIVE_SESSION_DATA[k]||[]).some(function(r){ return r.player&&_normPlayerName(r.player)===pk; });
+        return (window.LIVE_SESSION_DATA[k]||[]).some(function(r){ return r.player&&_normPlayerName(r.player)===_normPk; });
       });
       if(_bestKey&&_bestKey!==sessKey){
         var _sessSel=document.getElementById('prof-session');
