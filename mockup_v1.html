@@ -1018,41 +1018,9 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
   </div>
 
   <!-- ─── [2] ACWR FLAG ROW ─── -->
-  <div id="acwr-flags-row" style="display:flex;align-items:center;gap:10px;background:var(--s1);border:1px solid var(--border);border-left:3px solid var(--amber);border-radius:8px;padding:10px 16px;margin-bottom:20px;flex-wrap:wrap">
-    <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--amber);flex-shrink:0">ACWR Flags <span style="font-weight:400;color:var(--dim);font-size:8px;text-transform:none">· HMLD-ACWR · loading live data…</span></div>
-    <div style="display:flex;gap:7px;flex-wrap:wrap;flex:1">
-      <div style="display:flex;align-items:center;gap:6px;background:rgba(226,75,74,.08);border:1px solid rgba(226,75,74,.25);border-radius:5px;padding:4px 10px">
-        <span style="font-size:10px;font-weight:600;color:var(--text)">Liam Kelly</span>
-        <span style="font-size:8px;color:var(--dim);background:var(--s3);padding:1px 5px;border-radius:2px">M8</span>
-        <span style="font-size:10px;font-weight:700;color:var(--red)">1.90 ↑</span>
-        <span style="font-size:8px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:.05em">High risk</span>
-      </div>
-      <div style="display:flex;align-items:center;gap:6px;background:rgba(226,75,74,.08);border:1px solid rgba(226,75,74,.25);border-radius:5px;padding:4px 10px">
-        <span style="font-size:10px;font-weight:600;color:var(--text)">Colm Moran</span>
-        <span style="font-size:8px;color:var(--dim);background:var(--s3);padding:1px 5px;border-radius:2px">FWD</span>
-        <span style="font-size:10px;font-weight:700;color:var(--red)">1.82 ↑</span>
-        <span style="font-size:8px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:.05em">High risk</span>
-      </div>
-      <div style="display:flex;align-items:center;gap:6px;background:rgba(239,159,39,.07);border:1px solid rgba(239,159,39,.22);border-radius:5px;padding:4px 10px">
-        <span style="font-size:10px;font-weight:600;color:var(--text)">Senan Gallagher</span>
-        <span style="font-size:8px;color:var(--dim);background:var(--s3);padding:1px 5px;border-radius:2px">DEF</span>
-        <span style="font-size:10px;font-weight:700;color:var(--amber)">1.40 ↓</span>
-        <span style="font-size:8px;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:.05em">Caution</span>
-      </div>
-      <div style="display:flex;align-items:center;gap:6px;background:rgba(239,159,39,.07);border:1px solid rgba(239,159,39,.22);border-radius:5px;padding:4px 10px">
-        <span style="font-size:10px;font-weight:600;color:var(--text)">Sean Gleeson</span>
-        <span style="font-size:8px;color:var(--dim);background:var(--s3);padding:1px 5px;border-radius:2px">M8</span>
-        <span style="font-size:10px;font-weight:700;color:var(--amber)">1.30 →</span>
-        <span style="font-size:8px;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:.05em">Caution</span>
-      </div>
-      <div style="display:flex;align-items:center;gap:6px;background:rgba(79,195,247,.07);border:1px solid rgba(79,195,247,.2);border-radius:5px;padding:4px 10px">
-        <span style="font-size:10px;font-weight:600;color:var(--text)">Euan Cowzer</span>
-        <span style="font-size:8px;color:var(--dim);background:var(--s3);padding:1px 5px;border-radius:2px">M8</span>
-        <span style="font-size:10px;font-weight:700;color:var(--blue)">0.44 ↓</span>
-        <span style="font-size:8px;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:.05em">Under-loaded</span>
-      </div>
-    </div>
-    <div style="font-size:9px;color:var(--muted);flex-shrink:0">HMLD ACWR · full trend → Page 1<span style="font-size:8px;color:var(--muted);font-style:italic;margin-left:6px">&#9432; Requires per-player rolling load data at go-live</span></div>
+  <div id="acwr-flags-row" style="display:flex;align-items:center;gap:10px;background:var(--s1);border:1px solid var(--border);border-left:3px solid var(--muted);border-radius:8px;padding:10px 16px;margin-bottom:20px;flex-wrap:wrap">
+    <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);flex-shrink:0">ACWR Flags</div>
+    <div style="font-size:9px;color:var(--dim);flex:1">Loading live data…</div>
   </div>
 
   <!-- ─── [2] DRILL OVERVIEW CARDS ─── -->
@@ -7171,6 +7139,7 @@ function loadLiveData(){
       try { renderFlagCards(); } catch(e){ console.warn('renderFlagCards post-load:', e); }
       try { renderDotPlot(); } catch(e){ console.warn('renderDotPlot post-load:', e); }
       try { updateAcwrSummaryCards(); } catch(e){ console.warn('updateAcwrSummaryCards post-load:', e); }
+      try { updateACWRZoneTiles(); } catch(e){ console.warn('updateACWRZoneTiles post-load:', e); }
       try { updateWeeklyTargetPage(); } catch(e){ console.warn('updateWeeklyTargetPage post-load:', e); }
       try { updateTrainingQualityPage(); } catch(e){ console.warn('updateTrainingQualityPage post-load:', e); }
       try { updateMatchStimulusPage(); } catch(e){ console.warn('updateMatchStimulusPage post-load:', e); }
