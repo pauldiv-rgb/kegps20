@@ -41,13 +41,14 @@ input[name="page"]{position:absolute;opacity:0;width:0;height:0;pointer-events:n
 #rp14:checked~.nav .nb[for="rp14"],
 #rp34:checked~.nav .nb[for="rp34"],
 #rp13:checked~.nav .nb[for="rp13"],
-#rp50:checked~.nav .nb[for="rp50"]{color:var(--teal);border-bottom-color:var(--teal)}
+#rp50:checked~.nav .nb[for="rp50"],
+#rp60:checked~.nav .nb[for="rp60"]{color:var(--teal);border-bottom-color:var(--teal)}
 
 /* PAGES */
 .pg{display:none;padding:24px;max-width:1400px;margin:0 auto}
 #rp0:checked~.pg#p0,#rp37:checked~.pg#p34,#rp1:checked~.pg#p37,#rp15:checked~.pg#p1,
 #rp27:checked~.pg#p15,#rp14:checked~.pg#p27,#rp34:checked~.pg#p8,
-#rp13:checked~.pg#pprof,#rp50:checked~.pg#pmd{display:block}
+#rp13:checked~.pg#pprof,#rp50:checked~.pg#pmd,#rp60:checked~.pg#phc{display:block}
 
 /* PLAYER PROFILE PAGE */
 .prof-scatter-area{position:relative;height:260px;background:var(--s2);border-radius:8px;overflow:hidden;border:1px solid var(--border)}
@@ -813,6 +814,7 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
 <input type="radio" name="page" id="rp34">
 <input type="radio" name="page" id="rp13">
 <input type="radio" name="page" id="rp50">
+<input type="radio" name="page" id="rp60">
 
 <!-- DATA LOAD ERROR BANNER — hidden until a fetch failure is confirmed -->
 <div id="fetch-error-banner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9999;background:#7b1a1a;color:#ffcccc;font-size:10px;font-weight:600;padding:7px 16px;text-align:center;letter-spacing:.04em">
@@ -838,6 +840,7 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
   <label class="nb" for="rp34">6 · Planning summary</label>
   <label class="nb" for="rp13">7 · Player profile</label>
   <label class="nb" for="rp50">8 · MD Scorecard</label>
+  <label class="nb" for="rp60">⚙ Health Check</label>
 </div>
 
 <!-- ═══════════════════════════════════════
@@ -7147,6 +7150,7 @@ function loadLiveData(){
       try { updatePlayerProfileDropdown(); } catch(e){ console.warn('updatePlayerProfileDropdown post-load:', e); }
       try { updateCmpPlayerSelects(); } catch(e){ console.warn('updateCmpPlayerSelects post-load:', e); }
       try { updateFixtureStrips(); } catch(e){ console.warn('updateFixtureStrips post-load:', e); }
+      try { runHealthCheck(); } catch(e){ console.warn('runHealthCheck post-load:', e); }
     });
 }
 
@@ -9816,6 +9820,387 @@ function renderProfPerfBars(pk){
   </div><!-- /md-main-wrap -->
 
 </div><!-- /pmd -->
+
+<!-- ═══════════════════════════════════════
+     PAGE 10 — HEALTH CHECK
+════════════════════════════════════════ -->
+<div class="pg" id="phc">
+
+  <div class="pg-q">Dashboard Health Check</div>
+  <div class="pg-sub">Data pipeline · integrity · freshness — run after each data load</div>
+
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
+    <button id="hc-run-btn" onclick="runHealthCheck()" style="font-family:var(--syne);font-size:11px;font-weight:700;letter-spacing:.06em;background:var(--teal);color:#0A0C10;border:none;border-radius:5px;padding:8px 22px;cursor:pointer">RUN CHECK</button>
+    <span id="hc-run-ts" style="font-size:9px;color:var(--muted)">Not yet run this session</span>
+  </div>
+
+  <!-- SUMMARY STRIP -->
+  <div id="hc-summary" style="display:none;margin-bottom:22px">
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <div id="hc-sum-pass" style="background:var(--s1);border:1px solid var(--border);border-left:3px solid #4CAF50;border-radius:6px;padding:10px 18px;min-width:100px">
+        <div style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:4px">PASS</div>
+        <div style="font-family:var(--syne);font-size:24px;font-weight:700;color:#4CAF50" id="hc-n-pass">—</div>
+      </div>
+      <div id="hc-sum-warn" style="background:var(--s1);border:1px solid var(--border);border-left:3px solid var(--amber);border-radius:6px;padding:10px 18px;min-width:100px">
+        <div style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:4px">WARN</div>
+        <div style="font-family:var(--syne);font-size:24px;font-weight:700;color:var(--amber)" id="hc-n-warn">—</div>
+      </div>
+      <div id="hc-sum-fail" style="background:var(--s1);border:1px solid var(--border);border-left:3px solid var(--red);border-radius:6px;padding:10px 18px;min-width:100px">
+        <div style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:4px">FAIL</div>
+        <div style="font-family:var(--syne);font-size:24px;font-weight:700;color:var(--red)" id="hc-n-fail">—</div>
+      </div>
+      <div style="background:var(--s1);border:1px solid var(--border);border-left:3px solid var(--blue);border-radius:6px;padding:10px 18px;flex:1;min-width:200px;display:flex;align-items:center">
+        <span id="hc-overall-msg" style="font-size:11px;font-weight:600;color:var(--blue)">—</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- RESULTS TABLE -->
+  <div id="hc-results" style="display:none">
+    <!-- Groups injected by runHealthCheck() -->
+  </div>
+
+</div><!-- /phc -->
+
+<script>
+/* ═══════════════════════════════════════════════════════════
+   PAGE 10 — HEALTH CHECK
+   ══════════════════════════════════════════════════════════ */
+
+function runHealthCheck(){
+  var results = [];   /* [{group, label, status:'pass'|'warn'|'fail', detail}] */
+
+  /* ── helpers ─────────────────────────────────────────── */
+  function _pass(g,l,d){ results.push({group:g,label:l,status:'pass',detail:d||''}); }
+  function _warn(g,l,d){ results.push({group:g,label:l,status:'warn',detail:d||''}); }
+  function _fail(g,l,d){ results.push({group:g,label:l,status:'fail',detail:d||''}); }
+
+  var now = new Date();
+  function _daysAgo(dateStr){
+    if(!dateStr) return null;
+    var p=dateStr.split('/');
+    if(p.length<3) return null;
+    var d=new Date(Date.UTC(parseInt(p[2]<100?2000+parseInt(p[2]):p[2]),parseInt(p[1])-1,parseInt(p[0])));
+    if(isNaN(d.getTime())) return null;
+    return Math.floor((now-d)/(1000*60*60*24));
+  }
+
+  /* ── GROUP 1: Data Pipeline ──────────────────────────── */
+  var G1='Data Pipeline';
+
+  /* 1a. LIVE_SESSION_DATA */
+  var lsd = typeof window.LIVE_SESSION_DATA !== 'undefined' ? window.LIVE_SESSION_DATA : null;
+  var lsdRows = lsd ? Object.keys(lsd).length : 0;
+  if(!lsd || lsdRows === 0){
+    _fail(G1,'LS_Session_Review','No rows loaded — CSV may have failed');
+  } else if(lsdRows < 10){
+    _warn(G1,'LS_Session_Review','Only '+lsdRows+' player-session rows — check CSV completeness');
+  } else {
+    _pass(G1,'LS_Session_Review',lsdRows+' player-session rows loaded');
+  }
+
+  /* 1b. LIVE_ACWR */
+  var la = typeof window.LIVE_ACWR !== 'undefined' ? window.LIVE_ACWR : null;
+  var laCount = la ? Object.keys(la).length : 0;
+  if(!la || laCount === 0){
+    _fail(G1,'LS_Load_Trend_Export','No ACWR entries — CSV may have failed');
+  } else if(laCount < 5){
+    _warn(G1,'LS_Load_Trend_Export','Only '+laCount+' players in ACWR — check CSV completeness');
+  } else {
+    _pass(G1,'LS_Load_Trend_Export',laCount+' players with ACWR data');
+  }
+
+  /* 1c. LIVE_HISTORY_DATA */
+  var lhd = typeof window.LIVE_HISTORY_DATA !== 'undefined' ? window.LIVE_HISTORY_DATA : null;
+  var lhdRows = lhd ? (Array.isArray(lhd) ? lhd.length : Object.keys(lhd).length) : 0;
+  if(!lhd || lhdRows === 0){
+    _fail(G1,'LS_History','No historical rows loaded');
+  } else {
+    _pass(G1,'LS_History',lhdRows+' rows loaded');
+  }
+
+  /* 1d. PLAYER_META */
+  var pm = typeof window.PLAYER_META !== 'undefined' ? window.PLAYER_META : null;
+  var pmCount = pm ? Object.keys(pm).length : 0;
+  if(!pm || pmCount === 0){
+    _fail(G1,'PLAYER_META','No player metadata loaded');
+  } else {
+    _pass(G1,'PLAYER_META',pmCount+' players in metadata');
+  }
+
+  /* 1e. LIVE_EA_ROWS */
+  var lea = typeof window.LIVE_EA_ROWS !== 'undefined' ? window.LIVE_EA_ROWS : null;
+  var leaCount = lea ? Object.keys(lea).length : 0;
+  if(!lea){
+    _warn(G1,'LS_External_Activity','Not loaded (EA data absent — chart will be empty)');
+  } else {
+    _pass(G1,'LS_External_Activity',leaCount+' players with EA entries');
+  }
+
+  /* 1f. LB_DATA */
+  var lb = typeof window.LB_DATA !== 'undefined' ? window.LB_DATA : null;
+  var lbCount = lb ? Object.keys(lb).length : 0;
+  if(!lb || lbCount === 0){
+    _warn(G1,'LS_Squad_Load (LB_DATA)','Not loaded — Page 0 drill cards may be empty');
+  } else {
+    _pass(G1,'LS_Squad_Load (LB_DATA)',lbCount+' session keys');
+  }
+
+  /* ── GROUP 2: Player Count Consistency ───────────────── */
+  var G2='Player Count Consistency';
+
+  /* Unique players in LIVE_SESSION_DATA */
+  var lsdPlayers = new Set();
+  if(lsd){
+    Object.keys(lsd).forEach(function(pk){ lsdPlayers.add(pk); });
+  }
+  var pmPlayers = pm ? Object.keys(pm).length : 0;
+
+  if(lsdPlayers.size > 0 && pmPlayers > 0){
+    var diff = Math.abs(lsdPlayers.size - pmPlayers);
+    if(diff === 0){
+      _pass(G2,'Session vs Meta count','Both '+lsdPlayers.size+' players — perfect match');
+    } else if(diff <= 3){
+      _warn(G2,'Session vs Meta count','Session: '+lsdPlayers.size+', Meta: '+pmPlayers+' ('+diff+' difference — check for new/removed players)');
+    } else {
+      _fail(G2,'Session vs Meta count','Session: '+lsdPlayers.size+', Meta: '+pmPlayers+' ('+diff+' difference — data mismatch)');
+    }
+  } else {
+    _warn(G2,'Session vs Meta count','Cannot compare — one or both sources not loaded');
+  }
+
+  /* ACWR coverage */
+  if(laCount > 0 && lsdPlayers.size > 0){
+    var acwrCov = Math.round(laCount/lsdPlayers.size*100);
+    if(acwrCov >= 80){
+      _pass(G2,'ACWR coverage',laCount+'/'+lsdPlayers.size+' session players have ACWR ('+acwrCov+'%)');
+    } else if(acwrCov >= 50){
+      _warn(G2,'ACWR coverage',laCount+'/'+lsdPlayers.size+' session players have ACWR ('+acwrCov+'%) — check LS_Load_Trend_Export');
+    } else {
+      _fail(G2,'ACWR coverage','Only '+acwrCov+'% of session players have ACWR — serious coverage gap');
+    }
+  }
+
+  /* ── GROUP 3: ACWR Integrity ─────────────────────────── */
+  var G3='ACWR Integrity';
+
+  if(la && laCount > 0){
+    var vals = Object.values(la);
+    var outOfRange=[], zeroAcute=[], badValues=[];
+    vals.forEach(function(v){
+      var pk=v.pk||v.name||'?';
+      var acwr=typeof v.acwr==='number'?v.acwr:parseFloat(v.acwr);
+      var acute=typeof v.acute==='number'?v.acute:parseFloat(v.acute||0);
+      var chronic=typeof v.chronic==='number'?v.chronic:parseFloat(v.chronic||0);
+      if(!isNaN(acwr)&&acwr>0&&(acwr<0.05||acwr>2.5)) outOfRange.push(pk+' ('+acwr.toFixed(2)+')');
+      if(!isNaN(acute)&&acute===0&&!isNaN(chronic)&&chronic>0) zeroAcute.push(pk);
+      if(isNaN(acwr)&&!isNaN(chronic)&&chronic>0) badValues.push(pk);
+    });
+
+    if(outOfRange.length===0){
+      _pass(G3,'ACWR value range','All non-zero values within 0.05–2.50');
+    } else {
+      _warn(G3,'ACWR value range',outOfRange.length+' players outside normal range: '+outOfRange.slice(0,5).join(', ')+(outOfRange.length>5?' …':''));
+    }
+
+    if(zeroAcute.length===0){
+      _pass(G3,'Zero-acute players','No players with chronic>0 but acute=0 (no absent players this week)');
+    } else {
+      _warn(G3,'Zero-acute players',zeroAcute.length+' players absent/rested this week (acute=0, chronic>0): '+zeroAcute.slice(0,6).join(', ')+(zeroAcute.length>6?' …':''));
+    }
+
+    if(badValues.length>0){
+      _warn(G3,'ACWR NaN values',badValues.length+' players have chronic>0 but NaN ACWR: '+badValues.slice(0,5).join(', '));
+    } else {
+      _pass(G3,'ACWR NaN values','No NaN ACWR values found');
+    }
+
+    /* Zone tile recount vs live DOM */
+    try{
+      var tileRed=parseInt((document.getElementById('zn-red')||{}).textContent||'0');
+      var tileAmber=parseInt((document.getElementById('zn-amber')||{}).textContent||'0');
+      var tileGreen=parseInt((document.getElementById('zn-green')||{}).textContent||'0');
+      var tileBlue=parseInt((document.getElementById('zn-blue')||{}).textContent||'0');
+      var liveRed=0,liveAmber=0,liveGreen=0,liveBlue=0;
+      vals.forEach(function(v){
+        var acwr=typeof v.acwr==='number'?v.acwr:parseFloat(v.acwr);
+        if(isNaN(acwr)||acwr<=0) return;
+        if(acwr>=1.5) liveRed++;
+        else if(acwr>=1.3) liveAmber++;
+        else if(acwr>=0.8) liveGreen++;
+        else liveBlue++;
+      });
+      var tileMismatch=(tileRed!==liveRed||tileAmber!==liveAmber||tileGreen!==liveGreen||tileBlue!==liveBlue);
+      if(tileMismatch){
+        _fail(G3,'Zone tile recount','DOM tiles R/A/G/B='+tileRed+'/'+tileAmber+'/'+tileGreen+'/'+tileBlue+
+          ' but live recount='+liveRed+'/'+liveAmber+'/'+liveGreen+'/'+liveBlue+' — stale tiles');
+      } else {
+        _pass(G3,'Zone tile recount','Tiles match live recount (R'+liveRed+' A'+liveAmber+' G'+liveGreen+' B'+liveBlue+')');
+      }
+    } catch(e){ _warn(G3,'Zone tile recount','Could not verify: '+e.message); }
+  } else {
+    _warn(G3,'ACWR checks','Skipped — LIVE_ACWR not loaded');
+  }
+
+  /* ── GROUP 4: Match Stimulus Integrity ───────────────── */
+  var G4='Match Stimulus';
+
+  if(lsd && lsdRows > 0){
+    var matchWithNoHMLD=[], matchWithNoTD=[];
+    var _isMatchTypeHC = typeof _isMatchType==='function' ? _isMatchType : function(mt){
+      var lc=(mt||'').toLowerCase();
+      return lc.indexOf('match')>-1||lc.indexOf('championship')>-1||lc.indexOf('league')>-1||lc.indexOf('final')>-1;
+    };
+    Object.values(lsd).forEach(function(playerSessions){
+      (Array.isArray(playerSessions)?playerSessions:Object.values(playerSessions||{})).forEach(function(s){
+        if(!_isMatchTypeHC(s.matchType||s.mt||'')) return;
+        var hmld=parseFloat(s.hmld||s.HMLD||0);
+        var td=parseFloat(s.td||s.TD||0);
+        if(hmld===0) matchWithNoHMLD.push((s.player||s.pk||'?')+' '+((s.date||s.dt||'')));
+        if(td===0)   matchWithNoTD.push((s.player||s.pk||'?')+' '+((s.date||s.dt||'')));
+      });
+    });
+    if(matchWithNoHMLD.length===0){
+      _pass(G4,'Match sessions with HMLD=0','All match rows have HMLD data');
+    } else {
+      _warn(G4,'Match sessions with HMLD=0',matchWithNoHMLD.length+' match rows missing HMLD: '+matchWithNoHMLD.slice(0,4).join(', ')+(matchWithNoHMLD.length>4?' …':''));
+    }
+    if(matchWithNoTD.length===0){
+      _pass(G4,'Match sessions with TD=0','All match rows have TD data');
+    } else {
+      _warn(G4,'Match sessions with TD=0',matchWithNoTD.length+' match rows missing TD: '+matchWithNoTD.slice(0,4).join(', ')+(matchWithNoTD.length>4?' …':''));
+    }
+  } else {
+    _warn(G4,'Match checks','Skipped — LIVE_SESSION_DATA not loaded');
+  }
+
+  /* ── GROUP 5: Data Freshness ─────────────────────────── */
+  var G5='Data Freshness';
+
+  /* Latest session date from LIVE_SESSION_DATA */
+  var latestDate=null;
+  if(lsd){
+    Object.values(lsd).forEach(function(ps){
+      (Array.isArray(ps)?ps:Object.values(ps||{})).forEach(function(s){
+        var d=s.date||s.dt||s.Date||'';
+        if(!d) return;
+        var parts=d.split('/');
+        if(parts.length<3) return;
+        var dt=new Date(Date.UTC(parseInt(parts[2]<100?2000+parseInt(parts[2]):parts[2]),parseInt(parts[1])-1,parseInt(parts[0])));
+        if(!isNaN(dt.getTime())&&(!latestDate||dt>latestDate)) latestDate=dt;
+      });
+    });
+  }
+  if(latestDate){
+    var daysOld=Math.floor((now-latestDate)/(1000*60*60*24));
+    var dateStr=(latestDate.getUTCDate())+'/'+(latestDate.getUTCMonth()+1)+'/'+latestDate.getUTCFullYear();
+    if(daysOld<=7){
+      _pass(G5,'Last session date',dateStr+' ('+daysOld+' days ago) — current');
+    } else if(daysOld<=14){
+      _warn(G5,'Last session date',dateStr+' ('+daysOld+' days ago) — may need refresh');
+    } else {
+      _fail(G5,'Last session date',dateStr+' ('+daysOld+' days ago) — stale data, check Google Sheets sync');
+    }
+  } else {
+    _warn(G5,'Last session date','Could not determine from loaded data');
+  }
+
+  /* Header live badge */
+  var badge=document.querySelector('.badge');
+  var badgeText=badge?badge.textContent:'';
+  if(badgeText.indexOf('Live')>-1){
+    _pass(G5,'Header live badge','Shows: '+badgeText.trim());
+  } else if(badgeText.indexOf('Baked')>-1){
+    _fail(G5,'Header live badge','Still showing "Baked" — live data load may have failed');
+  } else {
+    _warn(G5,'Header live badge','Unexpected badge state: '+badgeText.trim());
+  }
+
+  /* ── GROUP 6: Zero-Acute Player List ─────────────────── */
+  var G6='Absent / Rested This Week';
+  if(la && laCount>0){
+    var absentList=[];
+    Object.values(la).forEach(function(v){
+      var acute=typeof v.acute==='number'?v.acute:parseFloat(v.acute||0);
+      var chronic=typeof v.chronic==='number'?v.chronic:parseFloat(v.chronic||0);
+      if(!isNaN(acute)&&acute===0&&!isNaN(chronic)&&chronic>0){
+        absentList.push(v.name||v.pk||'?');
+      }
+    });
+    if(absentList.length===0){
+      _pass(G6,'Players with acute=0','No players absent from last 7 days of sessions');
+    } else {
+      _warn(G6,'Players with acute=0 (absent/rested)',absentList.length+' players: '+absentList.join(', '));
+    }
+  }
+
+  /* ── Render results ─────────────────────────────────── */
+  var nPass=results.filter(function(r){return r.status==='pass';}).length;
+  var nWarn=results.filter(function(r){return r.status==='warn';}).length;
+  var nFail=results.filter(function(r){return r.status==='fail';}).length;
+
+  document.getElementById('hc-n-pass').textContent=nPass;
+  document.getElementById('hc-n-warn').textContent=nWarn;
+  document.getElementById('hc-n-fail').textContent=nFail;
+
+  var overallMsg, overallCol;
+  if(nFail>0){
+    overallMsg='⚠ '+nFail+' critical issue'+(nFail>1?'s':'')+' — data integrity at risk. Review FAILs before presenting.';
+    overallCol='var(--red)';
+  } else if(nWarn>0){
+    overallMsg=''+nWarn+' warning'+(nWarn>1?'s':'')+' — dashboard functional but review items flagged.';
+    overallCol='var(--amber)';
+  } else {
+    overallMsg='✓ All checks passed — dashboard data looks clean.';
+    overallCol='#4CAF50';
+  }
+  var overallEl=document.getElementById('hc-overall-msg');
+  overallEl.textContent=overallMsg;
+  overallEl.style.color=overallCol;
+
+  /* Group and render */
+  var groups={};
+  results.forEach(function(r){
+    if(!groups[r.group]) groups[r.group]=[];
+    groups[r.group].push(r);
+  });
+
+  var icons={pass:'<span style="color:#4CAF50;font-weight:700;width:14px;display:inline-block">✓</span>',
+             warn:'<span style="color:var(--amber);font-weight:700;width:14px;display:inline-block">!</span>',
+             fail:'<span style="color:var(--red);font-weight:700;width:14px;display:inline-block">✗</span>'};
+
+  var html='';
+  Object.keys(groups).forEach(function(gname){
+    var rows=groups[gname];
+    var gFail=rows.some(function(r){return r.status==='fail';});
+    var gWarn=rows.some(function(r){return r.status==='warn';});
+    var gCol=gFail?'var(--red)':gWarn?'var(--amber)':'#4CAF50';
+    html+='<div style="margin-bottom:18px">';
+    html+='<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:'+gCol+';margin-bottom:8px">'+_escHtml(gname)+'</div>';
+    html+='<div style="background:var(--s1);border:1px solid var(--border);border-radius:8px;overflow:hidden">';
+    rows.forEach(function(r,i){
+      var bg=i%2===0?'var(--s1)':'var(--s2)';
+      html+='<div style="display:flex;align-items:flex-start;gap:10px;padding:9px 14px;background:'+bg+';border-bottom:'+(i<rows.length-1?'1px solid var(--border2)':'none')+'">';
+      html+=icons[r.status];
+      html+='<div style="flex:1">';
+      html+='<div style="font-size:10.5px;font-weight:600;margin-bottom:2px">'+_escHtml(r.label)+'</div>';
+      if(r.detail) html+='<div style="font-size:9.5px;color:var(--dim)">'+_escHtml(r.detail)+'</div>';
+      html+='</div></div>';
+    });
+    html+='</div></div>';
+  });
+
+  document.getElementById('hc-results').innerHTML=html;
+  document.getElementById('hc-summary').style.display='';
+  document.getElementById('hc-results').style.display='';
+
+  var ts=now.getHours()+':'+(now.getMinutes()<10?'0':'')+now.getMinutes()+' on '
+    +['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][now.getDay()]+' '
+    +now.getDate()+'/'+(now.getMonth()+1)+'/'+now.getFullYear();
+  document.getElementById('hc-run-ts').textContent='Last run: '+ts;
+}
+
+</script>
 
 <script>
 /* ═══════════════════════════════════════════════════════════
