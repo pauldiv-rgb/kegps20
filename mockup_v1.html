@@ -9937,22 +9937,26 @@ function runHealthCheck(){
     _pass(G1,'LS_External_Activity',leaCount+' players with EA entries');
   }
 
-  /* 1f. LB_DATA */
-  var lb = typeof window.LB_DATA !== 'undefined' ? window.LB_DATA : null;
-  var lbCount = lb ? Object.keys(lb).length : 0;
-  if(!lb || lbCount === 0){
-    _warn(G1,'LS_Squad_Load (LB_DATA)','Not loaded — Page 0 drill cards may be empty');
+  /* 1f. LIVE_DRILL_PLAYER_DATA (replaced LB_DATA) */
+  var ldpd = typeof window.LIVE_DRILL_PLAYER_DATA !== 'undefined' ? window.LIVE_DRILL_PLAYER_DATA : null;
+  var ldpdCount = ldpd ? Object.keys(ldpd).length : 0;
+  if(!ldpd || ldpdCount === 0){
+    _warn(G1,'LS_Drill_Data (LIVE_DRILL_PLAYER_DATA)','No drill sessions loaded — Page 0 per-drill cards will show empty state');
   } else {
-    _pass(G1,'LS_Squad_Load (LB_DATA)',lbCount+' session keys');
+    _pass(G1,'LS_Drill_Data (LIVE_DRILL_PLAYER_DATA)',ldpdCount+' drill sessions loaded');
   }
 
   /* ── GROUP 2: Player Count Consistency ───────────────── */
   var G2='Player Count Consistency';
 
-  /* Unique players in LIVE_SESSION_DATA */
+  /* Unique players in LIVE_SESSION_DATA — traverse date buckets, collect row.player */
   var lsdPlayers = new Set();
   if(lsd){
-    Object.keys(lsd).forEach(function(pk){ lsdPlayers.add(pk); });
+    Object.values(lsd).forEach(function(bucket){
+      (Array.isArray(bucket)?bucket:Object.values(bucket||{})).forEach(function(row){
+        if(row.player) lsdPlayers.add(row.player);
+      });
+    });
   }
   var pmPlayers = pm ? Object.keys(pm).length : 0;
 
@@ -10045,19 +10049,21 @@ function runHealthCheck(){
   /* ── GROUP 4: Match Stimulus Integrity ───────────────── */
   var G4='Match Stimulus';
 
-  if(lsd && lsdRows > 0){
+  if(lsd && Object.keys(lsd).length > 0){
     var matchWithNoHMLD=[], matchWithNoTD=[];
     var _isMatchTypeHC = typeof _isMatchType==='function' ? _isMatchType : function(mt){
       var lc=(mt||'').toLowerCase();
       return lc.indexOf('match')>-1||lc.indexOf('championship')>-1||lc.indexOf('league')>-1||lc.indexOf('final')>-1;
     };
-    Object.values(lsd).forEach(function(playerSessions){
-      (Array.isArray(playerSessions)?playerSessions:Object.values(playerSessions||{})).forEach(function(s){
+    Object.keys(lsd).forEach(function(dk){
+      var bucket=lsd[dk];
+      (Array.isArray(bucket)?bucket:Object.values(bucket||{})).forEach(function(s){
         if(!_isMatchTypeHC(s.matchType||s.mt||'')) return;
         var hmld=parseFloat(s.hmld||s.HMLD||0);
         var td=parseFloat(s.td||s.TD||0);
-        if(hmld===0) matchWithNoHMLD.push((s.player||s.pk||'?')+' '+((s.date||s.dt||'')));
-        if(td===0)   matchWithNoTD.push((s.player||s.pk||'?')+' '+((s.date||s.dt||'')));
+        var label=(s.player||'?')+' '+dk;
+        if(hmld===0) matchWithNoHMLD.push(label);
+        if(td===0)   matchWithNoTD.push(label);
       });
     });
     if(matchWithNoHMLD.length===0){
@@ -10077,18 +10083,15 @@ function runHealthCheck(){
   /* ── GROUP 5: Data Freshness ─────────────────────────── */
   var G5='Data Freshness';
 
-  /* Latest session date from LIVE_SESSION_DATA */
+  /* Latest session date — parse from outer date keys: d20260506 → YYYYMMDD */
   var latestDate=null;
   if(lsd){
-    Object.values(lsd).forEach(function(ps){
-      (Array.isArray(ps)?ps:Object.values(ps||{})).forEach(function(s){
-        var d=s.date||s.dt||s.Date||'';
-        if(!d) return;
-        var parts=d.split('/');
-        if(parts.length<3) return;
-        var dt=new Date(Date.UTC(parseInt(parts[2]<100?2000+parseInt(parts[2]):parts[2]),parseInt(parts[1])-1,parseInt(parts[0])));
-        if(!isNaN(dt.getTime())&&(!latestDate||dt>latestDate)) latestDate=dt;
-      });
+    Object.keys(lsd).forEach(function(dk){
+      if(!/^d\d{8}$/.test(dk)) return;
+      var s=dk.slice(1); /* "20260506" */
+      var yr=parseInt(s.slice(0,4)), mo=parseInt(s.slice(4,6))-1, dy=parseInt(s.slice(6,8));
+      var dt=new Date(Date.UTC(yr,mo,dy));
+      if(!isNaN(dt.getTime())&&(!latestDate||dt>latestDate)) latestDate=dt;
     });
   }
   if(latestDate){
