@@ -119,6 +119,17 @@ tr:hover td{background:rgba(30,52,72,.25)}
 .p-dim{background:rgba(107,130,153,.12);color:var(--dim)}
 .p-purple{background:rgba(155,119,221,.18);color:var(--purple)}
 
+/* PLAYER-CATEGORY: category filter pill strip */
+.cat-filter-bar{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:12px}
+.cat-filter-lbl{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-right:3px;flex-shrink:0}
+.cat-pill{display:inline-block;cursor:pointer;font-size:9px;font-weight:700;padding:3px 10px;border-radius:20px;border:1px solid var(--border);color:var(--dim);letter-spacing:.04em;transition:border-color .12s,color .12s,background .12s;user-select:none;text-transform:uppercase}
+.cat-pill:hover{border-color:rgba(159,225,203,.4);color:var(--text)}
+.cat-pill.cat-active{border-color:var(--teal);color:var(--teal);background:rgba(159,225,203,.07)}
+.cat-pill.cat-core.cat-active{border-color:var(--green);color:var(--green);background:rgba(76,175,80,.07)}
+.cat-pill.cat-impact.cat-active{border-color:var(--blue);color:var(--blue);background:rgba(79,195,247,.07)}
+.cat-pill.cat-unused.cat-active{border-color:var(--amber);color:var(--amber);background:rgba(239,159,39,.07)}
+.cat-pill.cat-fringe.cat-active{border-color:var(--muted);color:var(--muted);background:rgba(107,130,153,.07)}
+
 /* SESSION BAR */
 .sess-bar{background:var(--s1);border:1px solid var(--border);border-radius:8px;padding:14px 20px;display:flex;align-items:center;gap:22px;margin-bottom:22px;flex-wrap:wrap}
 .si-lbl{font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:2px}
@@ -993,6 +1004,20 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
         </select>
       </div>
     </div>
+    <!-- PLAYER-CATEGORY: squad category filter for global views -->
+    <div class="si-sep"></div>
+    <div>
+      <div class="si-lbl">Squad View</div>
+      <div class="si-val">
+        <select id="gf-cat" style="background:var(--s2);border:1px solid var(--border2);color:var(--text);font-family:var(--syne);font-size:11px;font-weight:600;padding:2px 5px;border-radius:4px;cursor:pointer" onchange="gfCatChange()" title="Filter squad views by player category">
+          <option value="all">All</option>
+          <option value="core">Core</option>
+          <option value="impact">Impact</option>
+          <option value="unused">Unused</option>
+          <option value="fringe">Fringe</option>
+        </select>
+      </div>
+    </div>
     <div class="att-note">⚠ 4 absent — averages based on 22 players present</div>
   </div>
 
@@ -1476,7 +1501,25 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
           <option value="mod">Modified</option>
           <option value="rtp">RTP</option>
         </select>
+        <!-- PLAYER-CATEGORY: category filter select for squad table -->
+        <select id="ft-cat" onchange="renderFullTable()" class="lb-sel" title="Filter by player category (Core/Impact/Unused/Fringe)">
+          <option value="all">All players</option>
+          <option value="core">Core</option>
+          <option value="impact">Impact</option>
+          <option value="unused">Unused</option>
+          <option value="fringe">Fringe</option>
+        </select>
       </div>
+    </div>
+    <!-- PLAYER-CATEGORY: pill strip below table header for visual reference -->
+    <div class="cat-filter-bar" id="squad-cat-pills" style="margin-bottom:8px;margin-top:2px">
+      <span class="cat-filter-lbl">Squad filter:</span>
+      <span class="cat-pill cat-active" data-cat="all" onclick="_setCatFilter('all')">All</span>
+      <span class="cat-pill cat-core" data-cat="core" onclick="_setCatFilter('core')">Core</span>
+      <span class="cat-pill cat-impact" data-cat="impact" onclick="_setCatFilter('impact')">Impact</span>
+      <span class="cat-pill cat-unused" data-cat="unused" onclick="_setCatFilter('unused')">Unused</span>
+      <span class="cat-pill cat-fringe" data-cat="fringe" onclick="_setCatFilter('fringe')">Fringe</span>
+      <span id="cat-count-note" style="font-size:9px;color:var(--muted);margin-left:6px"></span>
     </div>
     <div class="tbl-wrap" style="margin-bottom:0">
       <table>
@@ -3710,6 +3753,8 @@ function renderACWRFlags(){
   if(!row)return;
   var sidx=(SESSION_IDX[G.session]!==undefined)?SESSION_IDX[G.session]:7;
   var useLive=Object.keys(LIVE_ACWR).length>0;
+  // PLAYER-CATEGORY: read squad-level category filter (default 'all' — show all risk players)
+  var _acwrCatF=(document.getElementById('gf-cat')||{value:'all'}).value||'all';
   var flags=[];
   Object.keys(SPARK_DATA2).forEach(function(k){
     if(k==='squad')return;
@@ -3737,6 +3782,12 @@ function renderACWRFlags(){
     else if(a>=1.3){risk='Caution';col='var(--amber)';bg='rgba(239,159,39,.07)';bd='rgba(239,159,39,.22)';}
     else if(a<0.8){risk='Under-loaded';col='var(--blue)';bg='rgba(79,195,247,.07)';bd='rgba(79,195,247,.2)';}
     else return;
+    // PLAYER-CATEGORY: apply squad category filter if set
+    if(_acwrCatF!=='all'&&window._PM_NAME_MAP){
+      var _fPk=window._PM_NAME_MAP[_normPlayerName(d.label)];
+      var _fCat=_fPk?PLAYER_CATEGORIES[_fPk]:'fringe';
+      if(_fCat!==_acwrCatF) return;
+    }
     var pos=liveRec?liveRec.pos:d.pos||'—';
     flags.push({name:d.label,pos:pos,acwr:a,arrow:arrow,risk:risk,col:col,bg:bg,bd:bd});
   });
@@ -3762,6 +3813,17 @@ function renderACWRFlags(){
   row.innerHTML='<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--amber);flex-shrink:0">ACWR Flags <span style="font-weight:400;color:var(--dim);font-size:8px;text-transform:none">· '+dataLabel+'</span></div>'
     +'<div style="display:flex;gap:7px;flex-wrap:wrap;flex:1">'+pills+'</div>'
     +'<div style="font-size:9px;color:var(--muted);flex-shrink:0">full trend → Page 1</div>';
+}
+
+/* PLAYER-CATEGORY: squad-level category filter change handler */
+function gfCatChange(){
+  var cat=(document.getElementById('gf-cat')||{value:'all'}).value||'all';
+  // Sync ft-cat select to match
+  var ftCat=document.getElementById('ft-cat');
+  if(ftCat) ftCat.value=cat;
+  _syncCatPills();
+  renderACWRFlags();
+  renderFullTable();
 }
 
 /* ── Global filter change handler ─────────────────────────────── */
@@ -5771,15 +5833,21 @@ window._cmpBenchmarkType = window._cmpBenchmarkType || 'competition';
 /* Compute best28HmldMin from match halves in LIVE_DRILL_PLAYER_DATA filtered by match type.
    matchType: 'competition' (Match — 1st/2nd Half only),
               'inhouse'     (In-House Match / Inhouse Match halves only),
-              'all'         (all half-pattern drills) */
+              'all'         (all half-pattern drills)
+   PLAYER-CATEGORY: filters to core players only (≥50% match appearances, avg ≥30 min).
+   If no core players found, falls back to full squad to avoid a null benchmark. */
 function _computeBest28HmldMin(matchType){
   var dpd=window.LIVE_DRILL_PLAYER_DATA||{};
   var best=0;
+  // PLAYER-CATEGORY: pre-compute core set; fall back to all players if empty
+  var coreSet=_corePlayers();
+  var useCoreFilter=(coreSet.size>0&&window._PM_NAME_MAP);
   Object.keys(dpd).forEach(function(sk){
     Object.keys(dpd[sk]).forEach(function(slug){
-      var players=Object.values(dpd[sk][slug]);
-      if(!players.length) return;
-      var dname=players[0].name||'';
+      var drillData=dpd[sk][slug];
+      var playerNames=Object.keys(drillData);
+      if(!playerNames.length) return;
+      var dname=(drillData[playerNames[0]].name)||'';
       var dlow=dname.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
       var isHalf=dlow.indexOf('1st half')>-1||dlow.indexOf('first half')>-1||
                  dlow.indexOf('2nd half')>-1||dlow.indexOf('second half')>-1;
@@ -5787,9 +5855,39 @@ function _computeBest28HmldMin(matchType){
       var isInhouse=dlow.indexOf('in house')>-1||dlow.indexOf('inhouse')>-1;
       if(matchType==='competition'&&isInhouse) return;
       if(matchType==='inhouse'&&!isInhouse) return;
-      players.forEach(function(p){ if((p.hmldMin||0)>best) best=p.hmldMin; });
+      playerNames.forEach(function(pName){
+        var p=drillData[pName];
+        // PLAYER-CATEGORY: skip non-core players when core set is available
+        if(useCoreFilter){
+          var pk=window._PM_NAME_MAP[_normPlayerName(pName)];
+          if(!pk||!coreSet.has(pk)) return;
+        }
+        if((p.hmldMin||0)>best) best=p.hmldMin;
+      });
     });
   });
+  // PLAYER-CATEGORY: if core filter produced no result, fall back to all players
+  if(!best&&useCoreFilter){
+    Object.keys(dpd).forEach(function(sk){
+      Object.keys(dpd[sk]).forEach(function(slug){
+        var drillData=dpd[sk][slug];
+        var playerNames=Object.keys(drillData);
+        if(!playerNames.length) return;
+        var dname=(drillData[playerNames[0]].name)||'';
+        var dlow=dname.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+        var isHalf=dlow.indexOf('1st half')>-1||dlow.indexOf('first half')>-1||
+                   dlow.indexOf('2nd half')>-1||dlow.indexOf('second half')>-1;
+        if(!isHalf) return;
+        var isInhouse=dlow.indexOf('in house')>-1||dlow.indexOf('inhouse')>-1;
+        if(matchType==='competition'&&isInhouse) return;
+        if(matchType==='inhouse'&&!isInhouse) return;
+        playerNames.forEach(function(pName){
+          var p=drillData[pName];
+          if((p.hmldMin||0)>best) best=p.hmldMin;
+        });
+      });
+    });
+  }
   return best;
 }
 
@@ -7479,6 +7577,8 @@ function loadLiveData(){
       try { updateCmpPlayerSelects(); } catch(e){ console.warn('updateCmpPlayerSelects post-load:', e); }
       try { updateFixtureStrips(); } catch(e){ console.warn('updateFixtureStrips post-load:', e); }
       try { runHealthCheck(); } catch(e){ console.warn('runHealthCheck post-load:', e); }
+      // PLAYER-CATEGORY: build category map now that _PM_NAME_MAP + LIVE_SESSION_DATA are ready
+      try { _populatePlayerCategories(); } catch(e){ console.warn('_populatePlayerCategories post-load:', e); }
     });
 }
 
@@ -8985,6 +9085,122 @@ var PLAYER_META = {
   p28:{key:'p28',fullName:"Paul O'Dea",     n:"P.O'Dea",    pos:'mid',posLabel:'Middle 8',   status:'full',statusLabel:'Full training'}
 };
 
+/* ── PLAYER-CATEGORY: category classification ────────────────────────────────
+ * PLAYER_CATEGORIES map is populated once by _populatePlayerCategories() after
+ * loadLiveData() resolves. All category-aware functions read from this map.
+ * grep tag: PLAYER-CATEGORY
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+// PLAYER-CATEGORY: global map  playerKey → 'core'|'impact'|'unused'|'fringe'
+var PLAYER_CATEGORIES = {};
+
+/* PLAYER-CATEGORY: returns a Set of playerKeys who qualify as core starters.
+ * Core = appeared in ≥50% of match sessions AND avg duration ≥30 min/match.
+ * Reads from LIVE_SESSION_DATA + SESSION_DB. Returns empty Set when live data
+ * not yet available (benchmark callers should handle this gracefully). */
+function _corePlayers(){
+  var lsd=window.LIVE_SESSION_DATA;
+  if(!lsd||!window._PM_NAME_MAP) return new Set();
+
+  // Find all match session keys in SESSION_DB
+  var matchSessKeys=Object.keys(SESSION_DB).filter(function(dk){
+    var tl=(SESSION_DB[dk].typeLabel||'').toLowerCase();
+    return tl.indexOf('championship')>-1||tl.indexOf('challenge')>-1||tl.indexOf('match')>-1;
+  });
+  var totalMatches=matchSessKeys.length;
+  if(!totalMatches) return new Set();
+
+  // Per-player: count match appearances and accumulate total duration
+  var pMatchCount={}, pMatchDur={};
+  matchSessKeys.forEach(function(dk){
+    var rows=lsd[dk]; if(!rows||!rows.length) return;
+    // Prefer matchType-flagged rows; fall back to all rows for this session
+    var matchRows=rows.filter(function(r){ return _isMatchType(r.matchType); });
+    if(!matchRows.length) matchRows=rows;
+    // Aggregate duration per player (sum 1st-half + 2nd-half rows)
+    var seenDur={};
+    matchRows.forEach(function(r){
+      var pk=window._PM_NAME_MAP[_normPlayerName(r.player||'')]; if(!pk) return;
+      seenDur[pk]=(seenDur[pk]||0)+(r.dur||0);
+    });
+    Object.keys(seenDur).forEach(function(pk){
+      pMatchCount[pk]=(pMatchCount[pk]||0)+1;
+      pMatchDur[pk]=(pMatchDur[pk]||0)+seenDur[pk];
+    });
+  });
+
+  var coreSet=new Set();
+  Object.keys(pMatchCount).forEach(function(pk){
+    var ratio=pMatchCount[pk]/totalMatches;
+    var avgDur=pMatchDur[pk]/pMatchCount[pk];
+    if(ratio>=0.5&&avgDur>=30) coreSet.add(pk);
+  });
+  return coreSet;
+}
+
+/* PLAYER-CATEGORY: classify a single playerKey.
+ * Rules (evaluated in order):
+ *   fringe  — fewer than 3 total GPS sessions in LIVE_SESSION_DATA
+ *   core    — ≥50% of match sessions AND avg match duration ≥30 min
+ *   impact  — appears in ≥1 match session but below core threshold
+ *   unused  — in GPS data (≥3 training sessions) but zero match appearances */
+function _playerCategory(playerKey){
+  var lsd=window.LIVE_SESSION_DATA;
+  if(!lsd||!window._PM_NAME_MAP) return 'fringe';
+  var pm=PLAYER_META[playerKey]; if(!pm) return 'fringe';
+  var normName=_normPlayerName(pm.fullName);
+
+  // Total GPS sessions across all sessions
+  var totalSessions=0;
+  Object.keys(lsd).forEach(function(dk){
+    var rows=lsd[dk]||[];
+    if(rows.some(function(r){ return _normPlayerName(r.player||'')===normName; })) totalSessions++;
+  });
+  if(totalSessions<3) return 'fringe';
+
+  // Match session appearances + aggregate duration
+  var matchSessKeys=Object.keys(SESSION_DB).filter(function(dk){
+    var tl=(SESSION_DB[dk].typeLabel||'').toLowerCase();
+    return tl.indexOf('championship')>-1||tl.indexOf('challenge')>-1||tl.indexOf('match')>-1;
+  });
+  var totalMatches=matchSessKeys.length;
+  var matchCount=0, matchDur=0;
+  matchSessKeys.forEach(function(dk){
+    var rows=lsd[dk]||[];
+    var matchRows=rows.filter(function(r){ return _isMatchType(r.matchType); });
+    if(!matchRows.length) matchRows=rows;
+    var myRows=matchRows.filter(function(r){ return _normPlayerName(r.player||'')===normName; });
+    if(!myRows.length) return;
+    matchCount++;
+    matchDur+=myRows.reduce(function(a,r){ return a+(r.dur||0); },0);
+  });
+
+  if(!matchCount) return 'unused';
+  var ratio=totalMatches>0?matchCount/totalMatches:0;
+  var avgDur=matchDur/matchCount;
+  if(ratio>=0.5&&avgDur>=30) return 'core';
+  return 'impact';
+}
+
+/* PLAYER-CATEGORY: populate PLAYER_CATEGORIES map once after live data loads.
+ * Called in the loadLiveData().then() block after _PM_NAME_MAP is ready. */
+function _populatePlayerCategories(){
+  if(!window.LIVE_SESSION_DATA||!window._PM_NAME_MAP) return;
+  Object.keys(PLAYER_META).forEach(function(pk){
+    PLAYER_CATEGORIES[pk]=_playerCategory(pk);
+  });
+}
+
+/* PLAYER-CATEGORY: return category label text for UI display */
+function _catLabel(cat){
+  return {core:'Core',impact:'Impact',unused:'Unused',fringe:'Fringe'}[cat]||cat||'—';
+}
+
+/* PLAYER-CATEGORY: return category pill colour class */
+function _catPillCls(cat){
+  return {core:'p-green',impact:'p-blue',unused:'p-amber',fringe:'p-dim'}[cat]||'p-dim';
+}
+
 /* PLAYER_OBS removed — coaching observations to be added to Google Sheets */
 var PLAYER_OBS = {};
 /* PROF_DEFAULT_OBS removed — no baked observations displayed */
@@ -9032,6 +9248,29 @@ function _rebuildFtDrillDropdown(sessKey){
   if(prev&&prev!=='sess'&&dpd[prev]) sel.value=prev; else sel.value='sess';
 }
 
+/* PLAYER-CATEGORY: sync pill strip + ft-cat select, then re-render */
+function _setCatFilter(cat){
+  var sel=document.getElementById('ft-cat');
+  if(sel) sel.value=cat;
+  // Update pill active states
+  var pills=document.querySelectorAll('#squad-cat-pills .cat-pill');
+  pills.forEach(function(p){
+    var isActive=p.getAttribute('data-cat')===cat;
+    p.classList.toggle('cat-active',isActive);
+  });
+  renderFullTable();
+}
+
+/* PLAYER-CATEGORY: update cat count note and pill sync from select value */
+function _syncCatPills(){
+  var sel=document.getElementById('ft-cat');
+  var cat=sel?sel.value:'all';
+  var pills=document.querySelectorAll('#squad-cat-pills .cat-pill');
+  pills.forEach(function(p){
+    p.classList.toggle('cat-active',p.getAttribute('data-cat')===cat);
+  });
+}
+
 var _ftSortCol='hmld', _ftSortDir=-1; /* -1=desc, 1=asc */
 function ftSort(col){
   if(_ftSortCol===col){ _ftSortDir*=-1; }
@@ -9051,6 +9290,9 @@ function renderFullTable(){
   var ftDrill= (document.getElementById('ft-drill')||{value:'sess'}).value||'sess';
   var posF   = (document.getElementById('ft-pos')||{value:'all'}).value||'all';
   var statusF= (document.getElementById('ft-status')||{value:'all'}).value||'all';
+  // PLAYER-CATEGORY: read category filter; sync pills to match select state
+  var catF   = (document.getElementById('ft-cat')||{value:'all'}).value||'all';
+  _syncCatPills();
   var search = ((document.getElementById('ft-search')||{value:''}).value||'').toLowerCase().trim();
   var sessKey = typeof G!=='undefined' ? G.session : ((document.getElementById('gf-session')||{}).value||'');
   var sessDb  = (typeof SESSION_DB!=='undefined'&&sessKey) ? SESSION_DB[sessKey]:{};
@@ -9069,6 +9311,8 @@ function renderFullTable(){
       if(posF!=='all'&&pos!==posF) return;
       if(search&&pName.toLowerCase().indexOf(search)===-1) return;
       if(statusF!=='all'){var st=pm?pm.status:'full'; if(st!==statusF) return;}
+      // PLAYER-CATEGORY: filter by category
+      if(catF!=='all'&&pmKey){var pCat=PLAYER_CATEGORIES[pmKey]||'fringe';if(pCat!==catF) return;}
       rows.push({player:pName,pos:pos,pm:pm,pmKey:pmKey,
         hmld:d.hmld||0, hmldMin:d.hmldMin||0,
         td:d.td||0, tdMin:d.tdMin||0,
@@ -9164,6 +9408,12 @@ function renderFullTable(){
         var pmStatus=pmKey&&PLAYER_META[pmKey]?PLAYER_META[pmKey].status:'full';
         if(pmStatus!==statusF) return false;
       }
+      // PLAYER-CATEGORY: filter by player category
+      if(catF!=='all'){
+        var _pmKey2=window._PM_NAME_MAP?window._PM_NAME_MAP[_normPlayerName(r.player)]:null;
+        var _pCat=_pmKey2?PLAYER_CATEGORIES[_pmKey2]:'fringe';
+        if(_pCat!==catF) return false;
+      }
       return true;
     });
 
@@ -9226,8 +9476,14 @@ function renderFullTable(){
       var acwrVal=r._acwr||null;
       var acwrStr=acwrVal?acwrVal.toFixed(2):'—';
       var acwrCls=acwrVal?(acwrVal>1.5?'c-red':acwrVal>1.3?'c-amber':acwrVal<0.8?'c-blue':'c-green'):'';
+      // PLAYER-CATEGORY: show category badge in player name cell
+      var _catBadge='';
+      if(pmKey&&PLAYER_CATEGORIES[pmKey]){
+        var _pcat=PLAYER_CATEGORIES[pmKey];
+        _catBadge='<span class="pill '+_catPillCls(_pcat)+'" style="font-size:7.5px;padding:1px 5px;margin-left:5px;vertical-align:middle">'+_catLabel(_pcat)+'</span>';
+      }
       html+='<tr>'
-        +'<td style="font-weight:600"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+col+';margin-right:6px;vertical-align:middle"></span>'+r.player+'<span class="'+stCls+'">'+stLbl+'</span></td>'
+        +'<td style="font-weight:600"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+col+';margin-right:6px;vertical-align:middle"></span>'+r.player+'<span class="'+stCls+'">'+stLbl+'</span>'+_catBadge+'</td>'
         +'<td style="color:'+col+'">'+r.pos.toUpperCase()+'</td>'
         +'<td class="'+acwrCls+'" style="font-size:9px">'+acwrStr+'</td>'
         +'<td class="'+hmldCls+'"><strong>'+r.hmld.toLocaleString()+'</strong></td>'
@@ -9245,7 +9501,12 @@ function renderFullTable(){
         +'</tr>';
     });
     tbody.innerHTML=html||'<tr><td colspan="15" style="color:var(--muted);padding:12px;text-align:center">No players match filter</td></tr>';
-    if(note) note.textContent='Live GPS data · '+rows.length+' players · '+sessDb.typeLabel+(isMatch?' (match rows only)':'');
+    // PLAYER-CATEGORY: update count note
+    var _catNoteEl=document.getElementById('cat-count-note');
+    if(_catNoteEl&&catF!=='all'){
+      _catNoteEl.textContent='Showing '+rows.length+' '+_catLabel(catF)+' player'+(rows.length!==1?'s':'');
+    } else if(_catNoteEl){ _catNoteEl.textContent=''; }
+    if(note) note.textContent='Live GPS data · '+rows.length+' players · '+sessDb.typeLabel+(isMatch?' (match rows only)':'')+(catF!=='all'?' · filtered: '+_catLabel(catF):'');
     return;
   }
 
