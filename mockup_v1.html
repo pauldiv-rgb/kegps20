@@ -3491,7 +3491,9 @@ function renderSessionVerdict(){
   Object.keys(SPARK_DATA2).forEach(function(k){
     if(k==='squad')return;
     var liveKey=_normPlayerName(SPARK_DATA2[k].label);
-    var a=useLiveVerdict&&LIVE_ACWR[liveKey]?LIVE_ACWR[liveKey].acwr:SPARK_DATA2[k].acwr[sidx];
+    var liveEntry=useLiveVerdict?LIVE_ACWR[liveKey]:null;
+    if(liveEntry && _isStaleAcwr(liveEntry.week)) return;
+    var a=liveEntry?liveEntry.acwr:SPARK_DATA2[k].acwr[sidx];
     if(a>=1.5)highCnt++;else if(a>=1.3)cautCnt++;
   });
   var acwrCol2=highCnt>0?'var(--red)':cautCnt>0?'var(--amber)':'var(--green)';
@@ -8202,6 +8204,7 @@ function renderDotPlot(){
   Object.keys(LIVE_ACWR).forEach(function(key){
     var rec=LIVE_ACWR[key];
     if(!rec.acwr||rec.acwr<=0) return;
+    if(_isStaleAcwr(rec.week)) return;  /* exclude stale data from dot plot */
     var row=_dpRow(rec.pos);
     var rowKey=row.cy;
     if(!rows[rowKey]) rows[rowKey]={row:row,players:[]};
