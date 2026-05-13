@@ -130,6 +130,11 @@ tr:hover td{background:rgba(30,52,72,.25)}
 .cat-pill.cat-unused.cat-active{border-color:var(--amber);color:var(--amber);background:rgba(239,159,39,.07)}
 .cat-pill.cat-fringe.cat-active{border-color:var(--muted);color:var(--muted);background:rgba(107,130,153,.07)}
 
+/* MATCH-TYPE-APPS: match-type selector tab strip */
+.mt-tab{display:inline-block;cursor:pointer;font-size:9px;font-weight:700;padding:2px 8px;border-radius:4px;border:1px solid var(--border);color:var(--dim);letter-spacing:.04em;transition:border-color .12s,color .12s,background .12s;user-select:none;text-transform:uppercase}
+.mt-tab:hover{border-color:rgba(159,225,203,.4);color:var(--text)}
+.mt-tab.mt-tab-active{border-color:var(--teal);color:var(--teal);background:rgba(159,225,203,.07)}
+
 /* SESSION BAR */
 .sess-bar{background:var(--s1);border:1px solid var(--border);border-radius:8px;padding:14px 20px;display:flex;align-items:center;gap:22px;margin-bottom:22px;flex-wrap:wrap}
 .si-lbl{font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:2px}
@@ -1519,6 +1524,12 @@ input[name="sc-sg"],input[name="sc-bm"]{position:absolute;opacity:0;width:0;heig
       <span class="cat-pill cat-impact" data-cat="impact" onclick="_setCatFilter('impact')">Impact</span>
       <span class="cat-pill cat-unused" data-cat="unused" onclick="_setCatFilter('unused')">Unused</span>
       <span class="cat-pill cat-fringe" data-cat="fringe" onclick="_setCatFilter('fringe')">Fringe</span>
+      <span style="display:inline-block;width:1px;height:14px;background:var(--border);margin:0 8px;vertical-align:middle"></span>
+      <!-- MATCH-TYPE-APPS: match-type selector — recalculates categories for Champ/Challenge only -->
+      <span class="cat-filter-lbl" style="margin-right:3px">Match type:</span>
+      <span class="mt-tab mt-tab-active" data-mt="all" onclick="_setMtFilter('all')">All</span>
+      <span class="mt-tab" data-mt="Championship" onclick="_setMtFilter('Championship')">Championship</span>
+      <span class="mt-tab" data-mt="Challenge" onclick="_setMtFilter('Challenge')">Challenge</span>
       <span id="cat-count-note" style="font-size:9px;color:var(--muted);margin-left:6px"></span>
     </div>
     <div class="tbl-wrap" style="margin-bottom:0">
@@ -9093,6 +9104,12 @@ var PLAYER_META = {
 
 // PLAYER-CATEGORY: global map  playerKey → 'core'|'impact'|'unused'|'fringe'
 var PLAYER_CATEGORIES = {};
+// MATCH-TYPE-APPS: per-type classifications { all:{}, Championship:{}, Challenge:{} }
+var PLAYER_CATEGORIES_BY_TYPE = { all:{}, Championship:{}, Challenge:{} };
+// MATCH-TYPE-APPS: per-player match appearance breakdown { Championship:{apps,avgMin}, Challenge:{apps,avgMin}, Total:{apps,avgMin} }
+var PLAYER_MATCH_APPS = {};
+// MATCH-TYPE-APPS: current match-type scope ('all'|'Championship'|'Challenge')
+var _mtCatType = 'all';
 
 /* PLAYER-CATEGORY: returns a Set of playerKeys who qualify as core starters.
  * Core = appeared in ≥50% of match sessions AND avg duration ≥30 min/match.
@@ -9186,9 +9203,104 @@ function _playerCategory(playerKey){
  * Called in the loadLiveData().then() block after _PM_NAME_MAP is ready. */
 function _populatePlayerCategories(){
   if(!window.LIVE_SESSION_DATA||!window._PM_NAME_MAP) return;
+  // MATCH-TYPE-APPS: reset per-type maps and populate all three scopes
+  PLAYER_CATEGORIES_BY_TYPE = { all:{}, Championship:{}, Challenge:{} };
   Object.keys(PLAYER_META).forEach(function(pk){
-    PLAYER_CATEGORIES[pk]=_playerCategory(pk);
+    var cat=_playerCategory(pk);
+    PLAYER_CATEGORIES[pk]=cat;
+    PLAYER_CATEGORIES_BY_TYPE.all[pk]=cat;
+    PLAYER_CATEGORIES_BY_TYPE.Championship[pk]=_playerCategoryForType(pk,'Championship');
+    PLAYER_CATEGORIES_BY_TYPE.Challenge[pk]=_playerCategoryForType(pk,'Challenge');
+    PLAYER_MATCH_APPS[pk]=_playerMatchApps(pk);
   });
+}
+
+/* MATCH-TYPE-APPS: returns match appearance breakdown per match type for a player.
+ * Returns { Championship:{apps,avgMin}, Challenge:{apps,avgMin}, Total:{apps,avgMin} }
+ * Only counts sessions where SESSION_DB typeLabel is 'Championship' or contains 'Challenge'. */
+function _playerMatchApps(playerKey){
+  var result={Championship:{apps:0,totalMin:0},Challenge:{apps:0,totalMin:0},Total:{apps:0,totalMin:0}};
+  var lsd=window.LIVE_SESSION_DATA;
+  if(!lsd||!window._PM_NAME_MAP) return result;
+  var pm=PLAYER_META[playerKey]; if(!pm) return result;
+  var normName=_normPlayerName(pm.fullName);
+  Object.keys(SESSION_DB).forEach(function(dk){
+    var tl=SESSION_DB[dk].typeLabel||'';
+    var isChamp=(tl==='Championship');
+    var isChall=(tl.indexOf('Challenge')>-1);
+    if(!isChamp&&!isChall) return;
+    var rows=lsd[dk]; if(!rows||!rows.length) return;
+    var matchRows=rows.filter(function(r){return _isMatchType(r.matchType);});
+    if(!matchRows.length) matchRows=rows;
+    var myRows=matchRows.filter(function(r){return _normPlayerName(r.player||'')===normName&&(r.dur||0)>0;});
+    if(!myRows.length) return;
+    var dur=myRows.reduce(function(a,r){return a+(r.dur||0);},0);
+    var type=isChamp?'Championship':'Challenge';
+    result[type].apps++; result[type].totalMin+=dur;
+    result.Total.apps++; result.Total.totalMin+=dur;
+  });
+  ['Championship','Challenge','Total'].forEach(function(t){
+    result[t].avgMin=result[t].apps?Math.round(result[t].totalMin/result[t].apps):0;
+  });
+  return result;
+}
+
+/* MATCH-TYPE-APPS: classify a single player restricted to a specific match type.
+ * matchType: 'Championship' | 'Challenge' | 'all'
+ * Uses same thresholds as _playerCategory but filters the match session pool. */
+function _playerCategoryForType(playerKey,matchType){
+  var lsd=window.LIVE_SESSION_DATA;
+  if(!lsd||!window._PM_NAME_MAP) return 'fringe';
+  var pm=PLAYER_META[playerKey]; if(!pm) return 'fringe';
+  var normName=_normPlayerName(pm.fullName);
+  // Fringe gate: fewer than 3 total GPS sessions across all types
+  var totalSessions=0;
+  Object.keys(lsd).forEach(function(dk){
+    var rows=lsd[dk]||[];
+    if(rows.some(function(r){return _normPlayerName(r.player||'')===normName;})) totalSessions++;
+  });
+  if(totalSessions<3) return 'fringe';
+  // Filter match sessions to the requested type
+  var matchSessKeys=Object.keys(SESSION_DB).filter(function(dk){
+    var tl=SESSION_DB[dk].typeLabel||'';
+    if(matchType==='Championship') return tl==='Championship';
+    if(matchType==='Challenge') return tl.indexOf('Challenge')>-1;
+    return tl.indexOf('championship')>-1||tl.indexOf('challenge')>-1||tl.indexOf('match')>-1;
+  });
+  var totalMatches=matchSessKeys.length;
+  if(!totalMatches) return 'unused';
+  var matchCount=0,matchDur=0;
+  matchSessKeys.forEach(function(dk){
+    var rows=lsd[dk]||[];
+    var matchRows=rows.filter(function(r){return _isMatchType(r.matchType);});
+    if(!matchRows.length) matchRows=rows;
+    var myRows=matchRows.filter(function(r){return _normPlayerName(r.player||'')===normName;});
+    if(!myRows.length) return;
+    matchCount++;
+    matchDur+=myRows.reduce(function(a,r){return a+(r.dur||0);},0);
+  });
+  if(!matchCount) return 'unused';
+  var ratio=matchCount/totalMatches;
+  var avgDur=matchDur/matchCount;
+  if(ratio>=0.5&&avgDur>=30) return 'core';
+  return 'impact';
+}
+
+/* MATCH-TYPE-APPS: set match-type scope, swap PLAYER_CATEGORIES to reflect
+ * the selected type, update tab active states, and re-render squad view. */
+function _setMtFilter(mt){
+  _mtCatType=mt||'all';
+  var typeMap=_mtCatType==='Championship'?PLAYER_CATEGORIES_BY_TYPE.Championship:
+    _mtCatType==='Challenge'?PLAYER_CATEGORIES_BY_TYPE.Challenge:PLAYER_CATEGORIES_BY_TYPE.all;
+  // Overwrite PLAYER_CATEGORIES so all downstream callers (renderACWRFlags, renderFullTable) use the right scope
+  Object.keys(PLAYER_META).forEach(function(pk){
+    PLAYER_CATEGORIES[pk]=typeMap[pk]||_playerCategory(pk);
+  });
+  document.querySelectorAll('#squad-cat-pills .mt-tab').forEach(function(t){
+    t.classList.toggle('mt-tab-active',t.getAttribute('data-mt')===_mtCatType);
+  });
+  renderACWRFlags();
+  renderFullTable();
 }
 
 /* PLAYER-CATEGORY: return category label text for UI display */
@@ -9481,6 +9593,12 @@ function renderFullTable(){
       if(pmKey&&PLAYER_CATEGORIES[pmKey]){
         var _pcat=PLAYER_CATEGORIES[pmKey];
         _catBadge='<span class="pill '+_catPillCls(_pcat)+'" style="font-size:7.5px;padding:1px 5px;margin-left:5px;vertical-align:middle">'+_catLabel(_pcat)+'</span>';
+      }
+      // MATCH-TYPE-APPS: show Championship (C×N) and Challenge (Ch×N) appearance chips
+      if(pmKey&&PLAYER_MATCH_APPS[pmKey]){
+        var _apps=PLAYER_MATCH_APPS[pmKey];
+        if(_apps.Championship.apps>0) _catBadge+='<span title="Championship apps (avg '+_apps.Championship.avgMin+' min)" style="font-size:7px;padding:1px 4px;border-radius:10px;background:rgba(76,175,80,.12);border:1px solid rgba(76,175,80,.3);color:var(--green);font-weight:700;margin-left:3px;vertical-align:middle">C×'+_apps.Championship.apps+'</span>';
+        if(_apps.Challenge.apps>0) _catBadge+='<span title="Challenge apps (avg '+_apps.Challenge.avgMin+' min)" style="font-size:7px;padding:1px 4px;border-radius:10px;background:rgba(239,159,39,.12);border:1px solid rgba(239,159,39,.3);color:var(--amber);font-weight:700;margin-left:3px;vertical-align:middle">Ch×'+_apps.Challenge.apps+'</span>';
       }
       html+='<tr>'
         +'<td style="font-weight:600"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+col+';margin-right:6px;vertical-align:middle"></span>'+r.player+'<span class="'+stCls+'">'+stLbl+'</span>'+_catBadge+'</td>'
