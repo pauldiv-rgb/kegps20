@@ -6762,28 +6762,62 @@ function loadLiveData(){
       });
     }
 
+    /* ── Structural parse-time validation ─────────────────────────────────
+       All anomalies logged to window._parseIssues.  Rows with implausible
+       duration are DROPPED entirely — no derived metric is trustworthy if
+       duration is wrong.  Out-of-range metrics are CAPPED with the issue
+       logged so the Health Check can surface them.
+       ─────────────────────────────────────────────────────────────────── */
+    window._parseIssues = [];
     var lines=txt.trim().split(/\r?\n/), all=[];
       for(var i=1;i<lines.length;i++){
         if(!lines[i].trim()) continue;
         var v=_parseCSVLine(lines[i]);
-        /* LS_Session_Review exports Duration as:
-           - decimal hours for training sessions (Google Sheets time cell): e.g. 1.133 → 68 min → × 60
-           - plain minutes for match sessions (plain number cell): e.g. 70 → 70 min → use as-is
-           Heuristic: if raw > 5, already in minutes; if ≤ 5, convert hours → minutes. */
+        /* Duration heuristic: raw > 5 → already minutes; ≤ 5 → decimal hours → ×60
+           Day-fraction misparsed values (e.g. 2.007 from "48:11") will be caught
+           by the bounds check below and dropped.                                   */
         var durRaw=parseFloat(v[7])||0;
         var dur=parseFloat((durRaw>5?durRaw:durRaw*60).toFixed(1));
+        var _pName=v[1], _pDate=v[0];
+
+        /* ── 1. Duration bounds: drop row if implausible ── */
+        if(dur < 5 || dur > 200){
+          window._parseIssues.push({type:'duration',player:_pName,date:_pDate,
+            value:durRaw,note:dur<5?'possible day-fraction misparse (was '+durRaw+')':'implausible duration'});
+          continue; /* drop — all rate metrics (HMLD/min etc.) would be wrong */
+        }
+
+        var td=parseFloat(v[8])||0;
         var hmld=parseFloat(v[13])||0;
-        var spd=parseFloat(v[12])||0, ms=parseFloat(v[14])||0;
         var hsr=parseFloat(v[10])||0;
-        all.push({dateStr:v[0],date:_parseDate(v[0]),player:v[1],pos:v[3],sessionType:v[4],matchType:v[6],
-          dur:dur,totalDist:parseFloat(v[8])||0,hmld:hmld,hsr:hsr,
+        var spd=parseFloat(v[12])||0;
+        var ms=parseFloat(v[14])||0;
+
+        /* ── 2. Ratio invariant: HMLD ≤ total distance ── */
+        if(hmld > td && td > 0){ hmld = td; }
+
+        /* ── 3. Max speed cap: > 12 m/s is physically implausible for GAA ── */
+        if(ms > 12){
+          window._parseIssues.push({type:'maxSpd',player:_pName,date:_pDate,value:ms,note:'capped at 12 m/s'});
+          ms = 12;
+        }
+
+        /* ── 4. HMLD/min sanity: > 25 m/min is extreme (elite benchmark ~16–20) ── */
+        var _hmldMinTest = dur > 0 ? hmld/dur : 0;
+        if(_hmldMinTest > 25){
+          window._parseIssues.push({type:'hmldMin',player:_pName,date:_pDate,value:parseFloat(_hmldMinTest.toFixed(1)),note:'HMLD/min > 25 — GPS unit error likely'});
+          hmld = Math.min(hmld, 25 * dur);
+        }
+
+        all.push({dateStr:_pDate,date:_parseDate(_pDate),player:_pName,pos:v[3],sessionType:v[4],matchType:v[6],
+          dur:dur,totalDist:td,hmld:hmld,hsr:hsr,
           sprintDist:spd,maxSpd:ms,maxSpdKmh:parseFloat((ms*3.6).toFixed(1)),
           accEvents:parseFloat(v[15])||0,decEvents:parseFloat(v[16])||0,
           speedZ4:parseFloat(v[22])||0,speedZ5:parseFloat(v[23])||0,
           hmldMin:dur>0?parseFloat((hmld/dur).toFixed(1)):0,
           sprintMin:dur>0?parseFloat((spd/dur).toFixed(2)):0,
           hsrMin:dur>0?parseFloat((hsr/dur).toFixed(1)):0,
-          tdMin:dur>0?parseFloat(((parseFloat(v[8])||0)/dur).toFixed(1)):(parseFloat(v[9])||0)});
+          tdMin:dur>0?parseFloat((td/dur).toFixed(1)):(parseFloat(v[9])||0)});
       }
       all=all.filter(function(s){return s.date&&!isNaN(s.date.getTime())&&s.player;});
       all.sort(function(a,b){return a.date-b.date;});
@@ -7196,7 +7230,8 @@ function _isMatchType(mt){
 }
 /* ── Acute / chronic summary cards ──────────────────────────── */
 function updateAcwrSummaryCards(){
-  var vals=Object.values(LIVE_ACWR).filter(function(r){return r.acwr>0&&r.chronic>0;});
+  /* Exclude players with stale ACWR — their values cannot be acted on */
+  var vals=Object.values(LIVE_ACWR).filter(function(r){return r.acwr>0&&r.chronic>0&&!_isStaleAcwr(r.week);});
   if(!vals.length) return;
   var n=vals.length;
   var avgAcute=Math.round(vals.reduce(function(a,r){return a+r.acute;},0)/n);
@@ -10140,6 +10175,64 @@ function runHealthCheck(){
     } else {
       _warn(G6,'Players with acute=0 (absent/rested)',absentList.length+' players: '+absentList.join(', '));
     }
+  }
+
+  /* ── GROUP 7: Data Quality / Parse Anomalies ─────────── */
+  var G7='Data Quality — Parse Anomalies';
+  var _qi=window._parseIssues||[];
+  if(_qi.length===0){
+    _pass(G7,'GPS row validation','No anomalies detected — all rows passed bounds checks');
+  } else {
+    var _qiDur =_qi.filter(function(i){return i.type==='duration';});
+    var _qiSpd =_qi.filter(function(i){return i.type==='maxSpd';});
+    var _qiHmld=_qi.filter(function(i){return i.type==='hmldMin';});
+    /* Overall count */
+    _fail(G7,'Total anomalies caught at parse',
+      _qi.length+' row'+(+_qi.length!==1?'s':'')+' flagged — data clamped or dropped before reaching metrics');
+    /* Duration issues (rows dropped) */
+    if(_qiDur.length>0){
+      var _durEx=_qiDur.slice(0,3).map(function(i){return i.player+' '+i.date+' (raw '+i.value+')'}).join('; ');
+      _fail(G7,'Implausible durations — rows dropped',
+        _qiDur.length+' row'+(+_qiDur.length!==1?'s':'')+' excluded: '+_durEx+(_qiDur.length>3?' …':''));
+    }
+    /* Max speed issues (values capped at 12 m/s) */
+    if(_qiSpd.length>0){
+      var _spdEx=_qiSpd.slice(0,3).map(function(i){return i.player+' '+i.date+' (was '+i.value+' m/s)'}).join('; ');
+      _warn(G7,'Max speed >12 m/s — capped',
+        _qiSpd.length+' row'+(+_qiSpd.length!==1?'s':'')+': '+_spdEx+(_qiSpd.length>3?' …':''));
+    }
+    /* HMLD/min issues (HMLD clamped) */
+    if(_qiHmld.length>0){
+      var _hmEx=_qiHmld.slice(0,3).map(function(i){return i.player+' '+i.date+' ('+i.value+' m/min)'}).join('; ');
+      _warn(G7,'HMLD/min >25 — clamped (GPS unit likely)',
+        _qiHmld.length+' row'+(+_qiHmld.length!==1?'s':'')+': '+_hmEx+(_qiHmld.length>3?' …':''));
+    }
+  }
+
+  /* ── GROUP 8: Stale ACWR Players ────────────────────── */
+  var G8='ACWR Data Currency';
+  if(la && laCount>0){
+    var staleList=[];
+    var freshList=[];
+    Object.values(la).forEach(function(v){
+      var wk=v.week||'';
+      if(wk && _isStaleAcwr(wk)){
+        staleList.push((v.name||v.pk||'?')+' ('+wk+')');
+      } else if(wk){
+        freshList.push(v.name||v.pk||'?');
+      }
+    });
+    if(staleList.length===0){
+      _pass(G8,'ACWR data currency','All '+laCount+' players have ACWR data within 14 days — no stale values in display');
+    } else {
+      _warn(G8,'Players with stale ACWR (>14 days, hidden from display)',
+        staleList.length+' player'+(staleList.length!==1?'s':'')+' suppressed: '+staleList.slice(0,5).join(', ')+(staleList.length>5?' …':''));
+      if(freshList.length>0){
+        _pass(G8,'Players with current ACWR',freshList.length+' player'+(freshList.length!==1?'s':'')+' shown on all display panels');
+      }
+    }
+  } else {
+    _warn(G8,'ACWR currency check','Skipped — LIVE_ACWR not loaded');
   }
 
   /* ── Render results ─────────────────────────────────── */
