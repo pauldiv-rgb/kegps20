@@ -3539,6 +3539,8 @@ function renderACWRFlags(){
     /* Prefer live ACWR; fall back to baked */
     var liveKey=_normPlayerName(d.label);
     var liveRec=useLive?LIVE_ACWR[liveKey]:null;
+    /* Skip players whose ACWR data is stale — cannot be actioned with confidence */
+    if(liveRec && _isStaleAcwr(liveRec.week)) return;
     var a,prev,arrow;
     if(liveRec){
       a=liveRec.acwr;
