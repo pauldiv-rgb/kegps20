@@ -7564,8 +7564,7 @@ function updateTrainingQualityPage(){
       if(!r.player) return;
       var pkey=_normPlayerName(r.player);
       var acwrRec=LIVE_ACWR[pkey];
-      /* Stale ACWR must not influence risk classification — treat as unknown */
-      var acwr=(acwrRec&&!_isStaleAcwr(acwrRec.week))?acwrRec.acwr:0;
+      var acwr=acwrRec?acwrRec.acwr:0;
       var tdm=r.tdMin||0;
       /* ≥80 m/min = above match demand ceiling → elevated risk regardless of ACWR */
       var cat=tdm>=80?'risk':tdm>=70&&acwr>=1.30?'risk':tdm>=70?'good':'low';
@@ -8311,11 +8310,11 @@ function renderFlagCards(){
       }
     }
     var stale=_isStaleAcwr(rec.week);
-    /* Stale ACWR (>14 days) must never surface as an actionable CAUTION/HIGH flag.
-       Absent detection on Planning Summary handles stale players separately. */
-    if(stale) return;
+    /* Fix 2: if ACWR is stale AND player has been absent >21 days, skip — F01 absent detection handles them */
+    var _weekAgeDays=rec.week?Math.round((new Date()-new Date(rec.week))/86400000):0;
+    if(stale&&_weekAgeDays>21) return;
     flagged.push({key:key,name:rec.name,pos:_flagPosLabel(rec.pos),
-      acwr:rec.acwr,acute:rec.acute,risk:risk,arrow:arrow,peakSpd:peakSpd,stale:false,week:rec.week||'',
+      acwr:rec.acwr,acute:rec.acute,risk:risk,arrow:arrow,peakSpd:peakSpd,stale:stale,week:rec.week||'',
       eaCorrected:rec._eaCorrected||false});
   });
 
